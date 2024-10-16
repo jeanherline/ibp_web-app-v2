@@ -111,7 +111,7 @@ const MeetingPage = () => {
       configOverwrite: {
         startWithAudioMuted: true,
         disableModeratorIndicator: false,
-        prejoinPageEnabled: false,
+        prejoinPageEnabled: true,
         enableUserRolesBasedOnToken: true,
       },
       interfaceConfigOverwrite: {
