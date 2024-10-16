@@ -156,25 +156,39 @@ const MeetingPage = () => {
         "https://8x8.vc/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/external_api.js";
       script.async = true;
       script.onload = () => {
+        console.log("Jitsi API script loaded successfully.");
         if (meetingData && jwtToken) {
           startJitsiMeeting();
         }
       };
       document.body.appendChild(script);
-
+  
       return () => {
-        // Cleanup the script and Jitsi instance on component unmount
         document.body.removeChild(script);
         if (jitsiApiRef.current) {
-          jitsiApiRef.current.dispose(); // Dispose of the existing Jitsi instance
+          jitsiApiRef.current.dispose();
           jitsiApiRef.current = null;
         }
       };
     } else if (meetingData && jwtToken) {
-      startJitsiMeeting(); // Start meeting if script is already loaded
+      startJitsiMeeting();
     }
   }, [meetingData, jwtToken, startJitsiMeeting]);
-
+  
+  useEffect(() => {
+    if (meetingData) {
+      console.log("Fetching JWT token for the meeting...");
+      fetchJwtToken();
+    }
+  }, [meetingData, fetchJwtToken]);
+  
+  // Additional logging for debug
+  useEffect(() => {
+    if (jwtToken) {
+      console.log("JWT Token successfully set: ", jwtToken);
+    }
+  }, [jwtToken]);
+  
   useEffect(() => {
     if (meetingData) {
       console.log("Fetching JWT token...");

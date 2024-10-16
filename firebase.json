@@ -9,7 +9,7 @@
     "rewrites": [
       {
         "source": "/api/**",
-        "function": "app" 
+        "function": "api" 
       },
       {
         "source": "**",
