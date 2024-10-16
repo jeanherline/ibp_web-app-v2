@@ -14,6 +14,7 @@ const MeetingPage = () => {
   const [error, setError] = useState(null);
   const jitsiApiRef = useRef(null); // Ref to store the Jitsi API instance
   const navigate = useNavigate(); // Hook to navigate to the /lawyer page
+  const [jwtToken, setJwtToken] = useState(null); // State to store the JWT
 
   // Fetch meeting details from Firestore
   useEffect(() => {
@@ -62,6 +63,20 @@ const MeetingPage = () => {
     fetchLawyerData();
   }, []);
 
+  // Fetch JWT from the backend before starting the meeting
+  const fetchJwtToken = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `/api/generate-jwt?roomName=${meetingData?.appointmentDetails?.controlNumber}`
+      );
+
+      const data = await response.json();
+      setJwtToken(data.token); // Save the JWT token
+    } catch (error) {
+      console.error("Error fetching JWT:", error);
+    }
+  }, [meetingData]);
+
   // Get display name for the lawyer
   const getDisplayName = () => {
     if (!lawyerData) return "Lawyer";
@@ -81,33 +96,35 @@ const MeetingPage = () => {
       jitsiApiRef.current.dispose(); // Dispose of the existing Jitsi instance
     }
 
+    const roomName = meetingData?.appointmentDetails?.controlNumber; // Using controlNumber as the room name
+    if (!roomName || !jwtToken) {
+      console.error("Room name or JWT token is missing");
+      return;
+    }
+
     try {
-      const domain = "8x8.vc";
-      const roomName = meetingData.appointmentDetails?.meetingLink
-        .split("/")
-        .pop();
-
-      if (!roomName) {
-        console.error("Room name is missing or invalid");
-        return;
-      }
-
+      const domain = "8x8.vc"; // Jitsi domain
       const options = {
         roomName: `vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
         parentNode: document.querySelector("#jaas-container"),
+        jwt: jwtToken, // Pass the JWT token here
         userInfo: {
           displayName: getDisplayName(),
         },
         configOverwrite: {
           startWithAudioMuted: true,
-          disableModeratorIndicator: true,
+          disableModeratorIndicator: false,
           prejoinPageEnabled: false,
-          enableUserRolesBasedOnToken: true,
+          enableUserRolesBasedOnToken: true, // Ensure the JWT is used for role-based control
         },
         interfaceConfigOverwrite: {
           DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
         },
       };
+      console.log("Room Name: ", roomName);
+      console.log("JWT Token: ", jwtToken);
+
+      console.log("Starting Jitsi Meeting with options: ", options);
 
       const api = new window.JitsiMeetExternalAPI(domain, options);
 
@@ -129,7 +146,7 @@ const MeetingPage = () => {
     } catch (error) {
       console.error("Error initializing Jitsi meeting:", error);
     }
-  }, [meetingData, getDisplayName, navigate]);
+  }, [meetingData, getDisplayName, jwtToken, navigate]);
 
   // Load Jitsi API script and start the meeting
   useEffect(() => {
@@ -139,7 +156,7 @@ const MeetingPage = () => {
         "https://8x8.vc/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/external_api.js";
       script.async = true;
       script.onload = () => {
-        if (meetingData) {
+        if (meetingData && jwtToken) {
           startJitsiMeeting();
         }
       };
@@ -150,12 +167,20 @@ const MeetingPage = () => {
         document.body.removeChild(script);
         if (jitsiApiRef.current) {
           jitsiApiRef.current.dispose(); // Dispose of the existing Jitsi instance
+          jitsiApiRef.current = null;
         }
       };
-    } else if (meetingData) {
+    } else if (meetingData && jwtToken) {
       startJitsiMeeting(); // Start meeting if script is already loaded
     }
-  }, [meetingData, startJitsiMeeting]);
+  }, [meetingData, jwtToken, startJitsiMeeting]);
+
+  useEffect(() => {
+    if (meetingData) {
+      console.log("Fetching JWT token...");
+      fetchJwtToken(); // Fetch JWT when meeting data is loaded
+    }
+  }, [meetingData, fetchJwtToken]);
 
   if (loading) {
     return <div>Loading meeting...</div>;

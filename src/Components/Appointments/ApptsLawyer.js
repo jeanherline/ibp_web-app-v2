@@ -80,10 +80,11 @@ function ApptsLawyer() {
     const password = Math.random().toString(36).substring(2, 8); // Random password
 
     return {
-      link: `https://8x8.vc/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
-      password: password,
+        link: `https://lawyer-app-ed056.web.app/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
+        password: password
     };
-  };
+};
+
 
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
@@ -111,7 +112,7 @@ function ApptsLawyer() {
       "appointmentDetails.apptType": appointmentType,
       ...(meetingLink && {
         "appointmentDetails.meetingLink": meetingLink,
-        "appointmentDetails.meetingPass": meetingPass,
+        "appointmentDetails.meetingPass": meetingPass, // Save the password
       }),
     };
     await updateAppointment(selectedAppointment.id, updatedData);
@@ -1293,7 +1294,7 @@ function ApptsLawyer() {
                               href="#"
                               onClick={() =>
                                 window.open(
-                                  `/meeting/${selectedAppointment.id}`,
+                                  `https://lawyer-app-ed056.web.app/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
                                   "_blank"
                                 )
                               }

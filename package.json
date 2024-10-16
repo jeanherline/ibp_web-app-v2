@@ -22,6 +22,7 @@
     "crypto-browserify": "^3.12.0",
     "date-fns": "^2.29.3",
     "draft-js": "^0.11.7",
+    "express": "^4.21.1",
     "firebase": "^10.12.0",
     "firebase-admin": "^12.5.0",
     "googleapis": "^144.0.0",
@@ -91,5 +92,11 @@
     "source-map-loader": "^5.0.0",
     "style-loader": "^4.0.0",
     "webpack-dev-server": "^5.0.4"
-  }
+  },
+  "proxy": "http://localhost:3000",
+  "description": "This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).",
+  "main": "config-overrides.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

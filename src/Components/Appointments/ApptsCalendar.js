@@ -355,7 +355,7 @@ function ApptsCalendar() {
                   {event.appointmentDetails?.apptType === "Online" && (
                     <button
                       onClick={() =>
-                        window.open(`/meeting/${event.id}`, "_blank")
+                        window.open(`/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${event.id}`, "_blank")
                       }
                       className="join-meeting-btn"
                     >
@@ -447,7 +447,7 @@ function ApptsCalendar() {
                           <button
                             onClick={() =>
                               window.open(
-                                `/meeting/${selectedAppointment.id}`,
+                                `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
                                 "_blank"
                               )
                             }

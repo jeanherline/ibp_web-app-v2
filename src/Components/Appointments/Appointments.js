@@ -1000,7 +1000,7 @@ function Appointments() {
                       <>
                         <button
                           onClick={() =>
-                            window.open(`/meeting/${appointment.id}`, "_blank")
+                            window.open(`/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`, "_blank")
                           }
                           style={{
                             backgroundColor: "#28a745", // Change button color to green
@@ -1294,7 +1294,7 @@ function Appointments() {
                               href="#"
                               onClick={() =>
                                 window.open(
-                                  `/meeting/${selectedAppointment.id}`,
+                                  `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
                                   "_blank"
                                 )
                               }
