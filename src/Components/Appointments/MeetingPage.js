@@ -67,9 +67,8 @@ const MeetingPage = () => {
   const fetchJwtToken = useCallback(async () => {
     try {
       const response = await fetch(
-        `/api/generate-jwt?roomName=${meetingData?.appointmentDetails?.controlNumber}`
+        `https://us-central1-lawyer-app-ed056.cloudfunctions.net/api/generate-jwt?roomName=${meetingData?.appointmentDetails?.controlNumber}`
       );
-
       const data = await response.json();
       setJwtToken(data.token); // Save the JWT token
     } catch (error) {
@@ -91,62 +90,38 @@ const MeetingPage = () => {
       return;
     }
 
-    // Clean up previous Jitsi instance if it exists
     if (jitsiApiRef.current) {
-      jitsiApiRef.current.dispose(); // Dispose of the existing Jitsi instance
+      jitsiApiRef.current.dispose();
     }
 
-    const roomName = meetingData?.appointmentDetails?.controlNumber; // Using controlNumber as the room name
+    const roomName = meetingData?.appointmentDetails?.controlNumber;
     if (!roomName || !jwtToken) {
       console.error("Room name or JWT token is missing");
       return;
     }
 
-    try {
-      const domain = "8x8.vc"; // Jitsi domain
-      const options = {
-        roomName: `vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
-        parentNode: document.querySelector("#jaas-container"),
-        jwt: jwtToken, // Pass the JWT token here
-        userInfo: {
-          displayName: getDisplayName(),
-        },
-        configOverwrite: {
-          startWithAudioMuted: true,
-          disableModeratorIndicator: false,
-          prejoinPageEnabled: false,
-          enableUserRolesBasedOnToken: true, // Ensure the JWT is used for role-based control
-        },
-        interfaceConfigOverwrite: {
-          DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
-        },
-      };
-      console.log("Room Name: ", roomName);
-      console.log("JWT Token: ", jwtToken);
+    const domain = "8x8.vc";
+    const options = {
+      roomName: `vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
+      parentNode: document.querySelector("#jaas-container"),
+      jwt: jwtToken,
+      userInfo: {
+        displayName: getDisplayName(),
+      },
+      configOverwrite: {
+        startWithAudioMuted: true,
+        disableModeratorIndicator: false,
+        prejoinPageEnabled: false,
+        enableUserRolesBasedOnToken: true,
+      },
+      interfaceConfigOverwrite: {
+        DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
+      },
+    };
 
-      console.log("Starting Jitsi Meeting with options: ", options);
-
-      const api = new window.JitsiMeetExternalAPI(domain, options);
-
-      // Add event listeners to monitor the meeting
-      api.on("participantJoined", (participant) => {
-        console.log("Participant joined:", participant);
-      });
-
-      api.on("videoConferenceLeft", () => {
-        console.log("User left the meeting. Navigating back to /lawyer...");
-        navigate("/lawyer"); // Navigate to the /lawyer page
-      });
-
-      api.on("videoConferenceJoined", () => {
-        console.log("Joined the meeting!");
-      });
-
-      jitsiApiRef.current = api; // Store the Jitsi API instance
-    } catch (error) {
-      console.error("Error initializing Jitsi meeting:", error);
-    }
-  }, [meetingData, getDisplayName, jwtToken, navigate]);
+    const api = new window.JitsiMeetExternalAPI(domain, options);
+    jitsiApiRef.current = api;
+  }, [meetingData, jwtToken]);
 
   // Load Jitsi API script and start the meeting
   useEffect(() => {
@@ -162,7 +137,7 @@ const MeetingPage = () => {
         }
       };
       document.body.appendChild(script);
-  
+
       return () => {
         document.body.removeChild(script);
         if (jitsiApiRef.current) {
@@ -174,21 +149,21 @@ const MeetingPage = () => {
       startJitsiMeeting();
     }
   }, [meetingData, jwtToken, startJitsiMeeting]);
-  
+
   useEffect(() => {
     if (meetingData) {
       console.log("Fetching JWT token for the meeting...");
       fetchJwtToken();
     }
   }, [meetingData, fetchJwtToken]);
-  
+
   // Additional logging for debug
   useEffect(() => {
     if (jwtToken) {
       console.log("JWT Token successfully set: ", jwtToken);
     }
   }, [jwtToken]);
-  
+
   useEffect(() => {
     if (meetingData) {
       console.log("Fetching JWT token...");
