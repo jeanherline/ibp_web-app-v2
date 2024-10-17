@@ -25,7 +25,7 @@ async function getSecret() {
 }
 
 app.get("/generate-jwt", async (req, res) => {
-  const { roomName } = req.query;
+  const { roomName, isModerator } = req.query;
 
   if (!roomName) {
     return res.status(400).send("Room name is required.");
@@ -34,21 +34,24 @@ app.get("/generate-jwt", async (req, res) => {
   try {
     const privateKey = await getSecret(); // Fetch the secret key from Secret Manager
 
+    // Determine if the user is a moderator based on query parameter
+    const moderator = isModerator === 'true';
+
     // JWT Payload
     const payload = {
       aud: "jitsi", // Audience: "jitsi"
       iss: "chat", // Issuer
       sub: "vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765", // Subject (AppID)
       room: roomName, // Room name from query params
-      exp: Math.floor(Date.now() / 1000) + 60 * 60, // Expiry time (1 hour)
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 2, // Expiry time (2 hours)
       context: {
         user: {
-          moderator: true, // User is a moderator
+          moderator: moderator, // Set user role (moderator or participant)
         },
         features: {
           livestreaming: "false",
           transcription: "false",
-          recording: "true",
+          recording: moderator ? "true" : "false", // Only allow recording for moderators
         },
       },
     };

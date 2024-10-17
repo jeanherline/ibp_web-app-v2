@@ -68,7 +68,7 @@ const MeetingPage = () => {
 
     try {
       const response = await fetch(
-        `https://us-central1-lawyer-app-ed056.cloudfunctions.net/api/generate-jwt?roomName=${meetingData.appointmentDetails.controlNumber}`
+        `https://us-central1-lawyer-app-ed056.cloudfunctions.net/api/generate-jwt?roomName=${roomName}&isModerator=true`
       );
       const data = await response.json();
       setJwtToken(data.token); // Save the JWT token

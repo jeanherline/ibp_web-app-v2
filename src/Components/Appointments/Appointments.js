@@ -78,10 +78,12 @@ function Appointments() {
 
   const generateJitsiLink = (controlNumber) => {
     const roomName = controlNumber ? controlNumber : `room-${Date.now()}`;
-    const password = Math.random().toString(36).substring(2, 8); // Random password
+    const password = Math.floor(
+      1000000000 + Math.random() * 9000000000
+    ).toString();
 
     return {
-      link: `https://8x8.vc/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
+      link: `https://8x8/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
       password: password,
     };
   };
@@ -129,7 +131,7 @@ function Appointments() {
 
       // Send notifications to the client, assigned lawyer, and head lawyer
       await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment. The assigned lawyer for your case is ${lawyerFullName}.`,
+        `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
         selectedAppointment.uid,
         "appointment"
       );
@@ -733,7 +735,7 @@ function Appointments() {
 
       // Send notifications after successfully updating Firestore
       await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment. The assigned lawyer for your case is ${lawyerFullName}.`,
+        `Your appointment (ID: ${appointmentId}) has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
         selectedAppointment.uid,
         "appointment"
       );

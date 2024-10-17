@@ -744,7 +744,7 @@ function ApptsLawyer() {
 
       // Send notifications after successfully updating Firestore
       await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment. The assigned lawyer for your case is ${lawyerFullName}.`,
+        `Your appointment (ID: ${appointmentId}) has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
         selectedAppointment.uid,
         "appointment"
       );
