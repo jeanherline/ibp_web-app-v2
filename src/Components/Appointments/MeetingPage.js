@@ -32,9 +32,10 @@ const MeetingPage = () => {
         setLoading(false);
       }
     };
-
+  
     fetchMeetingDetails();
   }, [id]);
+  
 
   // Fetch lawyer data
   useEffect(() => {
@@ -96,6 +97,7 @@ const MeetingPage = () => {
     }
   
     const roomName = meetingData?.appointmentDetails?.controlNumber;
+    const meetingPassword = meetingData?.appointmentDetails?.meetingPass; // Fetch the password
     if (!roomName || !jwtToken) {
       console.error("Room name or JWT token is missing");
       return;
@@ -125,18 +127,24 @@ const MeetingPage = () => {
     // Store the API instance
     jitsiApiRef.current = api;
   
-    // Set a password for the room (if the user is the moderator)
+    // Set the room password when the moderator joins
     api.addEventListener("videoConferenceJoined", () => {
-      if (lawyerData?.moderator) {
-        api.executeCommand('password', 'your-room-password'); // Set your password here
+      if (lawyerData?.moderator && meetingPassword) {
+        api.executeCommand('password', meetingPassword); // Set the password from Firestore
+        console.log('Password set for the meeting:', meetingPassword);
+  
+        // Enable the lobby after the moderator joins
+        api.executeCommand('toggleLobby');
+        console.log('Lobby has been enabled.');
       }
     });
   
-    // Handle entering password if required
+    // Handle entering the password if required
     api.addEventListener("passwordRequired", () => {
-      const password = prompt("Enter the meeting password:"); // Prompt for the password
-      api.executeCommand('password', password);
+      api.executeCommand('password', meetingPassword); // Automatically enter the password
+      console.log("Password required, entered automatically.");
     });
+  
   }, [meetingData, jwtToken, lawyerData]);
   
 
