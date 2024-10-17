@@ -32,10 +32,9 @@ const MeetingPage = () => {
         setLoading(false);
       }
     };
-  
+
     fetchMeetingDetails();
   }, [id]);
-  
 
   // Fetch lawyer data
   useEffect(() => {
@@ -85,24 +84,25 @@ const MeetingPage = () => {
     return `${title} ${lawyerData.display_name} ${lawyerData.last_name}`;
   };
 
-  // Start Jitsi meeting
+  // Start Jitsi meeting with password and lobby enabled
   const startJitsiMeeting = useCallback(() => {
     if (!window.JitsiMeetExternalAPI) {
       console.error("JitsiMeetExternalAPI not loaded.");
       return;
     }
-  
+
     if (jitsiApiRef.current) {
       jitsiApiRef.current.dispose();
     }
-  
+
     const roomName = meetingData?.appointmentDetails?.controlNumber;
-    const meetingPassword = meetingData?.appointmentDetails?.meetingPass; // Fetch the password
+    const meetingPassword = meetingData?.appointmentDetails?.meetingPass;
+
     if (!roomName || !jwtToken) {
       console.error("Room name or JWT token is missing");
       return;
     }
-  
+
     const domain = "8x8.vc";
     const options = {
       roomName: `vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
@@ -114,39 +114,29 @@ const MeetingPage = () => {
       configOverwrite: {
         startWithAudioMuted: true,
         disableModeratorIndicator: false,
-        prejoinPageEnabled: true, // Pre-join page allows setting a password
+        prejoinPageEnabled: true,
         enableUserRolesBasedOnToken: true,
       },
       interfaceConfigOverwrite: {
         DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
       },
     };
-  
+
     const api = new window.JitsiMeetExternalAPI(domain, options);
-  
-    // Store the API instance
     jitsiApiRef.current = api;
-  
-    // Set the room password when the moderator joins
+
+    // Set the room password and enable lobby when the moderator joins
     api.addEventListener("videoConferenceJoined", () => {
       if (lawyerData?.moderator && meetingPassword) {
-        api.executeCommand('password', meetingPassword); // Set the password from Firestore
-        console.log('Password set for the meeting:', meetingPassword);
-  
-        // Enable the lobby after the moderator joins
-        api.executeCommand('toggleLobby');
-        console.log('Lobby has been enabled.');
+        api.executeCommand("password", meetingPassword); // Set the password from Firestore
+        console.log("Password set for the meeting:", meetingPassword);
+
+        // Enable the lobby immediately after the moderator joins
+        api.executeCommand("toggleLobby"); // This enables the lobby automatically
+        console.log("Lobby has been enabled.");
       }
     });
-  
-    // Handle entering the password if required
-    api.addEventListener("passwordRequired", () => {
-      api.executeCommand('password', meetingPassword); // Automatically enter the password
-      console.log("Password required, entered automatically.");
-    });
-  
-  }, [meetingData, jwtToken, lawyerData]);
-  
+  }, [meetingData, jwtToken]);
 
   // Load Jitsi API script and start the meeting
   useEffect(() => {
