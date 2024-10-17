@@ -65,7 +65,7 @@ const MeetingPage = () => {
   // Fetch JWT from the backend before starting the meeting
   const fetchJwtToken = useCallback(async () => {
     if (!meetingData?.appointmentDetails?.controlNumber) return;
-
+    const roomName = meetingData?.appointmentDetails?.controlNumber;
     try {
       const response = await fetch(
         `https://us-central1-lawyer-app-ed056.cloudfunctions.net/api/generate-jwt?roomName=${roomName}&isModerator=true`
