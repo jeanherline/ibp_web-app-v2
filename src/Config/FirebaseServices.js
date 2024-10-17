@@ -830,7 +830,7 @@ const addUser = async (userData) => {
   }
 };
 
-export const sendNotification = async (message, uid, type) => {
+export const sendNotification = async (message, uid, type, controlNumber) => {
   try {
     await addDoc(collection(fs, "notifications"), {
       message: message,
@@ -838,6 +838,7 @@ export const sendNotification = async (message, uid, type) => {
       timestamp: Timestamp.fromDate(new Date()),
       type: type,
       uid: uid,
+      controlNumber: controlNumber
     });
   } catch (error) {
     console.error("Error sending notification:", error);

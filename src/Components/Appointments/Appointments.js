@@ -751,7 +751,7 @@ function Appointments() {
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
           assignedLawyerDetails.uid,
           "appointment",
-        selectedAppointment.controlNumber
+          selectedAppointment.controlNumber
         );
       }
 
@@ -761,7 +761,7 @@ function Appointments() {
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
           headLawyerUid,
           "appointment",
-        selectedAppointment.controlNumber
+          selectedAppointment.controlNumber
         );
       }
 
