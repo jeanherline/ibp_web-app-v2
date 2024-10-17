@@ -65,9 +65,11 @@ const MeetingPage = () => {
 
   // Fetch JWT from the backend before starting the meeting
   const fetchJwtToken = useCallback(async () => {
+    if (!meetingData?.appointmentDetails?.controlNumber) return;
+
     try {
       const response = await fetch(
-        `https://us-central1-lawyer-app-ed056.cloudfunctions.net/api/generate-jwt?roomName=${meetingData?.appointmentDetails?.controlNumber}`
+        `https://us-central1-lawyer-app-ed056.cloudfunctions.net/api/generate-jwt?roomName=${meetingData.appointmentDetails.controlNumber}`
       );
       const data = await response.json();
       setJwtToken(data.token); // Save the JWT token
@@ -111,7 +113,7 @@ const MeetingPage = () => {
       configOverwrite: {
         startWithAudioMuted: true,
         disableModeratorIndicator: false,
-        prejoinPageEnabled: true,
+        prejoinPageEnabled: false,
         enableUserRolesBasedOnToken: true,
       },
       interfaceConfigOverwrite: {
@@ -125,49 +127,39 @@ const MeetingPage = () => {
 
   // Load Jitsi API script and start the meeting
   useEffect(() => {
-    if (!window.JitsiMeetExternalAPI) {
-      const script = document.createElement("script");
-      script.src =
-        "https://8x8.vc/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/external_api.js";
-      script.async = true;
-      script.onload = () => {
-        console.log("Jitsi API script loaded successfully.");
-        if (meetingData && jwtToken) {
-          startJitsiMeeting();
-        }
-      };
-      document.body.appendChild(script);
+    const loadJitsiScript = () => {
+      if (!window.JitsiMeetExternalAPI) {
+        const script = document.createElement("script");
+        script.src =
+          "https://8x8.vc/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/external_api.js";
+        script.async = true;
+        script.onload = () => {
+          console.log("Jitsi API script loaded successfully.");
+          if (meetingData && jwtToken) {
+            startJitsiMeeting();
+          }
+        };
+        document.body.appendChild(script);
 
-      return () => {
-        document.body.removeChild(script);
-        if (jitsiApiRef.current) {
-          jitsiApiRef.current.dispose();
-          jitsiApiRef.current = null;
-        }
-      };
-    } else if (meetingData && jwtToken) {
-      startJitsiMeeting();
-    }
+        return () => {
+          document.body.removeChild(script);
+          if (jitsiApiRef.current) {
+            jitsiApiRef.current.dispose();
+            jitsiApiRef.current = null;
+          }
+        };
+      } else if (meetingData && jwtToken) {
+        startJitsiMeeting();
+      }
+    };
+
+    loadJitsiScript();
   }, [meetingData, jwtToken, startJitsiMeeting]);
 
   useEffect(() => {
     if (meetingData) {
       console.log("Fetching JWT token for the meeting...");
       fetchJwtToken();
-    }
-  }, [meetingData, fetchJwtToken]);
-
-  // Additional logging for debug
-  useEffect(() => {
-    if (jwtToken) {
-      console.log("JWT Token successfully set: ", jwtToken);
-    }
-  }, [jwtToken]);
-
-  useEffect(() => {
-    if (meetingData) {
-      console.log("Fetching JWT token...");
-      fetchJwtToken(); // Fetch JWT when meeting data is loaded
     }
   }, [meetingData, fetchJwtToken]);
 
