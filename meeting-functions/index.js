@@ -47,9 +47,8 @@ app.get("/generate-jwt", async (req, res) => {
         },
         features: {
           livestreaming: "false",
-        //   outboundCall: "false",
           transcription: "false",
-          recording: "true"
+          recording: "true",
         },
       },
     };
@@ -60,8 +59,8 @@ app.get("/generate-jwt", async (req, res) => {
       header: {
         alg: 'RS256',
         kid: "vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/ab9a6e",
-      typ: 'JWT'
-    }, // Replace with the actual `kid`
+        typ: 'JWT',
+      },
     });
 
     res.json({ token }); // Return the JWT token

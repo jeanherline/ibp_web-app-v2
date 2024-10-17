@@ -126,15 +126,24 @@ const MeetingPage = () => {
     jitsiApiRef.current = api;
 
     // Set the room password and enable lobby when the moderator joins
-    api.addEventListener("videoConferenceJoined", () => {
-      if (lawyerData?.moderator && meetingPassword) {
-        api.executeCommand("password", meetingPassword); // Set the password from Firestore
-        console.log("Password set for the meeting:", meetingPassword);
-
+    api.addEventListener("participantRoleChanged", (event) => {
+      if (event.role === "moderator") {
+        // Set password for the room
+        if (meetingPassword) {
+          api.executeCommand("password", meetingPassword); // Set the password from Firestore
+          console.log("Password set for the meeting:", meetingPassword);
+        } else {
+          console.log("No password available for this meeting.");
+        }
         // Enable the lobby immediately after the moderator joins
-        api.executeCommand("toggleLobby"); // This enables the lobby automatically
+        api.executeCommand("toggleLobby", true); // This enables the lobby automatically
         console.log("Lobby has been enabled.");
       }
+    });
+
+    // Handle password-protected meeting
+    api.on("passwordRequired", () => {
+      api.executeCommand("password", meetingPassword); // Join the meeting with the password
     });
   }, [meetingData, jwtToken]);
 

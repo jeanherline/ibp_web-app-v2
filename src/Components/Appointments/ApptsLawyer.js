@@ -77,14 +77,15 @@ function ApptsLawyer() {
 
   const generateJitsiLink = (controlNumber) => {
     const roomName = controlNumber ? controlNumber : `room-${Date.now()}`;
-    const password = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+    const password = Math.floor(
+      1000000000 + Math.random() * 9000000000
+    ).toString();
 
     return {
-        link: `https://8x8/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
-        password: password
+      link: `https://8x8/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
+      password: password,
     };
-};
-
+  };
 
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
