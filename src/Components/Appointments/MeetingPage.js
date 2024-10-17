@@ -14,7 +14,8 @@ const MeetingPage = () => {
   const [error, setError] = useState(null);
   const jitsiApiRef = useRef(null); // Ref to store the Jitsi API instance
   const [jwtToken, setJwtToken] = useState(null); // State to store the JWT
-
+  const navigate = useNavigate();
+  
   // Fetch meeting details from Firestore
   useEffect(() => {
     const fetchMeetingDetails = async () => {
