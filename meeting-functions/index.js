@@ -37,7 +37,7 @@ app.get("/generate-jwt", async (req, res) => {
     // JWT Payload
     const payload = {
       aud: "jitsi", // Audience: "jitsi"
-      iss: "vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765", // Issuer
+      iss: "chat", // Issuer
       sub: "vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765", // Subject (AppID)
       room: roomName, // Room name from query params
       exp: Math.floor(Date.now() / 1000) + 60 * 60, // Expiry time (1 hour)
@@ -47,7 +47,7 @@ app.get("/generate-jwt", async (req, res) => {
         },
         features: {
           livestreaming: "false",
-          outboundCall: "false",
+        //   outboundCall: "false",
           transcription: "false",
           recording: "true"
         },
