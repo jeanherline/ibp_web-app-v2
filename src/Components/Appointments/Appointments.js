@@ -135,14 +135,16 @@ function Appointments() {
       await sendNotification(
         `Your appointment (ID: ${appointmentId}) has been scheduled a date and as an ${appointmentType} appointment.`,
         selectedAppointment.uid,
-        "appointment"
+        "appointment",
+        selectedAppointment.controlNumber
       );
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
           `You have scheduled the appointment (ID: ${appointmentId}) for ${clientFullName} in the date provided as an ${appointmentType} appointment.`,
           assignedLawyerDetails.uid,
-          "appointment"
+          "appointment",
+          selectedAppointment.controlNumber
         );
       }
 
@@ -152,7 +154,8 @@ function Appointments() {
         await sendNotification(
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been scheduled a date and as an ${appointmentType} appointment.`,
           headLawyerUid,
-          "appointment"
+          "appointment",
+          selectedAppointment.controlNumber
         );
       }
 
@@ -739,14 +742,16 @@ function Appointments() {
       await sendNotification(
         `Your appointment (ID: ${appointmentId}) has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
         selectedAppointment.uid,
-        "appointment"
+        "appointment",
+        selectedAppointment.controlNumber
       );
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
           assignedLawyerDetails.uid,
-          "appointment"
+          "appointment",
+        selectedAppointment.controlNumber
         );
       }
 
@@ -755,7 +760,8 @@ function Appointments() {
         await sendNotification(
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
           headLawyerUid,
-          "appointment"
+          "appointment",
+        selectedAppointment.controlNumber
         );
       }
 
@@ -784,25 +790,25 @@ function Appointments() {
     }
   };
 
-const getFormattedDate = (timestamp, includeTime = false) => {
+  const getFormattedDate = (timestamp, includeTime = false) => {
     if (!timestamp) {
-        console.error("Invalid timestamp:", timestamp);
-        return "N/A";
+      console.error("Invalid timestamp:", timestamp);
+      return "N/A";
     }
 
     // Check if timestamp is a valid Firebase Timestamp or Date object
-    const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
-    
+    const date =
+      timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
+
     const options = { year: "numeric", month: "long", day: "numeric" };
     if (includeTime) {
-        options.hour = "numeric";
-        options.minute = "numeric";
-        options.hour12 = true;
+      options.hour = "numeric";
+      options.minute = "numeric";
+      options.hour12 = true;
     }
 
     return date.toLocaleString("en-US", options);
-};
-
+  };
 
   const getDayClassName = (date) => {
     const isFullyBooked =
@@ -1009,7 +1015,10 @@ const getFormattedDate = (timestamp, includeTime = false) => {
                       <>
                         <button
                           onClick={() =>
-                            window.open(`/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`, "_blank")
+                            window.open(
+                              `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
+                              "_blank"
+                            )
                           }
                           style={{
                             backgroundColor: "#28a745", // Change button color to green

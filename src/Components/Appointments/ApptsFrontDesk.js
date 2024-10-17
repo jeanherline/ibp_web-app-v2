@@ -133,14 +133,16 @@ function ApptsFrontDesk() {
       await sendNotification(
         `Your appointment (ID: ${appointmentId}) has been scheduled a date and as an ${appointmentType} appointment.`,
         selectedAppointment.uid,
-        "appointment"
+        "appointment",
+        selectedAppointment.controlNumber
       );
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
           `You have scheduled the appointment (ID: ${appointmentId}) for ${clientFullName} in the date provided as an ${appointmentType} appointment.`,
           assignedLawyerDetails.uid,
-          "appointment"
+          "appointment",
+        selectedAppointment.controlNumber
         );
       }
 
@@ -150,7 +152,8 @@ function ApptsFrontDesk() {
         await sendNotification(
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been scheduled a date and as an ${appointmentType} appointment.`,
           headLawyerUid,
-          "appointment"
+          "appointment",
+        selectedAppointment.controlNumber
         );
       }
 
@@ -769,13 +772,16 @@ function ApptsFrontDesk() {
       await sendNotification(
         `Your appointment (ID: ${appointmentId}) has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
         selectedAppointment.uid,
+        "appointment",
+        selectedAppointment.controlNumber
       );
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
           assignedLawyerDetails.uid,
-          "appointment"
+          "appointment",
+        selectedAppointment.controlNumber
         );
       }
 
@@ -784,7 +790,8 @@ function ApptsFrontDesk() {
         await sendNotification(
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
           headLawyerUid,
-          "appointment"
+          "appointment",
+        selectedAppointment.controlNumber
         );
       }
 
