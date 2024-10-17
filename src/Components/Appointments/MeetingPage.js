@@ -13,7 +13,6 @@ const MeetingPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const jitsiApiRef = useRef(null); // Ref to store the Jitsi API instance
-  const navigate = useNavigate(); // Hook to navigate to the /lawyer page
   const [jwtToken, setJwtToken] = useState(null); // State to store the JWT
 
   // Fetch meeting details from Firestore
@@ -91,17 +90,17 @@ const MeetingPage = () => {
       console.error("JitsiMeetExternalAPI not loaded.");
       return;
     }
-
+  
     if (jitsiApiRef.current) {
       jitsiApiRef.current.dispose();
     }
-
+  
     const roomName = meetingData?.appointmentDetails?.controlNumber;
     if (!roomName || !jwtToken) {
       console.error("Room name or JWT token is missing");
       return;
     }
-
+  
     const domain = "8x8.vc";
     const options = {
       roomName: `vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
@@ -113,17 +112,33 @@ const MeetingPage = () => {
       configOverwrite: {
         startWithAudioMuted: true,
         disableModeratorIndicator: false,
-        prejoinPageEnabled: false,
+        prejoinPageEnabled: true, // Pre-join page allows setting a password
         enableUserRolesBasedOnToken: true,
       },
       interfaceConfigOverwrite: {
         DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
       },
     };
-
+  
     const api = new window.JitsiMeetExternalAPI(domain, options);
+  
+    // Store the API instance
     jitsiApiRef.current = api;
-  }, [meetingData, jwtToken]);
+  
+    // Set a password for the room (if the user is the moderator)
+    api.addEventListener("videoConferenceJoined", () => {
+      if (lawyerData?.moderator) {
+        api.executeCommand('password', 'your-room-password'); // Set your password here
+      }
+    });
+  
+    // Handle entering password if required
+    api.addEventListener("passwordRequired", () => {
+      const password = prompt("Enter the meeting password:"); // Prompt for the password
+      api.executeCommand('password', password);
+    });
+  }, [meetingData, jwtToken, lawyerData]);
+  
 
   // Load Jitsi API script and start the meeting
   useEffect(() => {
