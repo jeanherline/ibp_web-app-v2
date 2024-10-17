@@ -131,14 +131,14 @@ function ApptsLawyer() {
 
       // Send notifications to the client, assigned lawyer, and head lawyer
       await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
+        `Your appointment (ID: ${appointmentId}) has been scheduled a date and as an ${appointmentType} appointment.`,
         selectedAppointment.uid,
         "appointment"
       );
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
-          `You have scheduled the appointment (ID: ${appointmentId}) for ${clientFullName} on ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
+          `You have scheduled the appointment (ID: ${appointmentId}) for ${clientFullName} in the date provided as an ${appointmentType} appointment.`,
           assignedLawyerDetails.uid,
           "appointment"
         );
@@ -148,7 +148,7 @@ function ApptsLawyer() {
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
         await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment. The assigned lawyer is ${lawyerFullName}.`,
+          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been scheduled a date and as an ${appointmentType} appointment.`,
           headLawyerUid,
           "appointment"
         );
@@ -760,7 +760,7 @@ function ApptsLawyer() {
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
         await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment. The assigned lawyer is ${lawyerFullName}.`,
+          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
           headLawyerUid,
           "appointment"
         );

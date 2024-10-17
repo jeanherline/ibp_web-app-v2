@@ -91,6 +91,8 @@ function Appointments() {
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
 
+    console.log("Selected Appointment Date: ", appointmentDate);
+
     if (!appointmentDate || !appointmentType) {
       setSnackbarMessage("Appointment date and type are required.");
       setShowSnackbar(true);
@@ -131,14 +133,14 @@ function Appointments() {
 
       // Send notifications to the client, assigned lawyer, and head lawyer
       await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
+        `Your appointment (ID: ${appointmentId}) has been scheduled a date and as an ${appointmentType} appointment.`,
         selectedAppointment.uid,
         "appointment"
       );
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
-          `You have scheduled the appointment (ID: ${appointmentId}) for ${clientFullName} on ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
+          `You have scheduled the appointment (ID: ${appointmentId}) for ${clientFullName} in the date provided as an ${appointmentType} appointment.`,
           assignedLawyerDetails.uid,
           "appointment"
         );
@@ -148,7 +150,7 @@ function Appointments() {
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
         await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment. The assigned lawyer is ${lawyerFullName}.`,
+          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been scheduled a date and as an ${appointmentType} appointment.`,
           headLawyerUid,
           "appointment"
         );
@@ -751,7 +753,7 @@ function Appointments() {
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
         await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment. The assigned lawyer is ${lawyerFullName}.`,
+          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
           headLawyerUid,
           "appointment"
         );
@@ -782,20 +784,25 @@ function Appointments() {
     }
   };
 
-  const getFormattedDate = (timestamp, includeTime = false) => {
-    if (!timestamp || !(timestamp instanceof Timestamp)) {
-      console.error("Invalid timestamp: ", timestamp);
-      return "N/A";
+const getFormattedDate = (timestamp, includeTime = false) => {
+    if (!timestamp) {
+        console.error("Invalid timestamp:", timestamp);
+        return "N/A";
     }
-    const date = timestamp.toDate();
+
+    // Check if timestamp is a valid Firebase Timestamp or Date object
+    const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
+    
     const options = { year: "numeric", month: "long", day: "numeric" };
     if (includeTime) {
-      options.hour = "numeric";
-      options.minute = "numeric";
-      options.hour12 = true;
+        options.hour = "numeric";
+        options.minute = "numeric";
+        options.hour12 = true;
     }
+
     return date.toLocaleString("en-US", options);
-  };
+};
+
 
   const getDayClassName = (date) => {
     const isFullyBooked =
