@@ -627,37 +627,76 @@ function ApptsHead() {
 
   const handleSubmitProceedingNotes = async (e) => {
     e.preventDefault();
-
-    const updatedData = {
-      "appointmentDetails.proceedingNotes": proceedingNotes,
-      "appointmentDetails.ibpParalegalStaff":
-        clientEligibility.ibpParalegalStaff,
-      "appointmentDetails.assistingCounsel": clientEligibility.assistingCounsel,
-      "appointmentDetails.appointmentStatus": "done",
-      "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
-    };
-
-    await updateAppointment(selectedAppointment.id, updatedData);
-
-    setSelectedAppointment(null);
-    setProceedingNotes("");
-    setShowProceedingNotesForm(false);
-
-    const { data, total } = await getAdminAppointments(
-      filter,
-      lastVisible,
-      pageSize,
-      searchText,
-      natureOfLegalAssistanceFilter,
-      currentUser
-    );
-    setAppointments(data);
-    setTotalPages(Math.ceil(total / pageSize));
-
-    setSnackbarMessage("Remarks has been successfully submitted.");
-    setShowSnackbar(true);
-    setTimeout(() => setShowSnackbar(false), 3000);
+  
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+  
+    try {
+      const updatedData = {
+        "appointmentDetails.proceedingNotes": proceedingNotes,
+        "appointmentDetails.ibpParalegalStaff": clientEligibility.ibpParalegalStaff,
+        "appointmentDetails.assistingCounsel": clientEligibility.assistingCounsel,
+        "appointmentDetails.appointmentStatus": "done",
+        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
+        "appointmentDetails.clientAttend": clientAttend,
+      };
+  
+      await updateAppointment(selectedAppointment.id, updatedData);
+      setSnackbarMessage("Remarks have been successfully submitted.");
+  
+      // Clear form fields after successful submission
+      setProceedingNotes("");
+      setClientAttend(null);
+      setClientEligibility({
+        ...clientEligibility,
+        ibpParalegalStaff: "",
+        assistingCounsel: "",
+      });
+  
+      // Send notifications after successfully marking the appointment as done
+      const clientFullName = selectedAppointment.fullName;
+      const appointmentId = selectedAppointment.id;
+      
+      // Send notification to the client
+      await sendNotification(
+        `Your appointment (ID: ${appointmentId}) has been marked as done.`,
+        selectedAppointment.uid,
+        "appointment",
+        selectedAppointment.controlNumber
+      );
+  
+      // Send notification to the assigned lawyer
+      if (assignedLawyerDetails?.uid) {
+        await sendNotification(
+          `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
+          assignedLawyerDetails.uid,
+          "appointment",
+          selectedAppointment.controlNumber
+        );
+      }
+  
+      // Notify the head lawyer
+      const headLawyerUid = await getHeadLawyerUid();
+      if (headLawyerUid) {
+        await sendNotification(
+          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as done.`,
+          headLawyerUid,
+          "appointment",
+          selectedAppointment.controlNumber
+        );
+      }
+  
+      // Optionally, close the form/modal if needed
+      setShowProceedingNotesForm(false);
+    } catch (error) {
+      setSnackbarMessage("Error submitting remarks, please try again.");
+    } finally {
+      setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 3000);
+      setIsSubmitting(false);
+    }
   };
+  
 
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
