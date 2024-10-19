@@ -1481,7 +1481,7 @@ function Appointments() {
                                     )
                                   }
                                   style={{
-                                    backgroundColor: "#28a745",
+                                    backgroundColor: "#28a745", // Green background for active join meeting
                                     color: "white",
                                     border: "none",
                                     padding: "5px 8px",

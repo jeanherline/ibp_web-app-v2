@@ -335,7 +335,7 @@ function ApptsCalendar() {
       <SideNavBar />
       <div className="main-content">
         <br />
-        <h3>Appointments Calendar</h3>
+        <h3>Appts Calendar</h3>
         <br />
         <input
           type="text"
@@ -827,7 +827,7 @@ function ApptsCalendar() {
                                     )
                                   }
                                   style={{
-                                    backgroundColor: "#28a745",
+                                    backgroundColor: "#28a745", // Green background for active join meeting
                                     color: "white",
                                     border: "none",
                                     padding: "5px 8px",
