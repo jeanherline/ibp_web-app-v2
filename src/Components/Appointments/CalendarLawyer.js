@@ -484,7 +484,7 @@ function CalendarLawyer() {
                       </tr>
                       {selectedAppointment.appointmentDetails?.apptType ===
                         "Online" && (
-                        <tr>
+                          <tr className="no-print">
                           <th>Meeting Link:</th>
                           <td>
                             {selectedAppointment.appointmentDetails

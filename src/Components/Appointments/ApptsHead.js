@@ -142,13 +142,13 @@ function ApptsHead() {
 
   const handlePrint = () => {
     if (!selectedAppointment) {
-        alert("No appointment selected");
-        return;
+      alert("No appointment selected");
+      return;
     }
 
     // Get the contents of the appointment details section
     const printContents = document.getElementById(
-        "appointment-details-section"
+      "appointment-details-section"
     ).innerHTML;
 
     // Create a temporary div to modify the contents for printing
@@ -164,85 +164,103 @@ function ApptsHead() {
     // Open a new window for printing
     const printWindow = window.open("", "", "height=500, width=500");
     printWindow.document.write(
-        "<html><head><title>Appointment Details</title></head><body>"
+      "<html><head><title>Appointment Details</title></head><body>"
     );
 
-    // Add custom styles for the print layout, including page-break and scaling images
+    // Add modern, professional styles for printing
     printWindow.document.write("<style>");
     printWindow.document.write(`
-        @media print {
-            @page {
-                size: 8.5in 13in;
-                margin: 0.5in; /* Set margins for the print */
-            }
-            .page-break { 
-                page-break-before: always; 
-            }
-            .print-section { 
-                page-break-inside: avoid; 
-            }
-            .print-image {
-                width: 100%; 
-                height: auto; 
-                max-height: 11.5in; /* Ensure image fits within the page */
-                object-fit: contain; /* Maintain aspect ratio */
-                display: block;
-                page-break-before: always;
-            }
-            table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-            table, th, td {
-                border: 1px solid black;
-            }
-            th, td {
-                padding: 8px;
-                text-align: left;
-            }
-            th {
-                background-color: #f2f2f2;
-            }
-            .section-title {
-                color: #a34bc9;
-                font-size: 16px;
-            }
-            .no-print {
-                display: none;
-            }
-            .print-only {
-                display: block;
-            }
+      @media print {
+        @page {
+          size: A4;
+          margin: 0.6in; /* Narrow margin to fit more content */
         }
+        body {
+          font-family: 'Arial', sans-serif;
+          font-size: 12px;
+          line-height: 1.4;
+          color: #000;
+        }
+        .header {
+          text-align: center;
+          margin-bottom: 10px;
+        }
+        .header h2 {
+          font-size: 16px;
+          letter-spacing: 1px;
+        }
+        .header img {
+          width: 80px;
+          display: block;
+          margin: 0 auto;
+        }
+        .section-title {
+          font-size: 14px;
+          font-weight: bold;
+          margin-top: 20px;
+          margin-bottom: 5px;
+          text-transform: uppercase;
+          border-bottom: 1px solid #000;
+          padding-bottom: 5px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 20px;
+          font-size: 12px;
+        }
+        table, th, td {
+          border: 1px solid #000;
+        }
+        th, td {
+          padding: 6px;
+          text-align: left;
+        }
+        th {
+          background-color: #f4f4f4;
+          font-weight: bold;
+        }
+        .print-image {
+          width: 100%; 
+          height: auto; 
+          max-height: 10in; /* Ensure image fits within the page */
+          object-fit: contain; /* Maintain aspect ratio */
+          display: block;
+          margin-bottom: 10px;
+          page-break-before: always;
+        }
+        .no-print {
+          display: none;
+        }
+      }
     `);
     printWindow.document.write("</style>");
 
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
-        <div style="text-align: center;">
-            <img src="${ibpLogo}" alt="IBP Logo" style="width: 100px; display: block; margin: 0 auto;" />
-            <h2>Integrated Bar of the Philippines - Malolos</h2>
-            ${
-                selectedAppointment.appointmentDetails.qrCode
-                ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 100px; display: block; margin: 0 auto;" />`
-                : ""
-            }
-        </div>
-        <hr />
+      <div class="header">
+        <img src="${ibpLogo}" alt="IBP Logo" />
+        <h2>Integrated Bar of the Philippines - Malolos</h2>
+        ${
+          selectedAppointment.appointmentDetails.qrCode
+            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 80px; display: block; margin: 0 auto;" />`
+            : ""
+        }
+      </div>
     `);
 
     // Insert the modified contents
     printWindow.document.write(modifiedPrintContents);
 
-    // Include any relevant images for printing, adding page breaks and scaling
+    // Handle image printing with modern margins and scaling
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
-        if (!image.classList.contains("qr-code-image")) {
-            printWindow.document.write("<div class='page-break'></div>");
-            printWindow.document.write(
-                `<img src='${image.src}' class='print-image' />`
-            );
-        }
+      if (!image.classList.contains("qr-code-image")) {
+        printWindow.document.write("<div class='page-break'></div>");
+        printWindow.document.write(
+          `<img src='${image.src}' class='print-image' />`
+        );
+      }
     });
 
     // Close and trigger the print dialog
@@ -253,7 +271,7 @@ function ApptsHead() {
 
     // Close the print window after printing
     printWindow.onafterprint = () => printWindow.close();
-};
+  };
 
 
   useEffect(() => {
@@ -1181,7 +1199,7 @@ function ApptsHead() {
                       </tr>
                       {selectedAppointment.appointmentDetails?.apptType ===
                         "Online" && (
-                        <tr>
+                          <tr className="no-print">
                           <th>Meeting Link:</th>
                           <td>
                             {selectedAppointment.appointmentDetails
