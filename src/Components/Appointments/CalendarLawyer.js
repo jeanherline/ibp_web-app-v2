@@ -522,33 +522,72 @@ function CalendarLawyer() {
                       <tr>
                         <th>Meeting Link:</th>
                         <td>
-                          <button
-                            onClick={() =>
-                              window.open(
-                                `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
-                                "_blank"
-                              )
-                            }
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              padding: "5px 10px",
-                              backgroundColor: "#3c74d1",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "5px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faVideo}
-                              style={{ marginRight: "5px" }}
-                            />{" "}
-                            Join Meeting
-                          </button>
-                          <strong>Password:</strong>{" "}
-                          {selectedAppointment.appointmentDetails
-                            ?.meetingPass || "N/A"}
+                          {appointment.appointmentDetails?.apptType ===
+                          "Online" ? (
+                            appointment.appointmentDetails
+                              ?.appointmentStatus === "done" ? (
+                              // Appointment is done, show "Done" with a check icon
+                              <button
+                                style={{
+                                  backgroundColor: "#1DB954", // Green background for "Done"
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 8px",
+                                  cursor: "not-allowed",
+                                  display: "flex",
+                                  alignItems: "center",
+                                }}
+                                disabled // Make the button unclickable
+                              >
+                                <FontAwesomeIcon
+                                  icon={faCheck}
+                                  style={{ marginRight: "8px" }}
+                                />
+                                Done
+                              </button>
+                            ) : appointment.clientAttend === "no" ? (
+                              // If client didn't attend, show "Unavailable" with a red background
+                              <button
+                                style={{
+                                  backgroundColor: "#dc3545", // Red background for "Unavailable"
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 8px",
+                                  cursor: "not-allowed",
+                                }}
+                                disabled // Make the button unclickable
+                              >
+                                Unavailable
+                              </button>
+                            ) : (
+                              // If appointment is still active and client attended, show "Join Meeting"
+                              <button
+                                onClick={() =>
+                                  window.open(
+                                    `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
+                                    "_blank"
+                                  )
+                                }
+                                style={{
+                                  backgroundColor: "#28a745", // Green background for active join meeting
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 8px",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <FontAwesomeIcon
+                                  icon={faVideo}
+                                  style={{ marginRight: "8px" }}
+                                />
+                                Join Meeting
+                              </button>
+                            )
+                          ) : (
+                            "N/A"
+                          )}
                         </td>
                       </tr>
                     )}

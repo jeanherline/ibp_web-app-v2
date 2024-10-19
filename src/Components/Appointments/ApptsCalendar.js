@@ -355,7 +355,10 @@ function ApptsCalendar() {
                   {event.appointmentDetails?.apptType === "Online" && (
                     <button
                       onClick={() =>
-                        window.open(`/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${event.id}`, "_blank")
+                        window.open(
+                          `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${event.id}`,
+                          "_blank"
+                        )
                       }
                       className="join-meeting-btn"
                     >
@@ -405,58 +408,58 @@ function ApptsCalendar() {
             <h2>Appointment Details</h2>
             <div id="appointment-details-section">
               <section className="mb-4 print-section">
-              {(selectedAppointment.appointmentDetails?.newRequest ||
-                    selectedAppointment.appointmentDetails?.requestReason) && (
-                    <section className="mb-4 print-section">
-                      <h2>
-                        <em style={{ color: "#a34bc9", fontSize: "16px" }}>
-                          New Request Details
-                        </em>
-                      </h2>
-                      <table className="table table-striped table-bordered">
-                        <tbody>
-                          {/* Only show the control number if newRequest is true */}
-                          {selectedAppointment.appointmentDetails?.newRequest &&
-                            !selectedAppointment.appointmentDetails
-                              ?.requestReason && (
-                              <tr>
-                                <th>New Request Control Number:</th>
-                                <td>
-                                  {selectedAppointment.appointmentDetails
-                                    ?.newControlNumber || "N/A"}
-                                </td>
-                              </tr>
-                            )}
-                          <tr>
-                            <th>Reason for New Request:</th>
-                            <td>
-                              {selectedAppointment.appointmentDetails
-                                ?.requestReason || "N/A"}
-                            </td>
-                          </tr>
-                          {/* Only show Attached File if it exists */}
-                          {selectedAppointment.appointmentDetails
-                            ?.newRequestFile && (
+                {(selectedAppointment.appointmentDetails?.newRequest ||
+                  selectedAppointment.appointmentDetails?.requestReason) && (
+                  <section className="mb-4 print-section">
+                    <h2>
+                      <em style={{ color: "#a34bc9", fontSize: "16px" }}>
+                        New Request Details
+                      </em>
+                    </h2>
+                    <table className="table table-striped table-bordered">
+                      <tbody>
+                        {/* Only show the control number if newRequest is true */}
+                        {selectedAppointment.appointmentDetails?.newRequest &&
+                          !selectedAppointment.appointmentDetails
+                            ?.requestReason && (
                             <tr>
-                              <th>Attached File:</th>
+                              <th>New Request Control Number:</th>
                               <td>
-                                <a
-                                  href={
-                                    selectedAppointment.appointmentDetails
-                                      ?.newRequestFile
-                                  }
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  View File
-                                </a>
+                                {selectedAppointment.appointmentDetails
+                                  ?.newControlNumber || "N/A"}
                               </td>
                             </tr>
                           )}
-                        </tbody>
-                      </table>
-                    </section>
-                  )}
+                        <tr>
+                          <th>Reason for New Request:</th>
+                          <td>
+                            {selectedAppointment.appointmentDetails
+                              ?.requestReason || "N/A"}
+                          </td>
+                        </tr>
+                        {/* Only show Attached File if it exists */}
+                        {selectedAppointment.appointmentDetails
+                          ?.newRequestFile && (
+                          <tr>
+                            <th>Attached File:</th>
+                            <td>
+                              <a
+                                href={
+                                  selectedAppointment.appointmentDetails
+                                    ?.newRequestFile
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                View File
+                              </a>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </section>
+                )}
                 <h2>
                   <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                     Basic Information
@@ -496,33 +499,72 @@ function ApptsCalendar() {
                       <tr>
                         <th>Meeting Link:</th>
                         <td>
-                          <button
-                            onClick={() =>
-                              window.open(
-                                `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
-                                "_blank"
-                              )
-                            }
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              padding: "5px 10px",
-                              backgroundColor: "#3c74d1",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "5px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faVideo}
-                              style={{ marginRight: "5px" }}
-                            />{" "}
-                            Join Meeting
-                          </button>
-                          <strong>Password:</strong>{" "}
-                          {selectedAppointment.appointmentDetails
-                            ?.meetingPass || "N/A"}
+                          {appointment.appointmentDetails?.apptType ===
+                          "Online" ? (
+                            appointment.appointmentDetails
+                              ?.appointmentStatus === "done" ? (
+                              // Appointment is done, show "Done" with a check icon
+                              <button
+                                style={{
+                                  backgroundColor: "#1DB954", // Green background for "Done"
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 8px",
+                                  cursor: "not-allowed",
+                                  display: "flex",
+                                  alignItems: "center",
+                                }}
+                                disabled // Make the button unclickable
+                              >
+                                <FontAwesomeIcon
+                                  icon={faCheck}
+                                  style={{ marginRight: "8px" }}
+                                />
+                                Done
+                              </button>
+                            ) : appointment.clientAttend === "no" ? (
+                              // If client didn't attend, show "Unavailable" with a red background
+                              <button
+                                style={{
+                                  backgroundColor: "#dc3545", // Red background for "Unavailable"
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 8px",
+                                  cursor: "not-allowed",
+                                }}
+                                disabled // Make the button unclickable
+                              >
+                                Unavailable
+                              </button>
+                            ) : (
+                              // If appointment is still active and client attended, show "Join Meeting"
+                              <button
+                                onClick={() =>
+                                  window.open(
+                                    `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
+                                    "_blank"
+                                  )
+                                }
+                                style={{
+                                  backgroundColor: "#28a745", // Green background for active join meeting
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 8px",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <FontAwesomeIcon
+                                  icon={faVideo}
+                                  style={{ marginRight: "8px" }}
+                                />
+                                Join Meeting
+                              </button>
+                            )
+                          ) : (
+                            "N/A"
+                          )}
                         </td>
                       </tr>
                     )}

@@ -1052,9 +1052,44 @@ function ApptsLawyer() {
                     {capitalizeFirstLetter(appointment.appointmentStatus)}
                   </td>
                   <td>
-                    {appointment.appointmentDetails?.apptType === "Online" &&
-                    appointment.appointmentDetails?.meetingLink ? (
-                      <>
+                    {appointment.appointmentDetails?.apptType === "Online" ? (
+                      appointment.appointmentDetails?.appointmentStatus ===
+                      "done" ? (
+                        // Appointment is done, show "Done" with a check icon
+                        <button
+                          style={{
+                            backgroundColor: "#1DB954", // Green background for "Done"
+                            color: "white",
+                            border: "none",
+                            padding: "5px 8px",
+                            cursor: "not-allowed",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                          disabled // Make the button unclickable
+                        >
+                          <FontAwesomeIcon
+                            icon={faCheck}
+                            style={{ marginRight: "8px" }}
+                          />
+                          Done
+                        </button>
+                      ) : appointment.clientAttend === "no" ? (
+                        // If client didn't attend, show "Unavailable" with a red background
+                        <button
+                          style={{
+                            backgroundColor: "#dc3545", // Red background for "Unavailable"
+                            color: "white",
+                            border: "none",
+                            padding: "5px 8px",
+                            cursor: "not-allowed",
+                          }}
+                          disabled // Make the button unclickable
+                        >
+                          Unavailable
+                        </button>
+                      ) : (
+                        // If appointment is still active and client attended, show "Join Meeting"
                         <button
                           onClick={() =>
                             window.open(
@@ -1063,7 +1098,7 @@ function ApptsLawyer() {
                             )
                           }
                           style={{
-                            backgroundColor: "#28a745", // Change button color to green
+                            backgroundColor: "#28a745", // Green background for active join meeting
                             color: "white",
                             border: "none",
                             padding: "5px 8px",
@@ -1078,11 +1113,12 @@ function ApptsLawyer() {
                           />
                           Join Meeting
                         </button>
-                      </>
+                      )
                     ) : (
                       "N/A"
                     )}
                   </td>
+
                   <td>
                     <OverlayTrigger
                       placement="top"
@@ -1404,27 +1440,66 @@ function ApptsLawyer() {
                         <tr>
                           <th>Meeting Link:</th>
                           <td>
-                            <a
-                              href="#"
-                              onClick={() =>
-                                window.open(
-                                  `https://lawyer-app-ed056.web.app/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
-                                  "_blank"
-                                )
-                              }
-                              style={{
-                                color: "blue",
-                                textDecoration: "underline",
-                                cursor: "pointer",
-                              }}
-                            >
-                              Join Meeting
-                            </a>
-                            <br />
-                            <strong>Password:</strong>{" "}
-                            {selectedAppointment.appointmentDetails
-                              ?.meetingPass || "N/A"}
-                          </td>
+  {appointment.appointmentDetails?.apptType === "Online" ? (
+    appointment.appointmentDetails?.appointmentStatus === "done" ? (
+      // Appointment is done, show "Done" with a check icon
+      <button
+        style={{
+          backgroundColor: "#1DB954", // Green background for "Done"
+          color: "white",
+          border: "none",
+          padding: "5px 8px",
+          cursor: "not-allowed",
+          display: "flex",
+          alignItems: "center",
+        }}
+        disabled // Make the button unclickable
+      >
+        <FontAwesomeIcon icon={faCheck} style={{ marginRight: "8px" }} />
+        Done
+      </button>
+    ) : appointment.clientAttend === "no" ? (
+      // If client didn't attend, show "Unavailable" with a red background
+      <button
+        style={{
+          backgroundColor: "#dc3545", // Red background for "Unavailable"
+          color: "white",
+          border: "none",
+          padding: "5px 8px",
+          cursor: "not-allowed",
+        }}
+        disabled // Make the button unclickable
+      >
+        Unavailable
+      </button>
+    ) : (
+      // If appointment is still active and client attended, show "Join Meeting"
+      <button
+        onClick={() =>
+          window.open(
+            `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
+            "_blank"
+          )
+        }
+        style={{
+          backgroundColor: "#28a745", // Green background for active join meeting
+          color: "white",
+          border: "none",
+          padding: "5px 8px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
+        <FontAwesomeIcon icon={faVideo} style={{ marginRight: "8px" }} />
+        Join Meeting
+      </button>
+    )
+  ) : (
+    "N/A"
+  )}
+</td>
+
                         </tr>
                       )}
                       <tr>
