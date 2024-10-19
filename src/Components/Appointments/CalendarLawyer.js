@@ -176,9 +176,9 @@ function CalendarLawyer() {
             .page-break { page-break-before: always; }
             .print-section { page-break-inside: avoid; }
             .print-image {
-              width: 100%;
-              height: auto;
-              object-fit: contain; /* Ensure the image fits the page */
+              width: 100%; 
+              max-height: 100vh; /* Ensure the image fits within the viewable height */
+              object-fit: contain; /* Ensure the image fits the page without distortion */
               page-break-after: always; /* Ensure 1 image per page */
             }
             table {
@@ -246,6 +246,7 @@ function CalendarLawyer() {
     // Close the print window after printing
     printWindow.onafterprint = () => printWindow.close();
   };
+  
   
 
   const closeModal = () => {
