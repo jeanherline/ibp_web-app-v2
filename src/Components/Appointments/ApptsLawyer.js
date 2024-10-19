@@ -1052,54 +1052,18 @@ function ApptsLawyer() {
                     {capitalizeFirstLetter(appointment.appointmentStatus)}
                   </td>
                   <td>
-                    {selectedAppointment.appointmentDetails?.apptType ===
-                    "Online" ? (
-                      selectedAppointment.appointmentDetails
-                        ?.appointmentStatus === "done" ? (
-                        // Appointment is done, show "Done" with a check icon
-                        <button
-                          style={{
-                            backgroundColor: "#1DB954", // Green background for "Done"
-                            color: "white",
-                            border: "none",
-                            padding: "5px 8px",
-                            cursor: "not-allowed",
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                          disabled // Make the button unclickable
-                        >
-                          <FontAwesomeIcon
-                            icon={faCheck}
-                            style={{ marginRight: "8px" }}
-                          />
-                          Done
-                        </button>
-                      ) : selectedAppointment.clientAttend === "no" ? (
-                        // If client didn't attend, show "Unavailable" with a red background
-                        <button
-                          style={{
-                            backgroundColor: "#dc3545", // Red background for "Unavailable"
-                            color: "white",
-                            border: "none",
-                            padding: "5px 8px",
-                            cursor: "not-allowed",
-                          }}
-                          disabled // Make the button unclickable
-                        >
-                          Unavailable
-                        </button>
-                      ) : (
-                        // If appointment is still active and client attended, show "Join Meeting"
+                    {appointment.appointmentDetails?.apptType === "Online" &&
+                    appointment.appointmentDetails?.meetingLink ? (
+                      <>
                         <button
                           onClick={() =>
                             window.open(
-                              `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
+                              `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
                               "_blank"
                             )
                           }
                           style={{
-                            backgroundColor: "#28a745", // Green background for active join meeting
+                            backgroundColor: "#28a745", // Change button color to green
                             color: "white",
                             border: "none",
                             padding: "5px 8px",
@@ -1114,12 +1078,11 @@ function ApptsLawyer() {
                           />
                           Join Meeting
                         </button>
-                      )
+                      </>
                     ) : (
                       "N/A"
                     )}
                   </td>
-
                   <td>
                     <OverlayTrigger
                       placement="top"
