@@ -6,7 +6,7 @@ import ReactDatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Pagination from "react-bootstrap/Pagination";
 import {
-  getLawyerAppointments,
+  getAdminAppointments,
   updateAppointment,
   getBookedSlots,
   getUserById,
