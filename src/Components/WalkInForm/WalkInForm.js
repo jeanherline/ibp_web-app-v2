@@ -48,13 +48,13 @@ const signUpAndAuthenticate = async (email, password) => {
   }
 };
 
-const generateQrCodeImageUrl = async (data, fileNamePrefix) => {
+const generateQrCodeImageUrl = async (data, folder, controlNumber) => {
   try {
     const qrDataUrl = await QRCode.toDataURL(data, {
       errorCorrectionLevel: "L",
       color: {
-        dark: "#000000",
-        light: "#FFFFFF",
+        dark: "#000000", // QR code color
+        light: "rgba(0,0,0,0)", // Transparent background
       },
       width: 200, // Set the width to 200
       margin: 2, // Set the margin
@@ -62,11 +62,11 @@ const generateQrCodeImageUrl = async (data, fileNamePrefix) => {
 
     const response = await fetch(qrDataUrl);
     const blob = await response.blob();
-    const file = new File([blob], `${fileNamePrefix}_${data}.png`, {
+    const file = new File([blob], `${controlNumber}.png`, {
       type: "image/png",
     });
 
-    const storageRef = ref(storage, `qr_codes/${file.name}`);
+    const storageRef = ref(storage, `${folder}/${controlNumber}.png`);
     const snapshot = await uploadBytes(storageRef, file);
     return await getDownloadURL(storageRef);
   } catch (error) {
@@ -317,7 +317,7 @@ function WalkInForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-  
+
     try {
       // Validate required fields
       if (
@@ -331,10 +331,10 @@ function WalkInForm() {
       ) {
         throw new Error("All required fields must be filled out.");
       }
-  
+
       const now = new Date();
       const datetime = format(now, "yyyyMMdd_HHmmss");
-  
+
       const uploadDocument = async (file, path) => {
         if (file) {
           const storageRef = ref(storage, path);
@@ -343,24 +343,28 @@ function WalkInForm() {
         }
         return null;
       };
-  
+
       const controlNumber = generateControlNumber();
       setControlNumber(controlNumber); // Store control number in state
       const controlNumberQrCodeUrl = await generateQrCodeImageUrl(
         controlNumber,
-        "appointment_qr_code"
+        "appt_qr_codes",
+        controlNumber
       );
+
       setAppointmentQrCodeUrl(controlNumberQrCodeUrl); // Store appointment QR code URL in state
-  
+
       let userQrCodeUrl = null;
       let user = null;
-  
+
       if (!uid) {
         const email =
           userData.existingEmail === "yes"
             ? userData.generatedEmail
             : `${userData.display_name[0].toLowerCase()}${
-                userData.middle_name ? userData.middle_name[0].toLowerCase() : ""
+                userData.middle_name
+                  ? userData.middle_name[0].toLowerCase()
+                  : ""
               }${userData.last_name
                 .replace(/\s+/g, "")
                 .toLowerCase()}${userData.dob.replace(/-/g, "")}@gmail.com`;
@@ -371,10 +375,15 @@ function WalkInForm() {
         setGeneratedEmail(email); // Store generated email in state
         setGeneratedPassword(password); // Store generated password in state
         user = await signUpAndAuthenticate(email, password);
-        userQrCodeUrl = await generateQrCodeImageUrl(user.uid, "user_qr_code");
+        const userQrCodeUrl = await generateQrCodeImageUrl(
+          user.uid,
+          "profile_qr_codes",
+          controlNumber
+        );
+
         setUserQrCodeUrl(userQrCodeUrl); // Store user QR code URL in state
         setUid(user.uid); // Set UID from newly created user
-  
+
         const userDataToSave = {
           uid: user.uid,
           display_name: userData.display_name,
@@ -394,27 +403,27 @@ function WalkInForm() {
         };
         await setDoc(doc(fs, "users", user.uid), userDataToSave);
       }
-  
+
       // Validate UID
       if (!user && !uid) {
         throw new Error("User UID is not set. Unable to create appointment.");
       }
-  
+
       const currentUid = user ? user.uid : uid;
-  
+
       const barangayImageUrl = await uploadDocument(
         dataURItoBlob(scannedDocuments.certificateBarangay),
-        `konsulta_user_uploads/${currentUid}/${datetime}/certificateBarangay.png`
+        `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_barangayCertificateOfIndigency`
       );
       const dswdImageUrl = await uploadDocument(
         dataURItoBlob(scannedDocuments.certificateDSWD),
-        `konsulta_user_uploads/${currentUid}/${datetime}/certificateDSWD.png`
+        `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_certificateDSWD.png`
       );
       const paoImageUrl = await uploadDocument(
         dataURItoBlob(scannedDocuments.disqualificationLetterPAO),
-        `konsulta_user_uploads/${currentUid}/${datetime}/disqualificationLetterPAO.png`
+        `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_disqualificationLetterPAO.png`
       );
-  
+
       const appointmentData = {
         applicantProfile: {
           uid: currentUid,
@@ -457,16 +466,16 @@ function WalkInForm() {
           paoImageUrl,
         },
       };
-  
+
       await setDoc(doc(fs, "appointments", controlNumber), appointmentData);
-  
+
       setSnackbarMessage("Walk-In form has been successfully submitted.");
       setUserData(initialUserData);
       setScannedDocuments(initialScannedDocuments);
       setIsSubmissionModalOpen(true); // Show submission modal
-  
+
       const notificationsCollection = collection(fs, "notifications");
-  
+
       // Notify the newly created user or searched user
       await addDoc(notificationsCollection, {
         uid: currentUid,
@@ -475,7 +484,7 @@ function WalkInForm() {
         read: false,
         timestamp: now,
       });
-  
+
       // Notify all head lawyers
       const headLawyersSnapshot = await getDocs(
         query(collection(fs, "users"), where("member_type", "==", "head"))
@@ -493,7 +502,7 @@ function WalkInForm() {
           timestamp: now,
         });
       });
-  
+
       // Notify all frontdesk members
       const frontDeskSnapshot = await getDocs(
         query(collection(fs, "users"), where("member_type", "==", "frontdesk"))
@@ -520,7 +529,6 @@ function WalkInForm() {
       setTimeout(() => setShowSnackbar(false), 3000);
     }
   };
-  
 
   const nextStep = () => {
     if (step === 1) {
@@ -977,8 +985,7 @@ function WalkInForm() {
             {!credentialsOmitted && (
               <>
                 <h4>
-                  Kredensyal{" "}
-                  <span className="subtitle">(Credentials)</span>
+                  Kredensyal <span className="subtitle">(Credentials)</span>
                 </h4>
                 <div className="form-group">
                   <label>

@@ -636,36 +636,61 @@ function Appointments() {
 
   const handleSubmitProceedingNotes = async (e) => {
     e.preventDefault();
-  
+
     if (isSubmitting) return;
     setIsSubmitting(true);
-  
+
     try {
+      let fileUrl = null;
+
+      // Check if a file is selected and upload it to Firebase Storage
+      if (proceedingFile) {
+        const currentUid = currentUser.uid; // Current user's UID
+        const controlNumber = selectedAppointment.controlNumber; // Get control number from selected appointment
+        const fullName = selectedAppointment.fullName.replace(/ /g, "_"); // Replace spaces with underscores in full name
+
+        // Construct the file path in Firebase Storage
+        const fileRef = FirebaseStorage.instance
+          .ref()
+          .child(
+            `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
+          );
+
+        // Upload the file
+        const uploadTask = await fileRef.put(proceedingFile);
+        fileUrl = await uploadTask.ref.getDownloadURL(); // Get the download URL after upload
+      }
+
+      // Update appointment data in Firestore
       const updatedData = {
         "appointmentDetails.proceedingNotes": proceedingNotes,
-        "appointmentDetails.ibpParalegalStaff": clientEligibility.ibpParalegalStaff,
-        "appointmentDetails.assistingCounsel": clientEligibility.assistingCounsel,
+        "appointmentDetails.ibpParalegalStaff":
+          clientEligibility.ibpParalegalStaff,
+        "appointmentDetails.assistingCounsel":
+          clientEligibility.assistingCounsel,
         "appointmentDetails.appointmentStatus": "done",
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
+        "appointmentDetails.proceedingFileUrl": fileUrl, // Save the file URL (if uploaded)
       };
-  
+
       await updateAppointment(selectedAppointment.id, updatedData);
       setSnackbarMessage("Remarks have been successfully submitted.");
-  
+
       // Clear form fields after successful submission
       setProceedingNotes("");
+      setProceedingFile(null); // Reset file input after upload
       setClientAttend(null);
       setClientEligibility({
         ...clientEligibility,
         ibpParalegalStaff: "",
         assistingCounsel: "",
       });
-  
+
       // Send notifications after successfully marking the appointment as done
       const clientFullName = selectedAppointment.fullName;
       const appointmentId = selectedAppointment.id;
-      
+
       // Send notification to the client
       await sendNotification(
         `Your appointment (ID: ${appointmentId}) has been marked as done.`,
@@ -673,7 +698,7 @@ function Appointments() {
         "appointment",
         selectedAppointment.controlNumber
       );
-  
+
       // Send notification to the assigned lawyer
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
@@ -683,7 +708,7 @@ function Appointments() {
           selectedAppointment.controlNumber
         );
       }
-  
+
       // Notify the head lawyer
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
@@ -694,7 +719,7 @@ function Appointments() {
           selectedAppointment.controlNumber
         );
       }
-  
+
       // Optionally, close the form/modal if needed
       setShowProceedingNotesForm(false);
     } catch (error) {
@@ -705,8 +730,6 @@ function Appointments() {
       setIsSubmitting(false);
     }
   };
-  
-  
 
   const handleRescheduleSubmit = async (e) => {
     e.preventDefault();
@@ -2033,6 +2056,18 @@ function Appointments() {
                   onChange={handleNotesChange}
                   required
                 ></textarea>
+              </div>
+              <br />
+              <div>
+                <b>
+                  <label>Attach File (optional):</label>
+                </b>
+                <input
+                  type="file"
+                  name="proceedingFile"
+                  accept="application/pdf, image/*" // Limit the file types
+                  onChange={(e) => setProceedingFile(e.target.files[0])} // Capture file
+                />
               </div>
               <br />
               <div>

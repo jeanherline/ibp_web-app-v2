@@ -83,9 +83,20 @@ function Profile() {
     });
 
     if (profileImage) {
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}-${(now.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}-${now.getDate().toString().padStart(2, "0")}_${now
+        .getHours()
+        .toString()
+        .padStart(2, "0")}-${now.getMinutes().toString().padStart(2, "0")}-${now
+        .getSeconds()
+        .toString()
+        .padStart(2, "0")}`;
+
       const imageUrl = await uploadImage(
         profileImage,
-        `profile_images/${currentUser.uid}`
+        `profile_images/${currentUser.uid}/profileImage_${timestamp}.png`
       );
       updatedData.photo_url = imageUrl;
     }
@@ -93,14 +104,16 @@ function Profile() {
     try {
       const changes = findChangedFields(); // Track the changes before updating
       await updateUser(currentUser.uid, updatedData);
-    
+
       if (Object.keys(changes).length > 0) {
-        const message = `Your profile has been updated. Fields changed: ${Object.keys(changes).join(", ")}`;
-        
+        const message = `Your profile has been updated. Fields changed: ${Object.keys(
+          changes
+        ).join(", ")}`;
+
         // Call sendNotification with the correct parameters
         await sendNotification(message, currentUser.uid, "profile");
       }
-    
+
       setSnackbarMessage("Profile has been successfully updated.");
     } catch (error) {
       setSnackbarMessage("Failed to update profile. Please try again.");

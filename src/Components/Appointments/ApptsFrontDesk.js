@@ -671,6 +671,25 @@ function ApptsFrontDesk() {
     setIsSubmitting(true);
   
     try {
+      let fileUrl = null;
+  
+      // Check if a file is selected and upload it to Firebase Storage
+      if (proceedingFile) {
+        const currentUid = currentUser.uid; // Current user's UID
+        const controlNumber = selectedAppointment.controlNumber; // Get control number from selected appointment
+        const fullName = selectedAppointment.fullName.replace(/ /g, '_'); // Replace spaces with underscores in full name
+  
+        // Construct the file path in Firebase Storage
+        const fileRef = FirebaseStorage.instance
+          .ref()
+          .child(`konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`);
+  
+        // Upload the file
+        const uploadTask = await fileRef.put(proceedingFile);
+        fileUrl = await uploadTask.ref.getDownloadURL(); // Get the download URL after upload
+      }
+  
+      // Update appointment data in Firestore
       const updatedData = {
         "appointmentDetails.proceedingNotes": proceedingNotes,
         "appointmentDetails.ibpParalegalStaff": clientEligibility.ibpParalegalStaff,
@@ -678,6 +697,7 @@ function ApptsFrontDesk() {
         "appointmentDetails.appointmentStatus": "done",
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
+        "appointmentDetails.proceedingFileUrl": fileUrl, // Save the file URL (if uploaded)
       };
   
       await updateAppointment(selectedAppointment.id, updatedData);
@@ -685,6 +705,7 @@ function ApptsFrontDesk() {
   
       // Clear form fields after successful submission
       setProceedingNotes("");
+      setProceedingFile(null); // Reset file input after upload
       setClientAttend(null);
       setClientEligibility({
         ...clientEligibility,
@@ -735,6 +756,7 @@ function ApptsFrontDesk() {
       setIsSubmitting(false);
     }
   };
+  
   
   
 
