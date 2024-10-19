@@ -678,23 +678,20 @@ function ApptsFrontDesk() {
   
       // Check if a file is selected and upload it to Firebase Storage
       if (proceedingFile) {
-        const storage = getStorage(); // Get Firebase Storage instance
         const currentUid = currentUser.uid; // Current user's UID
         const controlNumber = selectedAppointment.controlNumber; // Get control number from selected appointment
         const fullName = selectedAppointment.fullName.replace(/ /g, "_"); // Replace spaces with underscores in full name
   
-        // Construct the file path in Firebase Storage
-        const fileRef = ref(
-          storage,
-          `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
-        );
+        // Get Firebase storage reference
+        const storage = getStorage(); // Initialize Firebase Storage
+        const fileRef = ref(storage, `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`);
   
         // Upload the file
-        await uploadBytes(fileRef, proceedingFile);
+        await uploadBytes(fileRef, proceedingFile); 
         fileUrl = await getDownloadURL(fileRef); // Get the download URL after upload
       }
   
-      // Proceed with updating the Firestore document with the new file URL
+      // Update appointment data in Firestore
       const updatedData = {
         "appointmentDetails.proceedingNotes": proceedingNotes,
         "appointmentDetails.ibpParalegalStaff": clientEligibility.ibpParalegalStaff,
@@ -705,25 +702,63 @@ function ApptsFrontDesk() {
         "appointmentDetails.proceedingFileUrl": fileUrl, // Save the file URL (if uploaded)
       };
   
+      // Update the appointment document in Firestore with the proceeding notes and file URL
       await updateAppointment(selectedAppointment.id, updatedData);
   
-      // Clear form fields after successful submission
-      setProceedingNotes("");
-      setProceedingFile(null); // Reset file input after upload
-      setClientAttend(null);
-  
+      // Notify success and reset form values
       setSnackbarMessage("Remarks have been successfully submitted.");
-      setShowSnackbar(true);
+      setProceedingNotes(""); // Reset proceeding notes
+      setProceedingFile(null); // Reset file input
+      setClientAttend(null);
+      setClientEligibility({
+        ...clientEligibility,
+        ibpParalegalStaff: "",
+        assistingCounsel: "",
+      });
   
-      // Reset after submission
-      setTimeout(() => setShowSnackbar(false), 3000);
+      // Send notifications as needed
+      const clientFullName = selectedAppointment.fullName;
+      const appointmentId = selectedAppointment.id;
+  
+      await sendNotification(
+        `Your appointment (ID: ${appointmentId}) has been marked as done.`,
+        selectedAppointment.uid,
+        "appointment",
+        selectedAppointment.controlNumber
+      );
+  
+      if (assignedLawyerDetails?.uid) {
+        await sendNotification(
+          `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
+          assignedLawyerDetails.uid,
+          "appointment",
+          selectedAppointment.controlNumber
+        );
+      }
+  
+      const headLawyerUid = await getHeadLawyerUid();
+      if (headLawyerUid) {
+        await sendNotification(
+          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as done.`,
+          headLawyerUid,
+          "appointment",
+          selectedAppointment.controlNumber
+        );
+      }
+  
+      // Optionally close the form/modal after successful submission
+      setShowProceedingNotesForm(false);
+  
     } catch (error) {
-      console.error("Error submitting remarks:", error);
       setSnackbarMessage("Error submitting remarks, please try again.");
     } finally {
+      setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 3000);
       setIsSubmitting(false);
     }
   };
+  
+  
 
   const handleRescheduleSubmit = async (e) => {
     e.preventDefault();

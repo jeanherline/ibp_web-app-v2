@@ -640,7 +640,7 @@ function ApptsLawyer() {
     }
   };
 
-const handleSubmitProceedingNotes = async (e) => {
+  const handleSubmitProceedingNotes = async (e) => {
     e.preventDefault();
 
     if (isSubmitting) return;
@@ -657,30 +657,36 @@ const handleSubmitProceedingNotes = async (e) => {
 
         // Get Firebase storage reference
         const storage = getStorage(); // Initialize Firebase Storage
-        const fileRef = ref(storage, `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`);
+        const fileRef = ref(
+          storage,
+          `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
+        );
 
         // Upload the file
-        await uploadBytes(fileRef, proceedingFile); 
+        await uploadBytes(fileRef, proceedingFile);
         fileUrl = await getDownloadURL(fileRef); // Get the download URL after upload
       }
 
       // Update appointment data in Firestore
       const updatedData = {
         "appointmentDetails.proceedingNotes": proceedingNotes,
-        "appointmentDetails.ibpParalegalStaff": clientEligibility.ibpParalegalStaff,
-        "appointmentDetails.assistingCounsel": clientEligibility.assistingCounsel,
+        "appointmentDetails.ibpParalegalStaff":
+          clientEligibility.ibpParalegalStaff,
+        "appointmentDetails.assistingCounsel":
+          clientEligibility.assistingCounsel,
         "appointmentDetails.appointmentStatus": "done",
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
         "appointmentDetails.proceedingFileUrl": fileUrl, // Save the file URL (if uploaded)
       };
 
+      // Update the appointment document in Firestore with the proceeding notes and file URL
       await updateAppointment(selectedAppointment.id, updatedData);
+
+      // Notify success and reset form values
       setSnackbarMessage("Remarks have been successfully submitted.");
-      
-      // Clear form fields after successful submission
-      setProceedingNotes("");
-      setProceedingFile(null); // Reset file input after upload
+      setProceedingNotes(""); // Reset proceeding notes
+      setProceedingFile(null); // Reset file input
       setClientAttend(null);
       setClientEligibility({
         ...clientEligibility,
@@ -688,11 +694,10 @@ const handleSubmitProceedingNotes = async (e) => {
         assistingCounsel: "",
       });
 
-      // Send notifications after successfully marking the appointment as done
+      // Send notifications as needed
       const clientFullName = selectedAppointment.fullName;
       const appointmentId = selectedAppointment.id;
 
-      // Send notification to the client
       await sendNotification(
         `Your appointment (ID: ${appointmentId}) has been marked as done.`,
         selectedAppointment.uid,
@@ -700,7 +705,6 @@ const handleSubmitProceedingNotes = async (e) => {
         selectedAppointment.controlNumber
       );
 
-      // Send notification to the assigned lawyer
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
           `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
@@ -710,7 +714,6 @@ const handleSubmitProceedingNotes = async (e) => {
         );
       }
 
-      // Notify the head lawyer
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
         await sendNotification(
@@ -721,7 +724,7 @@ const handleSubmitProceedingNotes = async (e) => {
         );
       }
 
-      // Optionally, close the form/modal if needed
+      // Optionally close the form/modal after successful submission
       setShowProceedingNotesForm(false);
     } catch (error) {
       setSnackbarMessage("Error submitting remarks, please try again.");

@@ -16,7 +16,7 @@ import {
   getAppointments,
 } from "../../Config/FirebaseServices";
 import { useAuth } from "../../AuthContext";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Correct way to import Firebase Storage
+import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { fs, auth, signInWithGoogle } from "../../Config/Firebase";
 import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore"; // Add these imports for Firestore
@@ -638,69 +638,64 @@ function Appointments() {
 
   const handleSubmitProceedingNotes = async (e) => {
     e.preventDefault();
-
+  
     if (isSubmitting) return;
     setIsSubmitting(true);
-
+  
     try {
       let fileUrl = null;
-
+  
       // Check if a file is selected and upload it to Firebase Storage
       if (proceedingFile) {
         const currentUid = currentUser.uid; // Current user's UID
         const controlNumber = selectedAppointment.controlNumber; // Get control number from selected appointment
         const fullName = selectedAppointment.fullName.replace(/ /g, "_"); // Replace spaces with underscores in full name
-
-        // Construct the file path in Firebase Storage
+  
+        // Get Firebase storage reference
         const storage = getStorage(); // Initialize Firebase Storage
-        const fileRef = ref(
-          storage,
-          `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
-        );
-        
-        const uploadTask = await uploadBytes(fileRef, proceedingFile);
-        fileUrl = await getDownloadURL(fileRef);
+        const fileRef = ref(storage, `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`);
+  
+        // Upload the file
+        await uploadBytes(fileRef, proceedingFile); 
+        fileUrl = await getDownloadURL(fileRef); // Get the download URL after upload
       }
-
+  
       // Update appointment data in Firestore
       const updatedData = {
         "appointmentDetails.proceedingNotes": proceedingNotes,
-        "appointmentDetails.ibpParalegalStaff":
-          clientEligibility.ibpParalegalStaff,
-        "appointmentDetails.assistingCounsel":
-          clientEligibility.assistingCounsel,
+        "appointmentDetails.ibpParalegalStaff": clientEligibility.ibpParalegalStaff,
+        "appointmentDetails.assistingCounsel": clientEligibility.assistingCounsel,
         "appointmentDetails.appointmentStatus": "done",
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
         "appointmentDetails.proceedingFileUrl": fileUrl, // Save the file URL (if uploaded)
       };
-
+  
+      // Update the appointment document in Firestore with the proceeding notes and file URL
       await updateAppointment(selectedAppointment.id, updatedData);
+  
+      // Notify success and reset form values
       setSnackbarMessage("Remarks have been successfully submitted.");
-
-      // Clear form fields after successful submission
-      setProceedingNotes("");
-      setProceedingFile(null); // Reset file input after upload
+      setProceedingNotes(""); // Reset proceeding notes
+      setProceedingFile(null); // Reset file input
       setClientAttend(null);
       setClientEligibility({
         ...clientEligibility,
         ibpParalegalStaff: "",
         assistingCounsel: "",
       });
-
-      // Send notifications after successfully marking the appointment as done
+  
+      // Send notifications as needed
       const clientFullName = selectedAppointment.fullName;
       const appointmentId = selectedAppointment.id;
-
-      // Send notification to the client
+  
       await sendNotification(
         `Your appointment (ID: ${appointmentId}) has been marked as done.`,
         selectedAppointment.uid,
         "appointment",
         selectedAppointment.controlNumber
       );
-
-      // Send notification to the assigned lawyer
+  
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
           `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
@@ -709,8 +704,7 @@ function Appointments() {
           selectedAppointment.controlNumber
         );
       }
-
-      // Notify the head lawyer
+  
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
         await sendNotification(
@@ -720,9 +714,10 @@ function Appointments() {
           selectedAppointment.controlNumber
         );
       }
-
-      // Optionally, close the form/modal if needed
+  
+      // Optionally close the form/modal after successful submission
       setShowProceedingNotesForm(false);
+  
     } catch (error) {
       setSnackbarMessage("Error submitting remarks, please try again.");
     } finally {
@@ -731,6 +726,7 @@ function Appointments() {
       setIsSubmitting(false);
     }
   };
+  
 
   const handleRescheduleSubmit = async (e) => {
     e.preventDefault();
