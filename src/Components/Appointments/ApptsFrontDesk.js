@@ -1196,14 +1196,14 @@ function ApptsFrontDesk() {
                           </tr>
                           {/* Only show Attached File if it exists */}
                           {selectedAppointment.appointmentDetails
-                            ?.attachedFile && (
+                            ?.newRequestFile && (
                             <tr>
                               <th>Attached File:</th>
                               <td>
                                 <a
                                   href={
                                     selectedAppointment.appointmentDetails
-                                      ?.attachedFile
+                                      ?.newRequestFile
                                   }
                                   target="_blank"
                                   rel="noopener noreferrer"

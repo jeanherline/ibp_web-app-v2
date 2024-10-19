@@ -1311,16 +1311,6 @@ function ApptsLawyer() {
               <h2>Appointment Details</h2>
               <div id="appointment-details-section">
                 <section className="mb-4 print-section">
-                  <h2>
-                    <em
-                      style={{
-                        color: "#a34bc9",
-                        fontSize: "16px",
-                      }}
-                    >
-                      Applicant Profile
-                    </em>
-                  </h2>
                   {(selectedAppointment.appointmentDetails?.newRequest ||
                     selectedAppointment.appointmentDetails?.requestReason) && (
                     <section className="mb-4 print-section">
@@ -1352,14 +1342,14 @@ function ApptsLawyer() {
                           </tr>
                           {/* Only show Attached File if it exists */}
                           {selectedAppointment.appointmentDetails
-                            ?.attachedFile && (
+                            ?.newRequestFile && (
                             <tr>
                               <th>Attached File:</th>
                               <td>
                                 <a
                                   href={
                                     selectedAppointment.appointmentDetails
-                                      ?.attachedFile
+                                      ?.newRequestFile
                                   }
                                   target="_blank"
                                   rel="noopener noreferrer"
