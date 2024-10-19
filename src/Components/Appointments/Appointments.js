@@ -220,13 +220,54 @@ function Appointments() {
         @media print {
             @page {
                 size: 8.5in 13in;
-                margin: 0.5in; /* Set margins for the print */
+                margin: 1in; /* Set margins for the print */
             }
-            .page-break { 
-                page-break-before: always; 
+            body {
+                font-family: 'Times New Roman', Times, serif;
+                line-height: 1.6;
+                color: #000;
+            }
+            .header {
+                text-align: center;
+                margin-bottom: 20px;
+            }
+            .header h2 {
+                font-size: 18px;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+            }
+            .header img {
+                width: 100px;
+                display: block;
+                margin: 0 auto;
+            }
+            .section-title {
+                font-size: 16px;
+                font-weight: bold;
+                margin-top: 30px;
+                margin-bottom: 10px;
+                text-transform: uppercase;
+                border-bottom: 2px solid #000;
+                padding-bottom: 5px;
             }
             .print-section { 
                 page-break-inside: avoid; 
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+            }
+            table, th, td {
+                border: 1px solid black;
+            }
+            th, td {
+                padding: 10px;
+                text-align: left;
+            }
+            th {
+                background-color: #f2f2f2;
+                font-weight: bold;
             }
             .print-image {
                 width: 100%; 
@@ -235,24 +276,7 @@ function Appointments() {
                 object-fit: contain; /* Maintain aspect ratio */
                 display: block;
                 page-break-before: always;
-            }
-            table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-            table, th, td {
-                border: 1px solid black;
-            }
-            th, td {
-                padding: 8px;
-                text-align: left;
-            }
-            th {
-                background-color: #f2f2f2;
-            }
-            .section-title {
-                color: #a34bc9;
-                font-size: 16px;
+                margin-bottom: 20px;
             }
             .no-print {
                 display: none;
@@ -266,8 +290,8 @@ function Appointments() {
 
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
-        <div style="text-align: center;">
-            <img src="${ibpLogo}" alt="IBP Logo" style="width: 100px; display: block; margin: 0 auto;" />
+        <div class="header">
+            <img src="${ibpLogo}" alt="IBP Logo" />
             <h2>Integrated Bar of the Philippines - Malolos</h2>
             ${
                 selectedAppointment.appointmentDetails.qrCode
@@ -275,7 +299,6 @@ function Appointments() {
                 : ""
             }
         </div>
-        <hr />
     `);
 
     // Insert the modified contents
@@ -1014,6 +1037,7 @@ function Appointments() {
                   <td>{appointment.selectedAssistanceType}</td>
                   <td>{getFormattedDate(appointment.appointmentDate, true)}</td>
                   <td>{appointment.appointmentDetails?.apptType}</td>
+                  <td>{appointment.appointmentDetails?.appointmentStatus}</td>
                   <td>
                     {appointment.appointmentDetails?.apptType === "Online" ? (
                       appointment.appointmentDetails?.appointmentStatus ===
