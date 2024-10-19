@@ -12,7 +12,7 @@ import "./Appointments.css";
 import { fs, auth } from "../../Config/Firebase";
 import ibpLogo from "../../Assets/img/ibp_logo.png";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faVideo } from "@fortawesome/free-solid-svg-icons"; // Import the video icon
+import { faVideo, faCheck } from "@fortawesome/free-solid-svg-icons"; // Import the video icon
 
 const localizer = momentLocalizer(moment);
 
