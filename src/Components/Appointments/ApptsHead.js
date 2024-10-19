@@ -951,7 +951,7 @@ function ApptsHead() {
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
           <option value="all">Status</option>
-          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
           <option value="scheduled">Scheduled</option>
           <option value="denied">Denied</option>
           <option value="done">Done</option>
@@ -982,10 +982,11 @@ function ApptsHead() {
               <th>#</th>
               <th>Control Number</th>
               <th>Full Name</th>
-              <th>Nature of Legal Assistance Requested</th>
+              <th>Legal Assistance</th>
               <th>Scheduled Date</th>
               <th>Type</th>
               <th>Status</th>
+              <th>Link</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -1000,67 +1001,245 @@ function ApptsHead() {
                   <td>{getFormattedDate(appointment.appointmentDate, true)}</td>
                   <td>{appointment.appointmentDetails?.apptType}</td>
                   <td>
-                    <span
-                      style={{
-                        color:
-                          appointment.appointmentStatus === "pending"
-                            ? "red"
-                            : "black", // Highlight the "Pending" status
-                        fontWeight:
-                          appointment.appointmentStatus === "pending"
-                            ? "bold"
-                            : "normal", // Make it bold for "Pending"
-                      }}
-                    >
-                      {capitalizeFirstLetter(appointment.appointmentStatus)}
-                    </span>
+                    {appointment.appointmentDetails?.apptType === "Online" ? (
+                      appointment.appointmentDetails?.appointmentStatus ===
+                      "done" ? (
+                        // Appointment is done, show "Done" with a check icon
+                        <button
+                          style={{
+                            backgroundColor: "#1DB954", // Green background for "Done"
+                            color: "white",
+                            border: "none",
+                            padding: "5px 8px",
+                            cursor: "not-allowed",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                          disabled // Make the button unclickable
+                        >
+                          <FontAwesomeIcon
+                            icon={faCheck}
+                            style={{ marginRight: "8px" }}
+                          />
+                          Done
+                        </button>
+                      ) : appointment.clientAttend === "no" ? (
+                        // If client didn't attend, show "Unavailable" with a red background
+                        <button
+                          style={{
+                            backgroundColor: "#dc3545", // Red background for "Unavailable"
+                            color: "white",
+                            border: "none",
+                            padding: "5px 8px",
+                            cursor: "not-allowed",
+                          }}
+                          disabled // Make the button unclickable
+                        >
+                          Unavailable
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() =>
+                            window.open(
+                              `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
+                              "_blank"
+                            )
+                          }
+                          style={{
+                            backgroundColor: "#28a745",
+                            color: "white",
+                            border: "none",
+                            padding: "5px 8px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          <FontAwesomeIcon
+                            icon={faVideo}
+                            style={{ marginRight: "8px" }}
+                          />
+                          Join Meeting
+                        </button>
+                      )
+                    ) : (
+                      "N/A"
+                    )}
                   </td>
+
                   <td>
-                    <button
-                      onClick={() => toggleDetails(appointment)}
-                      style={{
-                        backgroundColor: "#4267B2",
-                        color: "white",
-                        border: "none",
-                        padding: "5px 10px",
-                        cursor: "pointer",
-                      }}
+                    <OverlayTrigger
+                      placement="top"
+                      overlay={renderTooltip({ title: "View" })}
                     >
-                      <FontAwesomeIcon icon={faEye} />
-                    </button>
+                      <button
+                        onClick={() => toggleDetails(appointment)}
+                        style={{
+                          backgroundColor: "#4267B2",
+                          color: "white",
+                          border: "none",
+                          padding: "5px 10px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faEye} />
+                      </button>
+                    </OverlayTrigger>
                     &nbsp; &nbsp;
-                    <button
-                      disabled
-                      style={{
-                        backgroundColor: "gray",
-                        color: "white",
-                        border: "none",
-                        padding: "5px 10px",
-                        cursor: "not-allowed",
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faCalendarAlt} />
-                    </button>
-                    &nbsp; &nbsp;
-                    <button
-                      disabled
-                      style={{
-                        backgroundColor: "gray",
-                        color: "white",
-                        border: "none",
-                        padding: "5px 10px",
-                        cursor: "not-allowed",
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faCheck} />
-                    </button>
-                    &nbsp; &nbsp;
+                    {appointment.appointmentStatus === "approved" && (
+                      <>
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={renderTooltip({ title: "Schedule" })}
+                        >
+                          <button
+                            onClick={() => {
+                              setSelectedAppointment(appointment);
+                              setShowProceedingNotesForm(false);
+                              setShowRescheduleForm(false);
+                              setShowScheduleForm(true);
+                            }}
+                            style={{
+                              backgroundColor: "#1DB954",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faCalendarAlt} />
+                          </button>
+                        </OverlayTrigger>
+                        &nbsp; &nbsp;
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={renderTooltip({ title: "Done" })}
+                        >
+                          <button
+                            onClick={() => {
+                              setSelectedAppointment(appointment);
+                              setShowProceedingNotesForm(true);
+                              setShowRescheduleForm(false);
+                              setShowScheduleForm(false);
+                            }}
+                            style={{
+                              backgroundColor:
+                                appointment.appointmentStatus === "approved"
+                                  ? "gray"
+                                  : "#1DB954",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor:
+                                appointment.appointmentStatus === "approved"
+                                  ? "not-allowed"
+                                  : "pointer",
+                            }}
+                            disabled={
+                              appointment.appointmentStatus === "approved"
+                            } // Disable when status is approved
+                          >
+                            <FontAwesomeIcon icon={faCheck} />
+                          </button>
+                        </OverlayTrigger>
+                      </>
+                    )}
+                    {appointment.appointmentStatus === "scheduled" && (
+                      <>
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={renderTooltip({ title: "Reschedule" })}
+                        >
+                          <button
+                            onClick={() => {
+                              setSelectedAppointment(appointment);
+                              setShowProceedingNotesForm(false);
+                              setShowRescheduleForm(true);
+                              setShowScheduleForm(false);
+                            }}
+                            style={{
+                              backgroundColor: "#ff8b61",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faCalendarAlt} />
+                          </button>
+                        </OverlayTrigger>
+                        &nbsp; &nbsp;
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={renderTooltip({ title: "Done" })}
+                        >
+                          <button
+                            onClick={() => {
+                              setSelectedAppointment(appointment);
+                              setShowProceedingNotesForm(true);
+                              setShowRescheduleForm(false);
+                              setShowScheduleForm(false);
+                            }}
+                            style={{
+                              backgroundColor: "#1DB954",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faCheck} />
+                          </button>
+                        </OverlayTrigger>
+                      </>
+                    )}
+                    {(appointment.appointmentStatus === "pending" ||
+                      appointment.appointmentStatus === "done" ||
+                      appointment.appointmentStatus === "denied") && (
+                      <>
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={renderTooltip({ title: "Schedule" })}
+                        >
+                          <button
+                            disabled
+                            style={{
+                              backgroundColor: "gray",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "not-allowed",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faCalendarAlt} />
+                          </button>
+                        </OverlayTrigger>
+                        &nbsp; &nbsp;
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={renderTooltip({ title: "Done" })}
+                        >
+                          <button
+                            disabled
+                            style={{
+                              backgroundColor: "gray",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "not-allowed",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faCheck} />
+                          </button>
+                        </OverlayTrigger>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="7" style={{ textAlign: "center" }}>
+                <td colSpan="8" style={{ textAlign: "center" }}>
                   No results found.
                 </td>
               </tr>
@@ -1112,21 +1291,11 @@ function ApptsHead() {
                   ×
                 </button>
               </div>
-              <div style={{ position: "relative" }}>
-                <button
-                  onClick={handleCloseModal}
-                  className="close-button"
-                  style={{ position: "absolute", top: "15px", right: "15px" }}
-                >
-                  ×
-                </button>
-              </div>
               <br />
-
               <h2>Appointment Details</h2>
               <div id="appointment-details-section">
                 <section className="mb-4 print-section">
-                {(selectedAppointment.appointmentDetails?.newRequest ||
+                  {(selectedAppointment.appointmentDetails?.newRequest ||
                     selectedAppointment.appointmentDetails?.requestReason) && (
                     <section className="mb-4 print-section">
                       <h2>
@@ -1212,6 +1381,79 @@ function ApptsHead() {
                           )}
                         </td>
                       </tr>
+                      {selectedAppointment.appointmentDetails?.apptType ===
+                        "Online" && (
+                        <tr>
+                          <th>Meeting Link:</th>
+                          <td>
+                            {selectedAppointment.appointmentDetails
+                              ?.apptType === "Online" ? (
+                              selectedAppointment.appointmentDetails
+                                ?.appointmentStatus === "done" ? (
+                                // Appointment is done, show "Done" with a check icon
+                                <button
+                                  style={{
+                                    backgroundColor: "#1DB954", // Green background for "Done"
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 8px",
+                                    cursor: "not-allowed",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                  disabled // Make the button unclickable
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faCheck}
+                                    style={{ marginRight: "8px" }}
+                                  />
+                                  Done
+                                </button>
+                              ) : selectedAppointment.clientAttend === "no" ? (
+                                // If client didn't attend, show "Unavailable" with a red background
+                                <button
+                                  style={{
+                                    backgroundColor: "#dc3545", // Red background for "Unavailable"
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 8px",
+                                    cursor: "not-allowed",
+                                  }}
+                                  disabled // Make the button unclickable
+                                >
+                                  Unavailable
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    window.open(
+                                      `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
+                                      "_blank"
+                                    )
+                                  }
+                                  style={{
+                                    backgroundColor: "#28a745",
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 8px",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faVideo}
+                                    style={{ marginRight: "8px" }}
+                                  />
+                                  Join Meeting
+                                </button>
+                              )
+                            ) : (
+                              "N/A"
+                            )}
+                          </td>
+                        </tr>
+                      )}
                       <tr>
                         <th>Control Number:</th>
                         <td>{selectedAppointment.controlNumber}</td>
@@ -1274,26 +1516,9 @@ function ApptsHead() {
                                 )}
                               </td>
                             </tr>
-                            <tr>
-                              <th>Reschedule Reason</th>
-                              <td>
-                                {capitalizeFirstLetter(
-                                  selectedAppointment.rescheduleReason
-                                ) || "N/A"}
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>Updated Date and Time:</th>
-                              <td>
-                                {getFormattedDate(
-                                  selectedAppointment.appointmentDetails
-                                    ?.updatedTime,
-                                  true
-                                )}
-                              </td>
-                            </tr>
                           </>
                         )}
+
                         {selectedAppointment.appointmentStatus === "denied" && (
                           <>
                             <tr>
@@ -1842,7 +2067,7 @@ function ApptsHead() {
                     required
                   ></textarea>
                 </div>
-                <button>Submit</button>
+                <button disabled={isSubmitting}>Submit</button>
               </form>
             </div>
           )}
@@ -1966,6 +2191,23 @@ function ApptsHead() {
             </p>
             <form onSubmit={handleRescheduleSubmit}>
               <div>
+                <b>
+                  <label>Reason for Reschedule: *</label>
+                </b>
+                <textarea
+                  name="rescheduleReason"
+                  rows="4"
+                  placeholder="Enter reason for reschedule..."
+                  value={rescheduleReason}
+                  onChange={handleRescheduleChange}
+                  required
+                ></textarea>
+              </div>
+              <div>
+                <b>
+                  <label>Reschedule Date and Time: *</label>
+                </b>
+                <br />
                 <ReactDatePicker
                   selected={rescheduleDate}
                   onChange={(date) => setRescheduleDate(date)}
@@ -1981,20 +2223,26 @@ function ApptsHead() {
                   timeClassName={(time) => getTimeRescheduleClassName(time)} // Ensure className application
                 />
               </div>
+              <br />
               <div>
                 <b>
-                  <label>Reason for Reschedule:</label>
+                  <label>Type of Rescheduled Appointment *</label>
                 </b>
-                <textarea
-                  name="rescheduleReason"
-                  rows="4"
-                  placeholder="Enter reason for reschedule here..."
-                  value={rescheduleReason}
-                  onChange={handleRescheduleChange}
+                <select
+                  name="rescheduleAppointmentType"
+                  value={rescheduleAppointmentType}
+                  onChange={(e) => setRescheduleAppointmentType(e.target.value)}
                   required
-                ></textarea>
+                >
+                  <option value="" disabled>
+                    Select Type
+                  </option>
+                  <option value="In-person">In-person Consultation</option>
+                  <option value="Online">Online Video Consultation</option>
+                </select>
               </div>
-              <button>Submit</button>
+              <br />
+              <button disabled={isSubmitting}>Submit</button>
             </form>
           </div>
         )}
@@ -2012,6 +2260,10 @@ function ApptsHead() {
             <h2>Schedule Appointment</h2>
             <form onSubmit={handleScheduleSubmit}>
               <div>
+                <b>
+                  <label>Appointment Date and Time: *</label>
+                </b>
+                <br />
                 <ReactDatePicker
                   selected={appointmentDate} // Correct state for scheduling
                   onChange={(date) => setAppointmentDate(date)} // Ensure it updates appointmentDate
@@ -2027,11 +2279,35 @@ function ApptsHead() {
                   timeClassName={(time) => getTimeClassName(time)} // Ensure className application for time
                 />
               </div>
-              <button>Submit</button>
+              <br />
+              <div>
+                <b>
+                  <label>Type of Appointment *</label>
+                </b>
+                <select
+                  name="appointmentType"
+                  value={appointmentType}
+                  onChange={(e) => setAppointmentType(e.target.value)}
+                  required
+                >
+                  <option value="" disabled>
+                    Select Type
+                  </option>
+                  <option value="In-person">In-person Consultation</option>
+                  <option value="Online">Online Video Consultation</option>
+                </select>
+              </div>
+              <br />
+              <button disabled={isSubmitting}>Submit</button>
             </form>
           </div>
         )}
-        {showSnackbar && <div className="snackbar">{snackbarMessage}</div>}
+        <br />
+        {showSnackbar && (
+          <div className="snackbar">
+            <p>{snackbarMessage}</p>
+          </div>
+        )}
       </div>
     </div>
   );

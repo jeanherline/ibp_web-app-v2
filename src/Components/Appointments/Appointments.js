@@ -1087,7 +1087,6 @@ function Appointments() {
                           Unavailable
                         </button>
                       ) : (
-                        // If appointment is still active and client attended, show "Join Meeting"
                         <button
                           onClick={() =>
                             window.open(
@@ -1096,7 +1095,7 @@ function Appointments() {
                             )
                           }
                           style={{
-                            backgroundColor: "#28a745", // Green background for active join meeting
+                            backgroundColor: "#28a745",
                             color: "white",
                             border: "none",
                             padding: "5px 8px",
@@ -1436,9 +1435,9 @@ function Appointments() {
                         <tr>
                           <th>Meeting Link:</th>
                           <td>
-                            {appointment.appointmentDetails?.apptType ===
-                            "Online" ? (
-                              appointment.appointmentDetails
+                            {selectedAppointment.appointmentDetails
+                              ?.apptType === "Online" ? (
+                              selectedAppointment.appointmentDetails
                                 ?.appointmentStatus === "done" ? (
                                 // Appointment is done, show "Done" with a check icon
                                 <button
@@ -1459,7 +1458,7 @@ function Appointments() {
                                   />
                                   Done
                                 </button>
-                              ) : appointment.clientAttend === "no" ? (
+                              ) : selectedAppointment.clientAttend === "no" ? (
                                 // If client didn't attend, show "Unavailable" with a red background
                                 <button
                                   style={{
@@ -1474,16 +1473,15 @@ function Appointments() {
                                   Unavailable
                                 </button>
                               ) : (
-                                // If appointment is still active and client attended, show "Join Meeting"
                                 <button
                                   onClick={() =>
                                     window.open(
-                                      `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
+                                      `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
                                       "_blank"
                                     )
                                   }
                                   style={{
-                                    backgroundColor: "#28a745", // Green background for active join meeting
+                                    backgroundColor: "#28a745",
                                     color: "white",
                                     border: "none",
                                     padding: "5px 8px",

@@ -1049,9 +1049,6 @@ function ApptsLawyer() {
                   <td>{getFormattedDate(appointment.appointmentDate, true)}</td>
                   <td>{appointment.appointmentDetails?.apptType}</td>
                   <td>
-                    {capitalizeFirstLetter(appointment.appointmentStatus)}
-                  </td>
-                  <td>
                     {appointment.appointmentDetails?.apptType === "Online" ? (
                       appointment.appointmentDetails?.appointmentStatus ===
                       "done" ? (
@@ -1089,7 +1086,6 @@ function ApptsLawyer() {
                           Unavailable
                         </button>
                       ) : (
-                        // If appointment is still active and client attended, show "Join Meeting"
                         <button
                           onClick={() =>
                             window.open(
@@ -1098,7 +1094,7 @@ function ApptsLawyer() {
                             )
                           }
                           style={{
-                            backgroundColor: "#28a745", // Green background for active join meeting
+                            backgroundColor: "#28a745",
                             color: "white",
                             border: "none",
                             padding: "5px 8px",
@@ -1399,8 +1395,6 @@ function ApptsLawyer() {
                       </table>
                     </section>
                   )}
-                </section>
-                <section className="mb-4 print-section">
                   <h2>
                     <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                       Basic Information
@@ -1440,66 +1434,72 @@ function ApptsLawyer() {
                         <tr>
                           <th>Meeting Link:</th>
                           <td>
-  {appointment.appointmentDetails?.apptType === "Online" ? (
-    appointment.appointmentDetails?.appointmentStatus === "done" ? (
-      // Appointment is done, show "Done" with a check icon
-      <button
-        style={{
-          backgroundColor: "#1DB954", // Green background for "Done"
-          color: "white",
-          border: "none",
-          padding: "5px 8px",
-          cursor: "not-allowed",
-          display: "flex",
-          alignItems: "center",
-        }}
-        disabled // Make the button unclickable
-      >
-        <FontAwesomeIcon icon={faCheck} style={{ marginRight: "8px" }} />
-        Done
-      </button>
-    ) : appointment.clientAttend === "no" ? (
-      // If client didn't attend, show "Unavailable" with a red background
-      <button
-        style={{
-          backgroundColor: "#dc3545", // Red background for "Unavailable"
-          color: "white",
-          border: "none",
-          padding: "5px 8px",
-          cursor: "not-allowed",
-        }}
-        disabled // Make the button unclickable
-      >
-        Unavailable
-      </button>
-    ) : (
-      // If appointment is still active and client attended, show "Join Meeting"
-      <button
-        onClick={() =>
-          window.open(
-            `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
-            "_blank"
-          )
-        }
-        style={{
-          backgroundColor: "#28a745", // Green background for active join meeting
-          color: "white",
-          border: "none",
-          padding: "5px 8px",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        <FontAwesomeIcon icon={faVideo} style={{ marginRight: "8px" }} />
-        Join Meeting
-      </button>
-    )
-  ) : (
-    "N/A"
-  )}
-</td>
-
+                            {selectedAppointment.appointmentDetails
+                              ?.apptType === "Online" ? (
+                              selectedAppointment.appointmentDetails
+                                ?.appointmentStatus === "done" ? (
+                                // Appointment is done, show "Done" with a check icon
+                                <button
+                                  style={{
+                                    backgroundColor: "#1DB954", // Green background for "Done"
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 8px",
+                                    cursor: "not-allowed",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                  disabled // Make the button unclickable
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faCheck}
+                                    style={{ marginRight: "8px" }}
+                                  />
+                                  Done
+                                </button>
+                              ) : selectedAppointment.clientAttend === "no" ? (
+                                // If client didn't attend, show "Unavailable" with a red background
+                                <button
+                                  style={{
+                                    backgroundColor: "#dc3545", // Red background for "Unavailable"
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 8px",
+                                    cursor: "not-allowed",
+                                  }}
+                                  disabled // Make the button unclickable
+                                >
+                                  Unavailable
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    window.open(
+                                      `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
+                                      "_blank"
+                                    )
+                                  }
+                                  style={{
+                                    backgroundColor: "#28a745",
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 8px",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faVideo}
+                                    style={{ marginRight: "8px" }}
+                                  />
+                                  Join Meeting
+                                </button>
+                              )
+                            ) : (
+                              "N/A"
+                            )}
+                          </td>
                         </tr>
                       )}
                       <tr>
@@ -1742,7 +1742,12 @@ function ApptsLawyer() {
 
                 <section className="mb-4 print-section">
                   <h2>
-                    <em style={{ color: "#a34bc9", fontSize: "16px" }}>
+                    <em
+                      style={{
+                        color: "#a34bc9",
+                        fontSize: "16px",
+                      }}
+                    >
                       Applicant Profile
                     </em>
                   </h2>
@@ -1773,43 +1778,41 @@ function ApptsLawyer() {
                             "Not Available"}
                         </td>
                       </tr>
-                      <tr>
-                        <th>Address:</th>
-                        <td>
-                          {selectedAppointment?.address || "Not Available"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>City:</th>
-                        <td>{selectedAppointment?.city || "Not Available"}</td>
-                      </tr>
-                      <tr>
-                        <th>Gender:</th>
-                        <td>
-                          {selectedAppointment?.selectedGender ||
-                            "Not Specified"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Spouse Name:</th>
-                        <td>
-                          {selectedAppointment.spouseName || "Not Available"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Spouse Occupation:</th>
-                        <td>
-                          {selectedAppointment.spouseOccupation ||
-                            "Not Available"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Children Names and Ages:</th>
-                        <td>
-                          {selectedAppointment.childrenNamesAges ||
-                            "Not Available"}
-                        </td>
-                      </tr>
+                      <>
+                        <tr>
+                          <th>Address:</th>
+                          <td>
+                            {selectedAppointment?.address || "Not Available"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>Gender:</th>
+                          <td>
+                            {selectedAppointment?.selectedGender ||
+                              "Not Specified"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>Spouse Name:</th>
+                          <td>
+                            {selectedAppointment.spouseName || "Not Available"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>Spouse Occupation:</th>
+                          <td>
+                            {selectedAppointment.spouseOccupation ||
+                              "Not Available"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>Children Names and Ages:</th>
+                          <td>
+                            {selectedAppointment.childrenNamesAges ||
+                              "Not Available"}
+                          </td>
+                        </tr>
+                      </>
                     </tbody>
                   </table>
                 </section>
