@@ -1312,6 +1312,70 @@ function ApptsLawyer() {
               <div id="appointment-details-section">
                 <section className="mb-4 print-section">
                   <h2>
+                    <em
+                      style={{
+                        color: "#a34bc9",
+                        fontSize: "16px",
+                      }}
+                    >
+                      Applicant Profile
+                    </em>
+                  </h2>
+                  {(selectedAppointment.appointmentDetails?.newRequest ||
+                    selectedAppointment.appointmentDetails?.requestReason) && (
+                    <section className="mb-4 print-section">
+                      <h2>
+                        <em style={{ color: "#a34bc9", fontSize: "16px" }}>
+                          New Request Details
+                        </em>
+                      </h2>
+                      <table className="table table-striped table-bordered">
+                        <tbody>
+                          {/* Only show the control number if newRequest is true */}
+                          {selectedAppointment.appointmentDetails?.newRequest &&
+                            !selectedAppointment.appointmentDetails
+                              ?.requestReason && (
+                              <tr>
+                                <th>New Request Control Number:</th>
+                                <td>
+                                  {selectedAppointment.appointmentDetails
+                                    ?.newControlNumber || "N/A"}
+                                </td>
+                              </tr>
+                            )}
+                          <tr>
+                            <th>Reason for New Request:</th>
+                            <td>
+                              {selectedAppointment.appointmentDetails
+                                ?.requestReason || "N/A"}
+                            </td>
+                          </tr>
+                          {/* Only show Attached File if it exists */}
+                          {selectedAppointment.appointmentDetails
+                            ?.attachedFile && (
+                            <tr>
+                              <th>Attached File:</th>
+                              <td>
+                                <a
+                                  href={
+                                    selectedAppointment.appointmentDetails
+                                      ?.attachedFile
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  View File
+                                </a>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </section>
+                  )}
+                </section>
+                <section className="mb-4 print-section">
+                  <h2>
                     <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                       Basic Information
                     </em>
@@ -1613,12 +1677,7 @@ function ApptsLawyer() {
 
                 <section className="mb-4 print-section">
                   <h2>
-                    <em
-                      style={{
-                        color: "#a34bc9",
-                        fontSize: "16px",
-                      }}
-                    >
+                    <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                       Applicant Profile
                     </em>
                   </h2>
@@ -1649,41 +1708,43 @@ function ApptsLawyer() {
                             "Not Available"}
                         </td>
                       </tr>
-                      <>
-                        <tr>
-                          <th>Address:</th>
-                          <td>
-                            {selectedAppointment?.address || "Not Available"}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Gender:</th>
-                          <td>
-                            {selectedAppointment?.selectedGender ||
-                              "Not Specified"}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Spouse Name:</th>
-                          <td>
-                            {selectedAppointment.spouseName || "Not Available"}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Spouse Occupation:</th>
-                          <td>
-                            {selectedAppointment.spouseOccupation ||
-                              "Not Available"}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Children Names and Ages:</th>
-                          <td>
-                            {selectedAppointment.childrenNamesAges ||
-                              "Not Available"}
-                          </td>
-                        </tr>
-                      </>
+                      <tr>
+                        <th>Address:</th>
+                        <td>
+                          {selectedAppointment?.address || "Not Available"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>City:</th>
+                        <td>{selectedAppointment?.city || "Not Available"}</td>
+                      </tr>
+                      <tr>
+                        <th>Gender:</th>
+                        <td>
+                          {selectedAppointment?.selectedGender ||
+                            "Not Specified"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Spouse Name:</th>
+                        <td>
+                          {selectedAppointment.spouseName || "Not Available"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Spouse Occupation:</th>
+                        <td>
+                          {selectedAppointment.spouseOccupation ||
+                            "Not Available"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Children Names and Ages:</th>
+                        <td>
+                          {selectedAppointment.childrenNamesAges ||
+                            "Not Available"}
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </section>

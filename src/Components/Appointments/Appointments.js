@@ -1325,6 +1325,58 @@ function Appointments() {
               <h2>Appointment Details</h2>
               <div id="appointment-details-section">
                 <section className="mb-4 print-section">
+                {(selectedAppointment.appointmentDetails?.newRequest ||
+                    selectedAppointment.appointmentDetails?.requestReason) && (
+                    <section className="mb-4 print-section">
+                      <h2>
+                        <em style={{ color: "#a34bc9", fontSize: "16px" }}>
+                          New Request Details
+                        </em>
+                      </h2>
+                      <table className="table table-striped table-bordered">
+                        <tbody>
+                          {/* Only show the control number if newRequest is true */}
+                          {selectedAppointment.appointmentDetails?.newRequest &&
+                            !selectedAppointment.appointmentDetails
+                              ?.requestReason && (
+                              <tr>
+                                <th>New Request Control Number:</th>
+                                <td>
+                                  {selectedAppointment.appointmentDetails
+                                    ?.newControlNumber || "N/A"}
+                                </td>
+                              </tr>
+                            )}
+                          <tr>
+                            <th>Reason for New Request:</th>
+                            <td>
+                              {selectedAppointment.appointmentDetails
+                                ?.requestReason || "N/A"}
+                            </td>
+                          </tr>
+                          {/* Only show Attached File if it exists */}
+                          {selectedAppointment.appointmentDetails
+                            ?.attachedFile && (
+                            <tr>
+                              <th>Attached File:</th>
+                              <td>
+                                <a
+                                  href={
+                                    selectedAppointment.appointmentDetails
+                                      ?.attachedFile
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  View File
+                                </a>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </section>
+                  )}
                   <h2>
                     <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                       Basic Information

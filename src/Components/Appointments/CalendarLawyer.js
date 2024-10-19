@@ -42,26 +42,25 @@ function CalendarLawyer() {
 
   const [currentUserId, setCurrentUserId] = useState(null);
 
-useEffect(() => {
-  const unsubscribe = auth.onAuthStateChanged((user) => {
-    if (user) {
-      setCurrentUserId(user.uid); // Set currentUserId to logged-in user's UID
-    } else {
-      setCurrentUserId(null);
-      window.location.href = "/"; // Redirect if not logged in
-    }
-  });
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        setCurrentUserId(user.uid); // Set currentUserId to logged-in user's UID
+      } else {
+        setCurrentUserId(null);
+        window.location.href = "/"; // Redirect if not logged in
+      }
+    });
 
-  return () => unsubscribe();
-}, []);
-
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const fetchAppointmentsAndSlots = async () => {
       try {
         const apptData = await aptsCalendar(statusFilters, null, 50, "");
         const slotsData = await getCalendar();
-  
+
         const formatTime = (date) => {
           let hours = date.getHours();
           const minutes = date.getMinutes().toString().padStart(2, "0");
@@ -70,11 +69,15 @@ useEffect(() => {
           hours = hours ? hours : 12;
           return `${hours}:${minutes} ${ampm}`;
         };
-  
+
         const formattedAppointments = apptData.data
-          .filter((appt) => appt.appointmentDetails?.assignedLawyer === currentUserId) // Filter by current user's ID
+          .filter(
+            (appt) => appt.appointmentDetails?.assignedLawyer === currentUserId
+          ) // Filter by current user's ID
           .map((appt) => {
-            const appointmentDate = new Date(appt.appointmentDate.seconds * 1000);
+            const appointmentDate = new Date(
+              appt.appointmentDate.seconds * 1000
+            );
             return {
               start: appointmentDate,
               end: appointmentDate,
@@ -85,7 +88,7 @@ useEffect(() => {
               ...appt,
             };
           });
-  
+
         const formattedBookedSlots = slotsData.map((slot) => {
           const appointmentDate = new Date(slot.appointmentDate.seconds * 1000);
           return {
@@ -97,18 +100,17 @@ useEffect(() => {
             ...slot,
           };
         });
-  
+
         setAppointments([...formattedAppointments, ...formattedBookedSlots]);
       } catch (error) {
         console.error("Error fetching appointments and slots:", error);
       }
     };
-  
+
     if (currentUserId) {
       fetchAppointmentsAndSlots();
     }
   }, [statusFilters, currentUserId]);
-  
 
   useEffect(() => {
     const fetchReviewerDetails = async (reviewedBy) => {
@@ -376,7 +378,10 @@ useEffect(() => {
                   {event.appointmentDetails?.apptType === "Online" && (
                     <button
                       onClick={() =>
-                        window.open(`/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${event.id}`, "_blank")
+                        window.open(
+                          `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${event.id}`,
+                          "_blank"
+                        )
                       }
                       className="join-meeting-btn"
                     >
@@ -426,6 +431,58 @@ useEffect(() => {
             <h2>Appointment Details</h2>
             <div id="appointment-details-section">
               <section className="mb-4 print-section">
+                {(selectedAppointment.appointmentDetails?.newRequest ||
+                  selectedAppointment.appointmentDetails?.requestReason) && (
+                  <section className="mb-4 print-section">
+                    <h2>
+                      <em style={{ color: "#a34bc9", fontSize: "16px" }}>
+                        New Request Details
+                      </em>
+                    </h2>
+                    <table className="table table-striped table-bordered">
+                      <tbody>
+                        {/* Only show the control number if newRequest is true */}
+                        {selectedAppointment.appointmentDetails?.newRequest &&
+                          !selectedAppointment.appointmentDetails
+                            ?.requestReason && (
+                            <tr>
+                              <th>New Request Control Number:</th>
+                              <td>
+                                {selectedAppointment.appointmentDetails
+                                  ?.newControlNumber || "N/A"}
+                              </td>
+                            </tr>
+                          )}
+                        <tr>
+                          <th>Reason for New Request:</th>
+                          <td>
+                            {selectedAppointment.appointmentDetails
+                              ?.requestReason || "N/A"}
+                          </td>
+                        </tr>
+                        {/* Only show Attached File if it exists */}
+                        {selectedAppointment.appointmentDetails
+                          ?.attachedFile && (
+                          <tr>
+                            <th>Attached File:</th>
+                            <td>
+                              <a
+                                href={
+                                  selectedAppointment.appointmentDetails
+                                    ?.attachedFile
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                View File
+                              </a>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </section>
+                )}
                 <h2>
                   <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                     Basic Information
