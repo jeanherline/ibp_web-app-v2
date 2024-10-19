@@ -29,6 +29,7 @@ import {
   faEye,
   faCheck,
   faCalendarAlt,
+  faVideo,
 } from "@fortawesome/free-solid-svg-icons";
 import { Tooltip, OverlayTrigger } from "react-bootstrap";
 import ibpLogo from "../../Assets/img/ibp_logo.png";
