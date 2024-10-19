@@ -16,6 +16,7 @@ import {
   getAppointments,
 } from "../../Config/FirebaseServices";
 import { useAuth } from "../../AuthContext";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Correct way to import Firebase Storage
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { fs, auth, signInWithGoogle } from "../../Config/Firebase";
 import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore"; // Add these imports for Firestore
@@ -71,6 +72,7 @@ function Appointments() {
   const [assignedLawyerDetails, setAssignedLawyerDetails] = useState(null);
   const [holidays, setHolidays] = useState([]);
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
+  const [proceedingFile, setProceedingFile] = useState(null);
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
@@ -650,15 +652,14 @@ function Appointments() {
         const fullName = selectedAppointment.fullName.replace(/ /g, "_"); // Replace spaces with underscores in full name
 
         // Construct the file path in Firebase Storage
-        const fileRef = FirebaseStorage.instance
-          .ref()
-          .child(
-            `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
-          );
-
-        // Upload the file
-        const uploadTask = await fileRef.put(proceedingFile);
-        fileUrl = await uploadTask.ref.getDownloadURL(); // Get the download URL after upload
+        const storage = getStorage(); // Initialize Firebase Storage
+        const fileRef = ref(
+          storage,
+          `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
+        );
+        
+        const uploadTask = await uploadBytes(fileRef, proceedingFile);
+        fileUrl = await getDownloadURL(fileRef);
       }
 
       // Update appointment data in Firestore

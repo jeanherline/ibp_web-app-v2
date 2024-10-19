@@ -410,6 +410,9 @@ function WalkInForm() {
       }
 
       const currentUid = user ? user.uid : uid;
+      const fullName = `${userData.display_name} ${
+        userData.middle_name ? userData.middle_name + " " : ""
+      }${userData.last_name}`;
 
       const barangayImageUrl = await uploadDocument(
         dataURItoBlob(scannedDocuments.certificateBarangay),

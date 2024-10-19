@@ -11,6 +11,7 @@ import {
   getBookedSlots,
   getUserById,
   getUsers,
+  getHeadLawyerUid,
 } from "../../Config/FirebaseServices";
 import { useAuth } from "../../AuthContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -66,6 +67,9 @@ function ApptsHead() {
   const [lawyers, setLawyers] = useState([]);
   const [assignedLawyerDetails, setAssignedLawyerDetails] = useState(null);
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [proceedingFile, setProceedingFile] = useState(null);
+  const [clientAttend, setClientAttend] = useState(null);
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
@@ -641,11 +645,11 @@ function ApptsHead() {
         const fullName = selectedAppointment.fullName.replace(/ /g, "_"); // Replace spaces with underscores in full name
 
         // Construct the file path in Firebase Storage
-        const fileRef = FirebaseStorage.instance
-          .ref()
-          .child(
-            `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
-          );
+        const storage = getStorage();
+        const fileRef = ref(
+          storage,
+          `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
+        );
 
         // Upload the file
         const uploadTask = await fileRef.put(proceedingFile);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { FirebaseStorage } from "firebase/storage";
 import SideNavBar from "../SideNavBar/SideNavBar";
 import "../Dashboard/Dashboard.css";
 import "./Appointments.css";
@@ -19,6 +20,7 @@ import { useAuth } from "../../AuthContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { fs, auth, signInWithGoogle } from "../../Config/Firebase";
 import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore"; // Add these imports for Firestore
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 import {
   faEye,
@@ -38,7 +40,6 @@ function ApptsFrontDesk() {
   const [totalPages, setTotalPages] = useState(1);
   const [lastVisible, setLastVisible] = useState(null);
   const pageSize = 7;
-  const [clientAttend, setClientAttend] = useState(null);
   const [clientEligibility, setClientEligibility] = useState({
     eligibility: "",
     denialReason: "",
@@ -71,7 +72,9 @@ function ApptsFrontDesk() {
   const [assignedLawyerDetails, setAssignedLawyerDetails] = useState(null);
   const [holidays, setHolidays] = useState([]);
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
-
+  const [proceedingFile, setProceedingFile] = useState(null); 
+  const [clientAttend, setClientAttend] = useState(null);
+  
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
   };
@@ -675,21 +678,23 @@ function ApptsFrontDesk() {
   
       // Check if a file is selected and upload it to Firebase Storage
       if (proceedingFile) {
+        const storage = getStorage(); // Get Firebase Storage instance
         const currentUid = currentUser.uid; // Current user's UID
         const controlNumber = selectedAppointment.controlNumber; // Get control number from selected appointment
-        const fullName = selectedAppointment.fullName.replace(/ /g, '_'); // Replace spaces with underscores in full name
+        const fullName = selectedAppointment.fullName.replace(/ /g, "_"); // Replace spaces with underscores in full name
   
         // Construct the file path in Firebase Storage
-        const fileRef = FirebaseStorage.instance
-          .ref()
-          .child(`konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`);
+        const fileRef = ref(
+          storage,
+          `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
+        );
   
         // Upload the file
-        const uploadTask = await fileRef.put(proceedingFile);
-        fileUrl = await uploadTask.ref.getDownloadURL(); // Get the download URL after upload
+        await uploadBytes(fileRef, proceedingFile);
+        fileUrl = await getDownloadURL(fileRef); // Get the download URL after upload
       }
   
-      // Update appointment data in Firestore
+      // Proceed with updating the Firestore document with the new file URL
       const updatedData = {
         "appointmentDetails.proceedingNotes": proceedingNotes,
         "appointmentDetails.ibpParalegalStaff": clientEligibility.ibpParalegalStaff,
@@ -701,64 +706,24 @@ function ApptsFrontDesk() {
       };
   
       await updateAppointment(selectedAppointment.id, updatedData);
-      setSnackbarMessage("Remarks have been successfully submitted.");
   
       // Clear form fields after successful submission
       setProceedingNotes("");
       setProceedingFile(null); // Reset file input after upload
       setClientAttend(null);
-      setClientEligibility({
-        ...clientEligibility,
-        ibpParalegalStaff: "",
-        assistingCounsel: "",
-      });
   
-      // Send notifications after successfully marking the appointment as done
-      const clientFullName = selectedAppointment.fullName;
-      const appointmentId = selectedAppointment.id;
-      
-      // Send notification to the client
-      await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been marked as done.`,
-        selectedAppointment.uid,
-        "appointment",
-        selectedAppointment.controlNumber
-      );
+      setSnackbarMessage("Remarks have been successfully submitted.");
+      setShowSnackbar(true);
   
-      // Send notification to the assigned lawyer
-      if (assignedLawyerDetails?.uid) {
-        await sendNotification(
-          `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
-          assignedLawyerDetails.uid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
-  
-      // Notify the head lawyer
-      const headLawyerUid = await getHeadLawyerUid();
-      if (headLawyerUid) {
-        await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as done.`,
-          headLawyerUid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
-  
-      // Optionally, close the form/modal if needed
-      setShowProceedingNotesForm(false);
+      // Reset after submission
+      setTimeout(() => setShowSnackbar(false), 3000);
     } catch (error) {
+      console.error("Error submitting remarks:", error);
       setSnackbarMessage("Error submitting remarks, please try again.");
     } finally {
-      setShowSnackbar(true);
-      setTimeout(() => setShowSnackbar(false), 3000);
       setIsSubmitting(false);
     }
   };
-  
-  
-  
 
   const handleRescheduleSubmit = async (e) => {
     e.preventDefault();
