@@ -143,28 +143,28 @@ function CalendarLawyer() {
       alert("No appointment selected");
       return;
     }
-
+  
     // Get the contents of the appointment details section
     const printContents = document.getElementById(
       "appointment-details-section"
     ).innerHTML;
-
+  
     // Create a temporary div to modify the contents for printing
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = printContents;
-
+  
     // Remove any elements you don't want to print (with class 'no-print')
     const noPrintSection = tempDiv.querySelectorAll(".no-print");
     noPrintSection.forEach((section) => section.remove());
-
+  
     const modifiedPrintContents = tempDiv.innerHTML;
-
+  
     // Open a new window for printing
     const printWindow = window.open("", "", "height=500, width=500");
     printWindow.document.write(
       "<html><head><title>Appointment Details</title></head><body>"
     );
-
+  
     // Add custom styles for the print layout, including setting the paper size to legal (8.5x13 inches)
     printWindow.document.write("<style>");
     printWindow.document.write(`
@@ -175,7 +175,12 @@ function CalendarLawyer() {
             }
             .page-break { page-break-before: always; }
             .print-section { page-break-inside: avoid; }
-            .print-image { width: 100%; height: auto; object-fit: cover; }
+            .print-image {
+              width: 100%;
+              height: auto;
+              object-fit: contain; /* Ensure the image fits the page */
+              page-break-after: always; /* Ensure 1 image per page */
+            }
             table {
               width: 100%;
               border-collapse: collapse;
@@ -203,7 +208,7 @@ function CalendarLawyer() {
           }
         `);
     printWindow.document.write("</style>");
-
+  
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
           <div style="text-align: center;">
@@ -217,57 +222,10 @@ function CalendarLawyer() {
           </div>
           <hr />
         `);
-
-    // Insert the modified contents
+  
+    // Insert the modified contents (excluding reschedule history)
     printWindow.document.write(modifiedPrintContents);
-
-    // Add the reschedule history section
-    if (
-      selectedAppointment.rescheduleHistory &&
-      selectedAppointment.rescheduleHistory.length > 0
-    ) {
-      printWindow.document.write(`
-        <h2 style="color: #a34bc9; font-size: 16px;">Reschedule History</h2>
-        <table style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr>
-              <th style="border: 1px solid black; padding: 8px;">Original Date</th>
-              <th style="border: 1px solid black; padding: 8px;">Original Type</th>
-              <th style="border: 1px solid black; padding: 8px;">Reason</th>
-              <th style="border: 1px solid black; padding: 8px;">Reschedule Time</th>
-            </tr>
-          </thead>
-          <tbody>
-      `);
-
-      selectedAppointment.rescheduleHistory.forEach((entry) => {
-        printWindow.document.write(`
-          <tr>
-            <td style="border: 1px solid black; padding: 8px;">${getFormattedDate(
-              entry.rescheduleDate,
-              true
-            )}</td>
-            <td style="border: 1px solid black; padding: 8px;">${
-              entry.rescheduleAppointmentType || "N/A"
-            }</td>
-            <td style="border: 1px solid black; padding: 8px;">${
-              entry.rescheduleReason || "N/A"
-            }</td>
-            <td style="border: 1px solid black; padding: 8px;">${getFormattedDate(
-              entry.rescheduleTimestamp,
-              true
-            )}</td>
-          </tr>
-        `);
-      });
-
-      printWindow.document.write(`
-          </tbody>
-        </table>
-        <br />
-      `);
-    }
-
+  
     // Include any relevant images for printing
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
@@ -278,16 +236,17 @@ function CalendarLawyer() {
         );
       }
     });
-
+  
     // Close and trigger the print dialog
     printWindow.document.write("</body></html>");
     printWindow.document.close();
     printWindow.focus(); // Focus the window to ensure it shows up
     printWindow.print(); // Trigger print
-
+  
     // Close the print window after printing
     printWindow.onafterprint = () => printWindow.close();
   };
+  
 
   const closeModal = () => {
     setIsModalOpen(false);
