@@ -638,42 +638,47 @@ function Appointments() {
 
   const handleSubmitProceedingNotes = async (e) => {
     e.preventDefault();
-  
+
     if (isSubmitting) return;
     setIsSubmitting(true);
-  
+
     try {
       let fileUrl = null;
-  
+
       // Check if a file is selected and upload it to Firebase Storage
       if (proceedingFile) {
         const currentUid = currentUser.uid; // Current user's UID
         const controlNumber = selectedAppointment.controlNumber; // Get control number from selected appointment
         const fullName = selectedAppointment.fullName.replace(/ /g, "_"); // Replace spaces with underscores in full name
-  
+
         // Get Firebase storage reference
         const storage = getStorage(); // Initialize Firebase Storage
-        const fileRef = ref(storage, `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`);
-  
+        const fileRef = ref(
+          storage,
+          `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
+        );
+
         // Upload the file
-        await uploadBytes(fileRef, proceedingFile); 
+        await uploadBytes(fileRef, proceedingFile);
         fileUrl = await getDownloadURL(fileRef); // Get the download URL after upload
       }
-  
+
       // Update appointment data in Firestore
       const updatedData = {
         "appointmentDetails.proceedingNotes": proceedingNotes,
-        "appointmentDetails.ibpParalegalStaff": clientEligibility.ibpParalegalStaff,
-        "appointmentDetails.assistingCounsel": clientEligibility.assistingCounsel,
+        "appointmentDetails.ibpParalegalStaff":
+          clientEligibility.ibpParalegalStaff,
+        "appointmentDetails.assistingCounsel":
+          clientEligibility.assistingCounsel,
         "appointmentDetails.appointmentStatus": "done",
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
         "appointmentDetails.proceedingFileUrl": fileUrl, // Save the file URL (if uploaded)
       };
-  
+
       // Update the appointment document in Firestore with the proceeding notes and file URL
       await updateAppointment(selectedAppointment.id, updatedData);
-  
+
       // Notify success and reset form values
       setSnackbarMessage("Remarks have been successfully submitted.");
       setProceedingNotes(""); // Reset proceeding notes
@@ -684,18 +689,18 @@ function Appointments() {
         ibpParalegalStaff: "",
         assistingCounsel: "",
       });
-  
+
       // Send notifications as needed
       const clientFullName = selectedAppointment.fullName;
       const appointmentId = selectedAppointment.id;
-  
+
       await sendNotification(
         `Your appointment (ID: ${appointmentId}) has been marked as done.`,
         selectedAppointment.uid,
         "appointment",
         selectedAppointment.controlNumber
       );
-  
+
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
           `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
@@ -704,7 +709,7 @@ function Appointments() {
           selectedAppointment.controlNumber
         );
       }
-  
+
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
         await sendNotification(
@@ -714,10 +719,9 @@ function Appointments() {
           selectedAppointment.controlNumber
         );
       }
-  
+
       // Optionally close the form/modal after successful submission
       setShowProceedingNotesForm(false);
-  
     } catch (error) {
       setSnackbarMessage("Error submitting remarks, please try again.");
     } finally {
@@ -726,7 +730,6 @@ function Appointments() {
       setIsSubmitting(false);
     }
   };
-  
 
   const handleRescheduleSubmit = async (e) => {
     e.preventDefault();
@@ -2041,54 +2044,61 @@ function Appointments() {
                 </label>
               </div>
               <br />
-              <div>
-                <b>
-                  <label>Record of Consultation *</label>
-                </b>
-                <textarea
-                  name="proceedingNotes"
-                  rows="4"
-                  placeholder="Enter proceeding notes here..."
-                  value={proceedingNotes}
-                  onChange={handleNotesChange}
-                  required
-                ></textarea>
-              </div>
-              <br />
-              <div>
-                <b>
-                  <label>Attach File (optional):</label>
-                </b>
-                <input
-                  type="file"
-                  name="proceedingFile"
-                  accept="application/pdf, image/*" // Limit the file types
-                  onChange={(e) => setProceedingFile(e.target.files[0])} // Capture file
-                />
-              </div>
-              <br />
-              <div>
-                <b>
-                  <label>IBP Paralegal/Staff:</label>
-                </b>
-                <input
-                  type="text"
-                  name="ibpParalegalStaff"
-                  placeholder="Enter name here..."
-                  value={clientEligibility.ibpParalegalStaff}
-                  onChange={handleChange}
-                />
-                <b>
-                  <label>Assisting Counsel:</label>
-                </b>
-                <input
-                  type="text"
-                  name="assistingCounsel"
-                  placeholder="Enter name here..."
-                  value={clientEligibility.assistingCounsel}
-                  onChange={handleChange}
-                />
-              </div>
+
+              {/* Only show these fields if the client attended (if 'Yes' is selected) */}
+              {clientAttend === "yes" && (
+                <>
+                  <div>
+                    <b>
+                      <label>Record of Consultation *</label>
+                    </b>
+                    <textarea
+                      name="proceedingNotes"
+                      rows="4"
+                      placeholder="Enter proceeding notes here..."
+                      value={proceedingNotes}
+                      onChange={handleNotesChange}
+                      required
+                    ></textarea>
+                  </div>
+                  <br />
+                  <div>
+                    <b>
+                      <label>Attach File (optional):</label>
+                    </b>
+                    <input
+                      type="file"
+                      name="proceedingFile"
+                      accept="application/pdf, image/*" // Limit the file types
+                      onChange={(e) => setProceedingFile(e.target.files[0])} // Capture file
+                    />
+                  </div>
+                  <br />
+                  <div>
+                    <b>
+                      <label>IBP Paralegal/Staff:</label>
+                    </b>
+                    <input
+                      type="text"
+                      name="ibpParalegalStaff"
+                      placeholder="Enter name here..."
+                      value={clientEligibility.ibpParalegalStaff}
+                      onChange={handleChange}
+                    />
+                    <b>
+                      <label>Assisting Counsel:</label>
+                    </b>
+                    <input
+                      type="text"
+                      name="assistingCounsel"
+                      placeholder="Enter name here..."
+                      value={clientEligibility.assistingCounsel}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </>
+              )}
+
               <button disabled={isSubmitting}>Submit</button>
             </form>
           </div>

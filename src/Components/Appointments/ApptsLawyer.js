@@ -2030,54 +2030,61 @@ function ApptsLawyer() {
                 </label>
               </div>
               <br />
-              <div>
-                <b>
-                  <label>Record of Consultation *</label>
-                </b>
-                <textarea
-                  name="proceedingNotes"
-                  rows="4"
-                  placeholder="Enter proceeding notes here..."
-                  value={proceedingNotes}
-                  onChange={handleNotesChange}
-                  required
-                ></textarea>
-              </div>
-              <br />
-              <div>
-                <b>
-                  <label>Attach File (optional):</label>
-                </b>
-                <input
-                  type="file"
-                  name="proceedingFile"
-                  accept="application/pdf, image/*" // Limit the file types
-                  onChange={(e) => setProceedingFile(e.target.files[0])} // Capture file
-                />
-              </div>
-              <br />
-              <div>
-                <b>
-                  <label>IBP Paralegal/Staff:</label>
-                </b>
-                <input
-                  type="text"
-                  name="ibpParalegalStaff"
-                  placeholder="Enter name here..."
-                  value={clientEligibility.ibpParalegalStaff}
-                  onChange={handleChange}
-                />
-                <b>
-                  <label>Assisting Counsel:</label>
-                </b>
-                <input
-                  type="text"
-                  name="assistingCounsel"
-                  placeholder="Enter name here..."
-                  value={clientEligibility.assistingCounsel}
-                  onChange={handleChange}
-                />
-              </div>
+
+              {/* Only show these fields if the client attended (if 'Yes' is selected) */}
+              {clientAttend === "yes" && (
+                <>
+                  <div>
+                    <b>
+                      <label>Record of Consultation *</label>
+                    </b>
+                    <textarea
+                      name="proceedingNotes"
+                      rows="4"
+                      placeholder="Enter proceeding notes here..."
+                      value={proceedingNotes}
+                      onChange={handleNotesChange}
+                      required
+                    ></textarea>
+                  </div>
+                  <br />
+                  <div>
+                    <b>
+                      <label>Attach File (optional):</label>
+                    </b>
+                    <input
+                      type="file"
+                      name="proceedingFile"
+                      accept="application/pdf, image/*" // Limit the file types
+                      onChange={(e) => setProceedingFile(e.target.files[0])} // Capture file
+                    />
+                  </div>
+                  <br />
+                  <div>
+                    <b>
+                      <label>IBP Paralegal/Staff:</label>
+                    </b>
+                    <input
+                      type="text"
+                      name="ibpParalegalStaff"
+                      placeholder="Enter name here..."
+                      value={clientEligibility.ibpParalegalStaff}
+                      onChange={handleChange}
+                    />
+                    <b>
+                      <label>Assisting Counsel:</label>
+                    </b>
+                    <input
+                      type="text"
+                      name="assistingCounsel"
+                      placeholder="Enter name here..."
+                      value={clientEligibility.assistingCounsel}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </>
+              )}
+
               <button disabled={isSubmitting}>Submit</button>
             </form>
           </div>
