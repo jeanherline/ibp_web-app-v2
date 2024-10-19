@@ -194,9 +194,8 @@ function Appointments() {
     }
   
     // Get the contents of the appointment details section
-    const printContents = document.getElementById(
-      "appointment-details-section"
-    ).innerHTML;
+    const printContents = document.getElementById("appointment-details-section")
+      .innerHTML;
   
     // Create a temporary div to modify the contents for printing
     const tempDiv = document.createElement("div");
@@ -214,7 +213,7 @@ function Appointments() {
       "<html><head><title>Appointment Details</title></head><body>"
     );
   
-    // Add custom styles for the table layout and flexible widths
+    // Add modern, professional styles for printing
     printWindow.document.write("<style>");
     printWindow.document.write(`
       @media print {
@@ -247,70 +246,48 @@ function Appointments() {
           margin-top: 20px;
           margin-bottom: 5px;
           text-transform: uppercase;
-          border-bottom: 1px solid #000;
+          border-bottom: 2px solid #000;
           padding-bottom: 5px;
         }
-  
-        /* Flexible table styles */
-        .flexible-table {
-          table-layout: auto;
+        table {
           width: 100%;
           border-collapse: collapse;
+          margin-bottom: 20px;
+          font-size: 12px;
         }
-        .flexible-table thead th {
-          padding: 12px;
+        table, th, td {
+          border: 2px solid #000;
+        }
+        th, td {
+          padding: 10px;
           text-align: left;
-          background-color: #f2f2f2;
-          border-bottom: 2px solid #ddd;
         }
-  
-        /* Unique width settings for each header column */
-        .flexible-table thead th:nth-child(1) {
-          width: 5%; /* Control number column */
+        th {
+          background-color: #d9d9d9;
+          font-weight: bold;
+          text-align: center;
+          text-transform: uppercase;
         }
-        .flexible-table thead th:nth-child(2) {
-          width: 20%; /* Full Name column */
+        td {
+          text-align: center;
         }
-        .flexible-table thead th:nth-child(3) {
-          width: 25%; /* Legal Assistance column */
+        .form-label {
+          font-size: 12px;
+          font-weight: bold;
+          text-transform: uppercase;
+          padding-top: 10px;
         }
-        .flexible-table thead th:nth-child(4) {
-          width: 20%; /* Scheduled Date column */
+        .form-field {
+          font-size: 12px;
+          border-bottom: 1px solid #000;
+          margin-bottom: 5px;
+          padding-bottom: 2px;
         }
-        .flexible-table thead th:nth-child(5) {
-          width: 10%; /* Type column */
-        }
-        .flexible-table thead th:nth-child(6) {
-          width: 10%; /* Status column */
-        }
-        .flexible-table thead th:nth-child(7) {
-          width: 5%; /* Link column */
-        }
-        .flexible-table thead th:nth-child(8) {
-          width: 15%; /* Action column */
-        }
-  
-        /* Make rows dependent on content, not aligned */
-        .flexible-table td {
-          padding: 8px;
-          border: 1px solid #ddd;
-          white-space: nowrap; /* Prevent text from breaking in the table cells */
-        }
-  
-        /* Additional tweaks for irregularity */
-        .flexible-table tr td:nth-child(3) {
-          padding-left: 10px;
-        }
-  
-        .flexible-table tr td:nth-child(5) {
-          padding-right: 20px;
-        }
-  
         .print-image {
-          width: 100%; 
-          height: auto; 
-          max-height: 10in; /* Ensure image fits within the page */
-          object-fit: contain; /* Maintain aspect ratio */
+          width: 100%;
+          height: auto;
+          max-height: 10in;
+          object-fit: contain;
           display: block;
           margin-bottom: 10px;
           page-break-before: always;
