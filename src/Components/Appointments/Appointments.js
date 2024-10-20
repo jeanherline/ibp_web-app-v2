@@ -380,24 +380,21 @@ function Appointments() {
     return () => unsubscribe();
   }, []);
 
-  const fetchAppointments = async (
-    lastVisible = null,
-    pageDirection = "next"
-  ) => {
+  const fetchAppointments = async (lastVisible = null, pageDirection = "next") => {
     try {
       console.log("Fetching appointments. Last visible:", lastVisible);
-
+  
       let queryRef = collection(fs, "appointments");
-
-      // Apply filters
+  
+      // Apply filters (for status and legal assistance)
       const conditions = [];
-
+  
       if (filter && filter !== "all") {
         conditions.push(
           where("appointmentDetails.appointmentStatus", "==", filter)
         );
       }
-
+  
       if (
         natureOfLegalAssistanceFilter &&
         natureOfLegalAssistanceFilter !== "all"
@@ -410,90 +407,98 @@ function Appointments() {
           )
         );
       }
-
+  
       if (conditions.length > 0) {
         queryRef = query(queryRef, ...conditions);
       }
-
+  
       queryRef = query(
         queryRef,
         orderBy("appointmentDetails.createdDate", "desc")
       );
-
+  
       // Handle pagination direction
       if (lastVisible) {
         if (pageDirection === "prev") {
           queryRef = query(
             queryRef,
-            endBefore(lastVisible),
+            endBefore(lastVisible), // Use endBefore for previous page
             limitToLast(pageSize)
           );
         } else {
-          queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
+          queryRef = query(
+            queryRef,
+            startAfter(lastVisible), // Use startAfter for next page
+            limit(pageSize)
+          );
         }
       } else {
         queryRef = query(queryRef, limit(pageSize));
       }
-
+  
       const querySnapshot = await getDocs(queryRef);
-
+  
       if (querySnapshot.empty) {
         return { data: [], total: 0, firstDoc: null, lastDoc: null };
       }
-
-      // Filter results based on search text
-      const filtered = querySnapshot.docs.filter((doc) => {
+  
+      const appointmentsData = querySnapshot.docs.map((doc) => {
         const data = doc.data();
-        return (
-          data.applicantProfile?.fullName
-            ?.toLowerCase()
-            .includes(searchText.toLowerCase()) ||
-          data.applicantProfile?.address
-            ?.toLowerCase()
-            .includes(searchText.toLowerCase()) ||
-          data.applicantProfile?.contactNumber?.includes(searchText) ||
-          data.appointmentDetails?.controlNumber?.includes(searchText) ||
-          data.legalAssistanceRequested?.selectedAssistanceType
-            ?.toLowerCase()
-            .includes(searchText.toLowerCase())
-        );
+        return {
+          id: doc.id,
+          ...data.applicantProfile,
+          ...data.employmentProfile,
+          ...data.legalAssistanceRequested,
+          ...data.uploadedImages,
+          createdDate: data.appointmentDetails?.createdDate,
+          appointmentStatus: data.appointmentDetails?.appointmentStatus,
+          controlNumber: data.appointmentDetails?.controlNumber,
+          appointmentDate: data.appointmentDetails?.appointmentDate,
+          clientEligibility: data.clientEligibility,
+          appointmentDetails: data.appointmentDetails,
+          reviewerDetails: data.reviewerDetails,
+          proceedingNotes: data.proceedingNotes,
+          rescheduleHistory: data.rescheduleHistory || [],
+        };
       });
-
-      // Get the total count of documents matching the filter
-      const countSnapshot = await getCountFromServer(
-        query(collection(fs, "appointments"), ...conditions)
-      );
-
-      // Return fetched appointments and updated page markers
-      return {
-        data: filtered.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data.applicantProfile,
-            ...data.employmentProfile,
-            ...data.legalAssistanceRequested,
-            ...data.uploadedImages,
-            createdDate: data.appointmentDetails?.createdDate,
-            appointmentStatus: data.appointmentDetails?.appointmentStatus,
-            controlNumber: data.appointmentDetails?.controlNumber,
-            appointmentDate: data.appointmentDetails?.appointmentDate,
-            clientEligibility: data.clientEligibility,
-            appointmentDetails: data.appointmentDetails,
-            reviewerDetails: data.reviewerDetails,
-            proceedingNotes: data.proceedingNotes,
-            rescheduleHistory: data.rescheduleHistory || [],
-          };
-        }),
-        total: countSnapshot.data().count,
-        firstDoc: querySnapshot.docs[0],
-        lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
-      };
+  
+      // Set the fetched data and update the last visible document
+      setAppointments(appointmentsData);  // Update the state for appointments
+      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);  // Update the lastVisible for pagination
     } catch (error) {
       console.error("Error fetching appointments:", error);
       return { data: [], total: 0, firstDoc: null, lastDoc: null };
     }
   };
+  
+  // Pagination handlers
+  const handleNext = async () => {
+    if (currentPage < totalPages) {
+      await fetchAppointments(lastVisible, "next");
+      setCurrentPage((prevPage) => prevPage + 1); // Update the current page
+    }
+  };
+  
+  const handlePrevious = async () => {
+    if (currentPage > 1) {
+      await fetchAppointments(lastVisible, "prev");
+      setCurrentPage((prevPage) => prevPage - 1); // Update the current page
+    }
+  };
+  
+  const handleFirst = async () => {
+    // Reset to first page
+    setLastVisible(null);
+    await fetchAppointments(null, "next");
+    setCurrentPage(1);
+  };
+  
+  const handleLast = async () => {
+    // Fetch the last page
+    // This logic can be more complex depending on your requirements
+    setCurrentPage(totalPages);
+  };
+  
 
   useEffect(() => {
     const resetPagination = async () => {
