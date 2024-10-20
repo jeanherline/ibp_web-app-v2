@@ -367,38 +367,50 @@ function Appointments() {
 
   useEffect(() => {
     const fetchAppointments = async () => {
+      setAppointments([]); // Reset the table data before fetching new results
       try {
         const { data, total } = await getAppointments(
-          filter, // Pass the selected status filter
-          lastVisible, // Pass the pagination's lastVisible state
+          filter, // Filter by status
+          lastVisible, // For pagination, start from the last visible document
           pageSize,
-          searchText,
-          natureOfLegalAssistanceFilter // Pass the selected nature of legal assistance filter
+          searchText, // For search
+          natureOfLegalAssistanceFilter // Filter by legal assistance type
         );
 
-        setAppointments(data); // Set the filtered data in state
-        setTotalPages(Math.ceil(total / pageSize)); // Update total pages based on the total filtered items
-        setTotalFilteredItems(total); // Update total filtered items count
+        setAppointments(data); // Update the table with filtered appointments
+        setTotalPages(Math.ceil(total / pageSize)); // Calculate total pages
+        setTotalFilteredItems(total); // Update total filtered item count
       } catch (error) {
         console.error("Error fetching appointments:", error);
       }
     };
 
     fetchAppointments();
-  }, [filter, natureOfLegalAssistanceFilter, searchText, lastVisible]); // Add all dependencies
+  }, [
+    filter,
+    natureOfLegalAssistanceFilter,
+    searchText,
+    currentPage, // Re-fetch when the page changes
+  ]);
 
   const handleFilterChange = (e) => {
-    setFilter(e.target.value); // Update the status filter
+    setFilter(e.target.value); // Update status filter
     setLastVisible(null); // Reset pagination to start from the first page
-    setCurrentPage(1); // Reset the current page to the first page
+    setCurrentPage(1); // Set page to 1 when changing filter
   };
   
   const handleNatureOfLegalAssistanceFilterChange = (e) => {
-    setNatureOfLegalAssistanceFilter(e.target.value); // Update the nature of legal assistance filter
+    setNatureOfLegalAssistanceFilter(e.target.value); // Update legal assistance type filter
     setLastVisible(null); // Reset pagination to start from the first page
-    setCurrentPage(1); // Reset the current page to the first page
+    setCurrentPage(1); // Set page to 1 when changing filter
   };
   
+  const handleSearchTextChange = (e) => {
+    setSearchText(e.target.value); // Update search text
+    setLastVisible(null); // Reset pagination to start from the first page
+    setCurrentPage(1); // Set page to 1 when changing search term
+  };
+
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
       setBookedSlots(slots);
@@ -506,67 +518,57 @@ function Appointments() {
     return !isSlotBookedByAssignedLawyer(dateTime);
   };
 
-  // Handle navigating to the next page
   const handleNext = async () => {
     if (currentPage < totalPages) {
       const { data, lastDoc } = await getAppointments(
         filter,
-        lastVisible,
+        lastVisible, // Use the lastVisible document for pagination
         pageSize,
         searchText,
         natureOfLegalAssistanceFilter
       );
-      setAppointments(data);
-      setLastVisible(lastDoc); // Set lastVisible to the last document of the current page
-      setCurrentPage(currentPage + 1); // Increment the current page
+  
+      setAppointments(data); // Update appointments for the current page
+      setLastVisible(lastDoc); // Update the last visible document
+      setCurrentPage(currentPage + 1); // Move to the next page
     }
   };
-
-  // Handle navigating to the previous page
+  
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      const { data, firstDoc } = await getAppointments(
-        filter,
-        lastVisible,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter,
-        true // Pass isPrevious as true to fetch previous page
-      );
-      setAppointments(data);
-      setLastVisible(firstDoc); // Set lastVisible to the first document of the previous page
-      setCurrentPage(currentPage - 1); // Decrement the current page
+      setCurrentPage(currentPage - 1);
+      setLastVisible(null); // Reset to fetch from the beginning
     }
   };
-
-  // Handle navigating to the first page
+  
   const handleFirst = async () => {
-    const { data, firstDoc } = await getAppointments(
+    const { data, firstDoc } = await getLawyerAppointments(
       filter,
-      null, // Fetch from the beginning, no lastVisible
+      null,
       pageSize,
       searchText,
-      natureOfLegalAssistanceFilter
+      natureOfLegalAssistanceFilter,
+      currentUser
     );
     setAppointments(data);
-    setLastVisible(firstDoc); // Set lastVisible to the first document
-    setCurrentPage(1); // Reset current page to 1
+    setLastVisible(firstDoc);
+    setCurrentPage(1);
   };
 
-  // Handle navigating to the last page
   const handleLast = async () => {
-    const { data, lastDoc } = await getAppointments(
+    const { data, lastDoc } = await getLawyerAppointments(
       filter,
       lastVisible,
       pageSize,
       searchText,
       natureOfLegalAssistanceFilter,
+      currentUser,
       false,
-      true // Fetch the last page
+      true
     );
     setAppointments(data);
-    setLastVisible(lastDoc); // Set lastVisible to the last document
-    setCurrentPage(totalPages); // Set current page to the last page
+    setLastVisible(lastDoc);
+    setCurrentPage(totalPages);
   };
 
   const toggleDetails = (appointment) => {
