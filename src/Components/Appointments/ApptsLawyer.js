@@ -1330,6 +1330,82 @@ function ApptsLawyer() {
               <h2>Appointment Details</h2>
               <div id="appointment-details-section">
                 <section className="mb-4 print-section">
+                  <h2>
+                    <em
+                      style={{
+                        color: "#a34bc9",
+                        fontSize: "16px",
+                      }}
+                    >
+                      Applicant Profile
+                    </em>
+                  </h2>
+                  <table className="table table-striped table-bordered">
+                    <tbody>
+                      <tr>
+                        <th>Full Name:</th>
+                        <td>{selectedAppointment.fullName}</td>
+                      </tr>
+                      <tr>
+                        <th>Date of Birth:</th>
+                        <td>
+                          {selectedAppointment.dob
+                            ? new Date(
+                                selectedAppointment.dob
+                              ).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })
+                            : "N/A"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Contact Number:</th>
+                        <td>
+                          {selectedAppointment?.contactNumber ||
+                            "Not Available"}
+                        </td>
+                      </tr>
+                      <>
+                        <tr>
+                          <th>Address:</th>
+                          <td>
+                            {selectedAppointment?.address || "Not Available"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>Gender:</th>
+                          <td>
+                            {selectedAppointment?.selectedGender ||
+                              "Not Specified"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>Spouse Name:</th>
+                          <td>
+                            {selectedAppointment.spouseName || "Not Available"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>Spouse Occupation:</th>
+                          <td>
+                            {selectedAppointment.spouseOccupation ||
+                              "Not Available"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>Children Names and Ages:</th>
+                          <td>
+                            {selectedAppointment.childrenNamesAges ||
+                              "Not Available"}
+                          </td>
+                        </tr>
+                      </>
+                    </tbody>
+                  </table>
+                </section>
+                <section className="mb-4 print-section">
                   {(selectedAppointment.appointmentDetails?.newRequest ||
                     selectedAppointment.appointmentDetails?.requestReason) && (
                     <section className="mb-4 print-section">
@@ -1726,83 +1802,6 @@ function ApptsLawyer() {
                 ) : (
                   <p>No reschedule history available.</p>
                 )}
-
-                <section className="mb-4 print-section">
-                  <h2>
-                    <em
-                      style={{
-                        color: "#a34bc9",
-                        fontSize: "16px",
-                      }}
-                    >
-                      Applicant Profile
-                    </em>
-                  </h2>
-                  <table className="table table-striped table-bordered">
-                    <tbody>
-                      <tr>
-                        <th>Full Name:</th>
-                        <td>{selectedAppointment.fullName}</td>
-                      </tr>
-                      <tr>
-                        <th>Date of Birth:</th>
-                        <td>
-                          {selectedAppointment.dob
-                            ? new Date(
-                                selectedAppointment.dob
-                              ).toLocaleDateString("en-US", {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              })
-                            : "N/A"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Contact Number:</th>
-                        <td>
-                          {selectedAppointment?.contactNumber ||
-                            "Not Available"}
-                        </td>
-                      </tr>
-                      <>
-                        <tr>
-                          <th>Address:</th>
-                          <td>
-                            {selectedAppointment?.address || "Not Available"}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Gender:</th>
-                          <td>
-                            {selectedAppointment?.selectedGender ||
-                              "Not Specified"}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Spouse Name:</th>
-                          <td>
-                            {selectedAppointment.spouseName || "Not Available"}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Spouse Occupation:</th>
-                          <td>
-                            {selectedAppointment.spouseOccupation ||
-                              "Not Available"}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Children Names and Ages:</th>
-                          <td>
-                            {selectedAppointment.childrenNamesAges ||
-                              "Not Available"}
-                          </td>
-                        </tr>
-                      </>
-                    </tbody>
-                  </table>
-                </section>
 
                 <section className="mb-4 print-section">
                   <h2>
