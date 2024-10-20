@@ -369,36 +369,88 @@ function Appointments() {
     try {
       console.log("Fetching appointments. Last visible:", lastVisible);
   
-      const queryResult = await getAppointments(
-        filter,
-        lastVisible, // Pass the last visible document for pagination
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter,
-        pageDirection === "prev" // Determine if this is a previous page
-      );
+      let queryRef = collection(fs, "appointments");
   
-      const { data, total, firstDoc, lastDoc } = queryResult;
+      // Apply filters
+      const conditions = [];
   
-      console.log("Fetched data:", data);
-      console.log("First Doc: ", firstDoc, "Last Doc: ", lastDoc);
-  
-      if (pageDirection === "next") {
-        setPageMarkers((prev) => [...prev, lastDoc]); // Store the lastDoc for the current page
-        setLastVisible(lastDoc);
-      } else if (pageDirection === "prev") {
-        setPageMarkers((prev) => prev.slice(0, -1)); // Remove the last page marker when going back
-        setLastVisible(pageMarkers[pageMarkers.length - 2]); // Set to the previous page's lastVisible
+      if (filter && filter !== "all") {
+        conditions.push(where("appointmentDetails.appointmentStatus", "==", filter));
       }
   
-      setAppointments(data);
-      setTotalPages(Math.ceil(total / pageSize));
-      setTotalFilteredItems(total);
+      if (natureOfLegalAssistanceFilter && natureOfLegalAssistanceFilter !== "all") {
+        conditions.push(where("legalAssistanceRequested.selectedAssistanceType", "==", natureOfLegalAssistanceFilter));
+      }
   
+      if (conditions.length > 0) {
+        queryRef = query(queryRef, ...conditions);
+      }
+  
+      queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
+  
+      // Handle pagination direction
+      if (lastVisible) {
+        if (pageDirection === "prev") {
+          queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
+        } else {
+          queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
+        }
+      } else {
+        queryRef = query(queryRef, limit(pageSize));
+      }
+  
+      const querySnapshot = await getDocs(queryRef);
+  
+      if (querySnapshot.empty) {
+        return { data: [], total: 0, firstDoc: null, lastDoc: null };
+      }
+  
+      // Filter results based on search text
+      const filtered = querySnapshot.docs.filter((doc) => {
+        const data = doc.data();
+        return (
+          data.applicantProfile?.fullName?.toLowerCase().includes(searchText.toLowerCase()) ||
+          data.applicantProfile?.address?.toLowerCase().includes(searchText.toLowerCase()) ||
+          data.applicantProfile?.contactNumber?.includes(searchText) ||
+          data.appointmentDetails?.controlNumber?.includes(searchText) ||
+          data.legalAssistanceRequested?.selectedAssistanceType?.toLowerCase().includes(searchText.toLowerCase())
+        );
+      });
+  
+      // Get the total count of documents matching the filter
+      const countSnapshot = await getCountFromServer(query(collection(fs, "appointments"), ...conditions));
+  
+      // Return fetched appointments and updated page markers
+      return {
+        data: filtered.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data.applicantProfile,
+            ...data.employmentProfile,
+            ...data.legalAssistanceRequested,
+            ...data.uploadedImages,
+            createdDate: data.appointmentDetails?.createdDate,
+            appointmentStatus: data.appointmentDetails?.appointmentStatus,
+            controlNumber: data.appointmentDetails?.controlNumber,
+            appointmentDate: data.appointmentDetails?.appointmentDate,
+            clientEligibility: data.clientEligibility,
+            appointmentDetails: data.appointmentDetails,
+            reviewerDetails: data.reviewerDetails,
+            proceedingNotes: data.proceedingNotes,
+            rescheduleHistory: data.rescheduleHistory || [],
+          };
+        }),
+        total: countSnapshot.data().count,
+        firstDoc: querySnapshot.docs[0],
+        lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
+      };
     } catch (error) {
       console.error("Error fetching appointments:", error);
+      return { data: [], total: 0, firstDoc: null, lastDoc: null };
     }
   };
+  
   
   useEffect(() => {
     const resetPagination = async () => {
@@ -517,31 +569,32 @@ function Appointments() {
     return !isSlotBookedByAssignedLawyer(dateTime);
   };
 
-  const handleNext = async () => {
-    if (currentPage < totalPages) {
-      await fetchAppointments(lastVisible, "next");
-      setCurrentPage(currentPage + 1);
-    }
-  };
-  
-  const handlePrevious = async () => {
-    if (currentPage > 1) {
-      await fetchAppointments(lastVisible, "prev");
-      setCurrentPage(currentPage - 1);
-    }
-  };
-  
-  const handleFirst = async () => {
-    setLastVisible(null); // Reset to fetch from the start
-    setPageMarkers([]); // Clear page markers
-    await fetchAppointments(null, "next");
-    setCurrentPage(1);
-  };
-  
-  const handleLast = async () => {
-    // Fetch last page logic here, e.g., use `pageMarkers` to navigate to the end if implemented
-    setCurrentPage(totalPages);
-  };
+ // Pagination handlers
+const handleNext = async () => {
+  if (currentPage < totalPages) {
+    await fetchAppointments(lastVisible, "next");
+    setCurrentPage(currentPage + 1);
+  }
+};
+
+const handlePrevious = async () => {
+  if (currentPage > 1) {
+    await fetchAppointments(lastVisible, "prev");
+    setCurrentPage(currentPage - 1);
+  }
+};
+
+const handleFirst = async () => {
+  setLastVisible(null); // Reset to fetch from the start
+  setPageMarkers([]); // Clear page markers
+  await fetchAppointments(null, "next");
+  setCurrentPage(1);
+};
+
+const handleLast = async () => {
+  // Implement logic to fetch the last page if needed
+  setCurrentPage(totalPages);
+};
 
   // Reset pagination when filters or searchText change
   useEffect(() => {
