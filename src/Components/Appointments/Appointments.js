@@ -403,11 +403,18 @@ function Appointments() {
         natureOfLegalAssistanceFilter
       );
       setAppointments(data);
-      setLastVisible(lastDoc);
+      setLastVisible(lastDoc); // This line ensures that the last visible doc is updated only once.
     };
 
-    fetchAppointments(); // Fetch appointments whenever filter/search/pagination changes
-  }, [filter, searchText, lastVisible, natureOfLegalAssistanceFilter]);
+    // Call the function when dependencies change
+    fetchAppointments();
+  }, [
+    filter,
+    searchText,
+    currentPage,
+    lastVisible,
+    natureOfLegalAssistanceFilter,
+  ]);
 
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
@@ -516,6 +523,20 @@ function Appointments() {
     return !isSlotBookedByAssignedLawyer(dateTime);
   };
 
+  const handlePageChange = async (newPage) => {
+    if (newPage === currentPage) return; // Prevents unnecessary refetch
+    setCurrentPage(newPage);
+    const { data, lastDoc } = await getAppointments(
+      filter,
+      lastVisible,
+      pageSize,
+      searchText,
+      natureOfLegalAssistanceFilter
+    );
+    setAppointments(data);
+    setLastVisible(lastDoc);
+  };
+
   const handleNext = async () => {
     if (currentPage < totalPages) {
       const { data, lastDoc } = await getAppointments(
@@ -527,7 +548,7 @@ function Appointments() {
       );
       setAppointments(data);
       setLastVisible(lastDoc); // Update the last visible doc
-      setCurrentPage(currentPage + 1); // Move to the next page
+      setCurrentPage((prevPage) => prevPage + 1); // Move to the next page
     }
   };
 
@@ -1375,9 +1396,16 @@ function Appointments() {
             <Pagination.Item
               key={index + 1}
               active={index + 1 === currentPage}
-              onClick={() => {
+              onClick={async () => {
                 setCurrentPage(index + 1);
-                setLastVisible(appointments[index]);
+                const { data, lastDoc } = await getAppointments(
+                  filter,
+                  appointments[index], // Properly fetch the last visible appointment for this page
+                  pageSize,
+                  searchText,
+                  natureOfLegalAssistanceFilter
+                );
+                setLastVisible(lastDoc); // Update only after data is fetched
               }}
             >
               {index + 1}
