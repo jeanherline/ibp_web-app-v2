@@ -73,7 +73,6 @@ function Appointments() {
   const [holidays, setHolidays] = useState([]);
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
-  const [firstDoc, setFirstDoc] = useState(null);
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
@@ -193,28 +192,28 @@ function Appointments() {
       alert("No appointment selected");
       return;
     }
-
+  
     // Get the contents of the appointment details section
     const printContents = document.getElementById(
       "appointment-details-section"
     ).innerHTML;
-
+  
     // Create a temporary div to modify the contents for printing
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = printContents;
-
+  
     // Remove any elements you don't want to print (with class 'no-print')
     const noPrintSection = tempDiv.querySelectorAll(".no-print");
     noPrintSection.forEach((section) => section.remove());
-
+  
     const modifiedPrintContents = tempDiv.innerHTML;
-
+  
     // Open a new window for printing
     const printWindow = window.open("", "", "height=500, width=500");
     printWindow.document.write(
       "<html><head><title>Appointment Details</title></head><body>"
     );
-
+  
     // Add modern, professional styles for printing
     printWindow.document.write("<style>");
     printWindow.document.write(`
@@ -318,7 +317,7 @@ function Appointments() {
       }
     `);
     printWindow.document.write("</style>");
-
+  
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
       <div class="header">
@@ -331,10 +330,10 @@ function Appointments() {
         }
       </div>
     `);
-
+  
     // Insert the modified contents
     printWindow.document.write(modifiedPrintContents);
-
+  
     // Handle image printing with modern margins and scaling
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
@@ -345,16 +344,17 @@ function Appointments() {
         );
       }
     });
-
+  
     // Close and trigger the print dialog
     printWindow.document.write("</body></html>");
     printWindow.document.close();
     printWindow.focus(); // Focus the window to ensure it shows up
     printWindow.print(); // Trigger print
-
+  
     // Close the print window after printing
     printWindow.onafterprint = () => printWindow.close();
   };
+  
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -367,27 +367,21 @@ function Appointments() {
   }, []);
 
   useEffect(() => {
-    const fetchAppointments = async (isPrevious = false) => {
-      const { data, firstDoc, lastDoc, total } = await getAppointments(
-        filter, // Assuming you have a filter in your component
-        isPrevious ? firstDoc : lastVisible, // Use firstDoc for previous and lastVisible for next
+    const fetchAppointments = async () => {
+      const { data, total } = await getAppointments(
+        filter,
+        lastVisible,
         pageSize,
-        searchText, // Assuming you have a searchText in your component
-        assistanceFilter // Assistance type filter
+        searchText,
+        natureOfLegalAssistanceFilter
       );
-
       setAppointments(data);
-      setFirstDoc(firstDoc); // Save the first document for "previous" pagination
-      setLastVisible(lastDoc); // Save the last document for "next" pagination
-      setTotalPages(Math.ceil(total / pageSize)); // Update the total pages
+      setTotalPages(Math.ceil(total / pageSize));
+      setTotalFilteredItems(total);
     };
 
     fetchAppointments();
   }, [filter, lastVisible, searchText, natureOfLegalAssistanceFilter]);
-
-  useEffect(() => {
-    fetchAppointments(); // Fetch appointments on mount or when filters change
-  }, [filter, searchText, assistanceFilter]);
 
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
@@ -498,66 +492,65 @@ function Appointments() {
 
   const handleNext = async () => {
     if (currentPage < totalPages) {
-      await fetchAppointments(false); // Fetch the next set of appointments
-      setCurrentPage((prevPage) => prevPage + 1); // Increment current page
+      const { data, lastDoc } = await getLawyerAppointments(
+        filter,
+        lastVisible,
+        pageSize,
+        searchText,
+        natureOfLegalAssistanceFilter,
+        currentUser
+      );
+      setAppointments(data);
+      setLastVisible(lastDoc);
+      setCurrentPage(currentPage + 1);
     }
   };
 
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      await fetchAppointments(true); // Fetch the previous set of appointments
-      setCurrentPage((prevPage) => prevPage - 1); // Decrement current page
+      const { data, firstDoc } = await getLawyerAppointments(
+        filter,
+        lastVisible,
+        pageSize,
+        searchText,
+        natureOfLegalAssistanceFilter,
+        currentUser,
+        true
+      );
+      setAppointments(data);
+      setLastVisible(firstDoc);
+      setCurrentPage((prevPage) => prevPage - 1);
     }
   };
 
   const handleFirst = async () => {
-    setLastVisible(null); // Reset to fetch the first page
-    setCurrentPage(1); // Reset to first page
-    await fetchAppointments();
+    const { data, firstDoc } = await getLawyerAppointments(
+      filter,
+      null,
+      pageSize,
+      searchText,
+      natureOfLegalAssistanceFilter,
+      currentUser
+    );
+    setAppointments(data);
+    setLastVisible(firstDoc);
+    setCurrentPage(1);
   };
 
   const handleLast = async () => {
-    try {
-      // Fetch total number of documents in the collection
-      const appointmentsSnapshot = await getDocs(
-        collection(fs, "appointments")
-      );
-      const totalAppointments = appointmentsSnapshot.size;
-
-      // Calculate how many pages there are in total
-      const totalPages = Math.ceil(totalAppointments / pageSize);
-
-      // Calculate how many documents to skip to get to the last page
-      const skipDocuments = (totalPages - 1) * pageSize;
-
-      // Fetch the last page of appointments, starting after the skipped documents
-      const lastPageQuery = query(
-        collection(fs, "appointments"),
-        orderBy("appointmentDetails.createdDate", "asc"), // Order by created date in ascending order
-        limit(pageSize),
-        offset(skipDocuments) // Skip to the start of the last page
-      );
-
-      const querySnapshot = await getDocs(lastPageQuery);
-
-      if (!querySnapshot.empty) {
-        const lastVisibleDoc =
-          querySnapshot.docs[querySnapshot.docs.length - 1];
-
-        // Update the state to display the last page of appointments
-        setAppointments(
-          querySnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-        );
-
-        setLastVisible(lastVisibleDoc); // Update lastVisible to the last doc of this page
-        setCurrentPage(totalPages); // Set current page to the last one
-      }
-    } catch (error) {
-      console.error("Error fetching last page:", error);
-    }
+    const { data, lastDoc } = await getLawyerAppointments(
+      filter,
+      lastVisible,
+      pageSize,
+      searchText,
+      natureOfLegalAssistanceFilter,
+      currentUser,
+      false,
+      true
+    );
+    setAppointments(data);
+    setLastVisible(lastDoc);
+    setCurrentPage(totalPages);
   };
 
   const toggleDetails = (appointment) => {
@@ -1343,7 +1336,10 @@ function Appointments() {
             <Pagination.Item
               key={index + 1}
               active={index + 1 === currentPage}
-              onClick={() => setCurrentPage(index + 1)}
+              onClick={() => {
+                setCurrentPage(index + 1);
+                setLastVisible(appointments[index]);
+              }}
             >
               {index + 1}
             </Pagination.Item>
@@ -1375,7 +1371,7 @@ function Appointments() {
               <br />
               <h2>Appointment Details</h2>
               <div id="appointment-details-section">
-                <section className="mb-4 print-section">
+              <section className="mb-4 print-section">
                   <h2>
                     <em
                       style={{
