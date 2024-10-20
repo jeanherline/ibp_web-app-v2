@@ -17,8 +17,7 @@ import {
   Timestamp,
   endBefore,
   limitToLast,
-} from "firebase/firestore";
-// Import necessary functions directly from Firebase Firestore
+} from "firebase/firestore"; // Import necessary functions directly from Firebase Firestore
 import { fs, storage, signOut } from "./Firebase"; // Import fs from your Firebase configuration file
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -28,12 +27,11 @@ import ReactDOMServer from "react-dom/server";
 
 const getAppointments = async (
   statusFilter,
-  lastVisible = null, // Default to null for first page
+  lastVisible = null,  // Default to null for the first page
   pageSize = 7,
   searchText = "",
   assistanceFilter = "all",
-  isPrevious = false, // Handles previous page
-  isLast = false // Handles last page
+  isPrevious = false  // Handle backward pagination
 ) => {
   let queryRef = collection(fs, "appointments");
 
@@ -64,9 +62,7 @@ const getAppointments = async (
   queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
 
   // Pagination logic
-  if (isLast) {
-    queryRef = query(queryRef, limitToLast(pageSize)); // Fetch the last page
-  } else if (lastVisible) {
+  if (lastVisible) {
     queryRef = isPrevious
       ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize))
       : query(queryRef, startAfter(lastVisible), limit(pageSize));
@@ -80,17 +76,11 @@ const getAppointments = async (
   const filtered = querySnapshot.docs.filter((doc) => {
     const data = doc.data();
     return (
-      data.applicantProfile?.fullName
-        ?.toLowerCase()
-        .includes(searchText.toLowerCase()) ||
-      data.applicantProfile?.address
-        ?.toLowerCase()
-        .includes(searchText.toLowerCase()) ||
+      data.applicantProfile?.fullName?.toLowerCase().includes(searchText.toLowerCase()) ||
+      data.applicantProfile?.address?.toLowerCase().includes(searchText.toLowerCase()) ||
       data.applicantProfile?.contactNumber?.includes(searchText) ||
       data.appointmentDetails?.controlNumber?.includes(searchText) ||
-      data.legalAssistanceRequested?.selectedAssistanceType
-        ?.toLowerCase()
-        .includes(searchText.toLowerCase())
+      data.legalAssistanceRequested?.selectedAssistanceType?.toLowerCase().includes(searchText.toLowerCase())
     );
   });
 
@@ -108,13 +98,15 @@ const getAppointments = async (
   return {
     data: filtered.map((doc) => ({
       id: doc.id,
-      ...doc.data(),
+      ...doc.data()
     })),
     total: totalQuery.size,
-    firstDoc: querySnapshot.docs[0], // First document for pagination
-    lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1], // Last document for pagination
+    firstDoc: querySnapshot.docs[0],  // First document for pagination
+    lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],  // Last document for pagination
   };
 };
+
+
 
 const getLawyerCalendar = async (assignedLawyer) => {
   const appointmentsRef = collection(fs, "appointments");
@@ -440,7 +432,7 @@ const getLawyerAppointments = (
           appointmentDate: data.appointmentDetails?.appointmentDate,
           clientEligibility: data.clientEligibility,
           appointmentDetails: data.appointmentDetails,
-          rescheduleHistory: data.rescheduleHistory || [], // Ensure rescheduleHistory is included
+          rescheduleHistory: data.rescheduleHistory || [],  // Ensure rescheduleHistory is included
         };
       });
 
@@ -714,6 +706,7 @@ const getUsers = async (
   }
 };
 
+
 const getUsersCount = async (
   statusFilter,
   filterType,
@@ -822,12 +815,13 @@ export const sendNotification = async (message, uid, type, controlNumber) => {
       timestamp: Timestamp.fromDate(new Date()),
       type: type,
       uid: uid,
-      controlNumber: controlNumber,
+      controlNumber: controlNumber
     });
   } catch (error) {
     console.error("Error sending notification:", error);
   }
 };
+
 
 export const createAppointment = async (appointmentData) => {
   try {
@@ -843,7 +837,7 @@ export const createAppointment = async (appointmentData) => {
 export const getHeadLawyerUid = async () => {
   const usersRef = collection(fs, "users");
   const q = query(usersRef, where("member_type", "==", "headLawyer"));
-
+  
   try {
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {
