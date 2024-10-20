@@ -14,7 +14,6 @@ import {
   sendNotification,
   getHeadLawyerUid,
   getAppointments,
-  fetchAppointments,
 } from "../../Config/FirebaseServices";
 import { useAuth } from "../../AuthContext";
 import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
@@ -74,7 +73,6 @@ function Appointments() {
   const [holidays, setHolidays] = useState([]);
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
-  const [loading, setLoading] = useState(false);
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
@@ -194,28 +192,28 @@ function Appointments() {
       alert("No appointment selected");
       return;
     }
-
+  
     // Get the contents of the appointment details section
     const printContents = document.getElementById(
       "appointment-details-section"
     ).innerHTML;
-
+  
     // Create a temporary div to modify the contents for printing
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = printContents;
-
+  
     // Remove any elements you don't want to print (with class 'no-print')
     const noPrintSection = tempDiv.querySelectorAll(".no-print");
     noPrintSection.forEach((section) => section.remove());
-
+  
     const modifiedPrintContents = tempDiv.innerHTML;
-
+  
     // Open a new window for printing
     const printWindow = window.open("", "", "height=500, width=500");
     printWindow.document.write(
       "<html><head><title>Appointment Details</title></head><body>"
     );
-
+  
     // Add modern, professional styles for printing
     printWindow.document.write("<style>");
     printWindow.document.write(`
@@ -319,7 +317,7 @@ function Appointments() {
       }
     `);
     printWindow.document.write("</style>");
-
+  
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
       <div class="header">
@@ -332,10 +330,10 @@ function Appointments() {
         }
       </div>
     `);
-
+  
     // Insert the modified contents
     printWindow.document.write(modifiedPrintContents);
-
+  
     // Handle image printing with modern margins and scaling
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
@@ -346,16 +344,17 @@ function Appointments() {
         );
       }
     });
-
+  
     // Close and trigger the print dialog
     printWindow.document.write("</body></html>");
     printWindow.document.close();
     printWindow.focus(); // Focus the window to ensure it shows up
     printWindow.print(); // Trigger print
-
+  
     // Close the print window after printing
     printWindow.onafterprint = () => printWindow.close();
   };
+  
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -369,7 +368,7 @@ function Appointments() {
 
   useEffect(() => {
     const fetchAppointments = async () => {
-      const { data, lastDoc } = await getAppointments(
+      const { data, total } = await getAppointments(
         filter,
         lastVisible,
         pageSize,
@@ -377,18 +376,12 @@ function Appointments() {
         natureOfLegalAssistanceFilter
       );
       setAppointments(data);
-      setLastVisible(lastDoc); // This line ensures that the last visible doc is updated only once.
+      setTotalPages(Math.ceil(total / pageSize));
+      setTotalFilteredItems(total);
     };
 
-    // Call the function when dependencies change
     fetchAppointments();
-  }, [
-    filter,
-    searchText,
-    currentPage,
-    lastVisible,
-    natureOfLegalAssistanceFilter,
-  ]);
+  }, [filter, lastVisible, searchText, natureOfLegalAssistanceFilter]);
 
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
@@ -497,44 +490,31 @@ function Appointments() {
     return !isSlotBookedByAssignedLawyer(dateTime);
   };
 
-  const handlePageChange = async (page) => {
-    if (page !== currentPage) {
-      setCurrentPage(page);
-      const { data, lastDoc } = await getAppointments(
-        filter,
-        lastVisible, // Current last visible document
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setLastVisible(lastDoc); // Update last visible document for Firestore pagination
-    }
-  };
-
   const handleNext = async () => {
     if (currentPage < totalPages) {
-      const { data, lastDoc } = await getAppointments(
-        filter,
-        lastVisible,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setLastVisible(lastDoc);
-      setCurrentPage((prevPage) => prevPage + 1);
-    }
-  };
-  
-  const handlePrevious = async () => {
-    if (currentPage > 1) {
-      const { data, firstDoc } = await getAppointments(
+      const { data, lastDoc } = await getLawyerAppointments(
         filter,
         lastVisible,
         pageSize,
         searchText,
         natureOfLegalAssistanceFilter,
+        currentUser
+      );
+      setAppointments(data);
+      setLastVisible(lastDoc);
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePrevious = async () => {
+    if (currentPage > 1) {
+      const { data, firstDoc } = await getLawyerAppointments(
+        filter,
+        lastVisible,
+        pageSize,
+        searchText,
+        natureOfLegalAssistanceFilter,
+        currentUser,
         true
       );
       setAppointments(data);
@@ -542,37 +522,6 @@ function Appointments() {
       setCurrentPage((prevPage) => prevPage - 1);
     }
   };
-  
-  const handlePageClick = async (page) => {
-    if (page !== currentPage) {
-      const { data, lastDoc } = await getAppointments(
-        filter,
-        lastVisible,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setLastVisible(lastDoc);
-      setCurrentPage(page);
-    }
-  };
-  
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchAppointments(); // Call your fetch function when searchText changes after a delay
-    }, 300); // 300ms debounce delay
-
-    return () => clearTimeout(timeoutId); // Cleanup the timeout
-  }, [searchText]); // Run this effect when searchText changes
-
-  useEffect(() => {
-    if (searchText === "") {
-      // If search is cleared, refetch the appointments without the search filter
-      fetchAppointments();
-    }
-  }, [searchText]);
 
   const handleFirst = async () => {
     const { data, firstDoc } = await getLawyerAppointments(
@@ -585,7 +534,7 @@ function Appointments() {
     );
     setAppointments(data);
     setLastVisible(firstDoc);
-    setCurrentPage(1); // Set page to 1
+    setCurrentPage(1);
   };
 
   const handleLast = async () => {
@@ -600,8 +549,8 @@ function Appointments() {
       true
     );
     setAppointments(data);
-    setLastVisible(lastDoc); // Update lastVisible for last page
-    setCurrentPage(totalPages); // Set page to the last page
+    setLastVisible(lastDoc);
+    setCurrentPage(totalPages);
   };
 
   const toggleDetails = (appointment) => {
@@ -1387,7 +1336,10 @@ function Appointments() {
             <Pagination.Item
               key={index + 1}
               active={index + 1 === currentPage}
-              onClick={() => handlePageChange(index + 1)} // Correct page handling function
+              onClick={() => {
+                setCurrentPage(index + 1);
+                setLastVisible(appointments[index]);
+              }}
             >
               {index + 1}
             </Pagination.Item>
@@ -1401,7 +1353,6 @@ function Appointments() {
             disabled={currentPage === totalPages}
           />
         </Pagination>
-        ;
         {selectedAppointment &&
           !showProceedingNotesForm &&
           !showRescheduleForm &&
@@ -1420,7 +1371,7 @@ function Appointments() {
               <br />
               <h2>Appointment Details</h2>
               <div id="appointment-details-section">
-                <section className="mb-4 print-section">
+              <section className="mb-4 print-section">
                   <h2>
                     <em
                       style={{
@@ -1500,7 +1451,7 @@ function Appointments() {
                 <section className="mb-4 print-section">
                   {(selectedAppointment.appointmentDetails?.newRequest ||
                     selectedAppointment.appointmentDetails?.requestReason) && (
-                    <section className="mb-4 print-section no-print">
+                      <section className="mb-4 print-section no-print">
                       <h2>
                         <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                           New Request Details
