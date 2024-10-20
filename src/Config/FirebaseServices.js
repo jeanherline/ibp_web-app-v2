@@ -40,24 +40,38 @@ const getAppointments = async (
     // Apply filters
     const conditions = [];
 
+    // Filter by status
     if (statusFilter && statusFilter !== "all") {
       conditions.push(
         where("appointmentDetails.appointmentStatus", "==", statusFilter)
       );
     }
 
+    // Filter by legal assistance type
     if (assistanceFilter && assistanceFilter !== "all") {
       conditions.push(
         where("legalAssistanceRequested.selectedAssistanceType", "==", assistanceFilter)
       );
     }
 
+    // Apply search filter for the fullName (assuming you are searching by fullName)
+    if (searchText) {
+      // Using Firestore range queries for searching
+      conditions.push(
+        where("applicantProfile.fullName", ">=", searchText),
+        where("applicantProfile.fullName", "<=", searchText + "\uf8ff") // End range for search
+      );
+    }
+
+    // Apply the conditions to the query
     if (conditions.length > 0) {
       queryRef = query(queryRef, ...conditions);
     }
 
+    // Order by created date for consistent pagination
     queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
 
+    // Handle pagination: using startAfter for next, endBefore for previous
     if (lastVisible) {
       if (isPrevious) {
         queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
@@ -65,58 +79,44 @@ const getAppointments = async (
         queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
       }
     } else {
-      queryRef = query(queryRef, limit(pageSize));
+      queryRef = query(queryRef, limit(pageSize)); // Initial load
     }
 
+    // Fetch the documents
     const querySnapshot = await getDocs(queryRef);
 
     if (querySnapshot.empty) {
       return { data: [], total: 0, firstDoc: null, lastDoc: null };
     }
 
-    // Search text filter
-    const filtered = querySnapshot.docs.filter((doc) => {
+    // Map the results into usable data
+    const appointmentsData = querySnapshot.docs.map((doc) => {
       const data = doc.data();
-      return (
-        data.applicantProfile?.fullName
-          ?.toLowerCase()
-          .includes(searchText.toLowerCase()) ||
-        data.applicantProfile?.address
-          ?.toLowerCase()
-          .includes(searchText.toLowerCase()) ||
-        data.applicantProfile?.contactNumber?.includes(searchText) ||
-        data.appointmentDetails?.controlNumber?.includes(searchText) ||
-        data.legalAssistanceRequested?.selectedAssistanceType
-          ?.toLowerCase()
-          .includes(searchText.toLowerCase())
-      );
+      return {
+        id: doc.id,
+        ...data.applicantProfile,
+        ...data.employmentProfile,
+        ...data.legalAssistanceRequested,
+        ...data.uploadedImages,
+        createdDate: data.appointmentDetails?.createdDate,
+        appointmentStatus: data.appointmentDetails?.appointmentStatus,
+        controlNumber: data.appointmentDetails?.controlNumber,
+        appointmentDate: data.appointmentDetails?.appointmentDate,
+        clientEligibility: data.clientEligibility,
+        appointmentDetails: data.appointmentDetails,
+        reviewerDetails: data.reviewerDetails,
+        proceedingNotes: data.proceedingNotes,
+        rescheduleHistory: data.rescheduleHistory || [],
+      };
     });
 
-    // Get total count
+    // Get total count (if needed for pagination UI)
     const countSnapshot = await getCountFromServer(
       query(collection(fs, "appointments"), ...conditions)
     );
 
     return {
-      data: filtered.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data.applicantProfile,
-          ...data.employmentProfile,
-          ...data.legalAssistanceRequested,
-          ...data.uploadedImages,
-          createdDate: data.appointmentDetails?.createdDate,
-          appointmentStatus: data.appointmentDetails?.appointmentStatus,
-          controlNumber: data.appointmentDetails?.controlNumber,
-          appointmentDate: data.appointmentDetails?.appointmentDate,
-          clientEligibility: data.clientEligibility,
-          appointmentDetails: data.appointmentDetails,
-          reviewerDetails: data.reviewerDetails,
-          proceedingNotes: data.proceedingNotes,
-          rescheduleHistory: data.rescheduleHistory || [],
-        };
-      }),
+      data: appointmentsData,
       total: countSnapshot.data().count,
       firstDoc: querySnapshot.docs[0],
       lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
@@ -126,7 +126,6 @@ const getAppointments = async (
     return { data: [], total: 0, firstDoc: null, lastDoc: null };
   }
 };
-
 
 const getLawyerCalendar = async (assignedLawyer) => {
   const appointmentsRef = collection(fs, "appointments");
