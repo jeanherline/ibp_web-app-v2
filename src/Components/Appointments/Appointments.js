@@ -219,7 +219,7 @@ function Appointments() {
     printWindow.document.write(`
       @media print {
         @page {
-          size: A4;
+          size: 8.5in 13in;
           margin: 0.8in;
         }
         body {
@@ -1476,6 +1476,7 @@ function Appointments() {
                       </table>
                     </section>
                   )}
+                  <br />
                   <h2>
                     <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                       Basic Information

@@ -218,7 +218,7 @@ function ApptsFrontDesk() {
     printWindow.document.write(`
       @media print {
         @page {
-          size: A4;
+          size: 8.5in 13in;
           margin: 0.8in;
         }
         body {
