@@ -73,6 +73,32 @@ function Appointments() {
   const [holidays, setHolidays] = useState([]);
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  <Pagination>
+    <Pagination.First onClick={handleFirst} disabled={currentPage === 1} />
+    <Pagination.Prev onClick={handlePrevious} disabled={currentPage === 1} />
+    {[...Array(totalPages).keys()].map((_, index) => (
+      <Pagination.Item
+        key={index + 1}
+        active={index + 1 === currentPage}
+        onClick={() => {
+          setCurrentPage(index + 1);
+          setLastVisible(appointments[index]); // Update visible doc for this page
+        }}
+      >
+        {index + 1}
+      </Pagination.Item>
+    ))}
+    <Pagination.Next
+      onClick={handleNext}
+      disabled={currentPage === totalPages}
+    />
+    <Pagination.Last
+      onClick={handleLast}
+      disabled={currentPage === totalPages}
+    />
+  </Pagination>;
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
@@ -367,7 +393,7 @@ function Appointments() {
 
   useEffect(() => {
     const fetchAppointments = async () => {
-      const { data, total } = await getAppointments(
+      const { data, lastDoc } = await getAppointments(
         filter,
         lastVisible,
         pageSize,
@@ -375,12 +401,11 @@ function Appointments() {
         natureOfLegalAssistanceFilter
       );
       setAppointments(data);
-      setTotalPages(Math.ceil(total / pageSize));
-      setTotalFilteredItems(total);
+      setLastVisible(lastDoc);
     };
 
-    fetchAppointments();
-  }, [filter, lastVisible, searchText, natureOfLegalAssistanceFilter]);
+    fetchAppointments(); // Fetch appointments whenever filter/search/pagination changes
+  }, [filter, searchText, lastVisible, natureOfLegalAssistanceFilter]);
 
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
@@ -491,36 +516,49 @@ function Appointments() {
 
   const handleNext = async () => {
     if (currentPage < totalPages) {
-      const { data, lastDoc } = await getLawyerAppointments(
+      const { data, lastDoc } = await getAppointments(
         filter,
-        lastVisible,
+        lastVisible, // Pass the current last visible doc for pagination
         pageSize,
         searchText,
-        natureOfLegalAssistanceFilter,
-        currentUser
+        natureOfLegalAssistanceFilter
       );
       setAppointments(data);
-      setLastVisible(lastDoc);
-      setCurrentPage(currentPage + 1);
+      setLastVisible(lastDoc); // Update the last visible doc
+      setCurrentPage(currentPage + 1); // Move to the next page
     }
   };
 
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      const { data, firstDoc } = await getLawyerAppointments(
+      const { data, firstDoc } = await getAppointments(
         filter,
-        lastVisible,
+        lastVisible, // Pass the current first visible doc for "previous" pagination
         pageSize,
         searchText,
         natureOfLegalAssistanceFilter,
-        currentUser,
-        true
+        true // This flag indicates you're going back in pagination
       );
       setAppointments(data);
-      setLastVisible(firstDoc);
+      setLastVisible(firstDoc); // Update the last visible doc to firstDoc for "previous"
       setCurrentPage((prevPage) => prevPage - 1);
     }
   };
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchAppointments(); // Call your fetch function when searchText changes after a delay
+    }, 300); // 300ms debounce delay
+
+    return () => clearTimeout(timeoutId); // Cleanup the timeout
+  }, [searchText]); // Run this effect when searchText changes
+
+  useEffect(() => {
+    if (searchText === "") {
+      // If search is cleared, refetch the appointments without the search filter
+      fetchAppointments();
+    }
+  }, [searchText]);
 
   const handleFirst = async () => {
     const { data, firstDoc } = await getLawyerAppointments(
