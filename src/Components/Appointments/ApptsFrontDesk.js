@@ -309,6 +309,10 @@ function ApptsFrontDesk() {
         table tbody tr:nth-child(even) {
           background-color: #f5f5f5;
         }
+        /* Add a page break before Employment Profile section */
+        .employment-profile {
+          page-break-before: always; /* Forces a page break before this section */
+        }
       }
     `);
     printWindow.document.write("</style>");
@@ -1081,7 +1085,7 @@ function ApptsFrontDesk() {
             {appointments.length > 0 ? (
               appointments.map((appointment, index) => (
                 <tr key={appointment.id}>
-                                    <td>{(currentPage - 1) * pageSize + index + 1}.</td>
+                  <td>{(currentPage - 1) * pageSize + index + 1}.</td>
                   <td>{appointment.controlNumber}</td>
                   <td>{appointment.fullName}</td>
                   <td>{appointment.selectedAssistanceType}</td>
@@ -1189,7 +1193,7 @@ function ApptsFrontDesk() {
               <br />
               <h2>Appointment Details</h2>
               <div id="appointment-details-section">
-              <section className="mb-4 print-section">
+                <section className="mb-4 print-section">
                   <h2>
                     <em
                       style={{
@@ -1265,6 +1269,7 @@ function ApptsFrontDesk() {
                     </tbody>
                   </table>
                 </section>
+                <br />
                 <section className="mb-4 print-section">
                   {(selectedAppointment.appointmentDetails?.newRequest ||
                     selectedAppointment.appointmentDetails?.requestReason) && (
@@ -1318,6 +1323,7 @@ function ApptsFrontDesk() {
                       </table>
                     </section>
                   )}
+                  <br />
                   <h2>
                     <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                       Basic Information
@@ -1607,6 +1613,7 @@ function ApptsFrontDesk() {
                     </tbody>
                   </table>
                 </section>
+                <br />
                 {selectedAppointment?.rescheduleHistory &&
                 selectedAppointment.rescheduleHistory.length > 0 ? (
                   <section className="mb-4 print-section no-print">
@@ -1662,10 +1669,8 @@ function ApptsFrontDesk() {
                 ) : (
                   <p>No reschedule history available.</p>
                 )}
-
-
-
-                <section className="mb-4 print-section">
+                <br />
+                <section className="mb-4 print-section employment-profile">
                   <h2>
                     <em
                       style={{
@@ -1713,7 +1718,7 @@ function ApptsFrontDesk() {
                     </tbody>
                   </table>
                 </section>
-
+                <br />
                 <section className="mb-4 print-section">
                   <h2>
                     <em
@@ -1759,7 +1764,7 @@ function ApptsFrontDesk() {
                     </tbody>
                   </table>
                 </section>
-
+                <br />
                 <section className="mb-4 print-section no-print">
                   <h2>
                     <em style={{ color: "#a34bc9", fontSize: "16px" }}>
@@ -1894,7 +1899,7 @@ function ApptsFrontDesk() {
                     </tbody>
                   </table>
                 </section>
-
+                <br />
                 {isModalOpen && (
                   <ImageModal
                     isOpen={isModalOpen}

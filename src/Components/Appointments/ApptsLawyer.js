@@ -305,6 +305,10 @@ function ApptsLawyer() {
         table tbody tr:nth-child(even) {
           background-color: #f5f5f5;
         }
+        /* Add a page break before Employment Profile section */
+        .employment-profile {
+          page-break-before: always; /* Forces a page break before this section */
+        }
       }
     `);
     printWindow.document.write("</style>");
@@ -1405,6 +1409,7 @@ function ApptsLawyer() {
                     </tbody>
                   </table>
                 </section>
+                <br />
                 <section className="mb-4 print-section">
                   {(selectedAppointment.appointmentDetails?.newRequest ||
                     selectedAppointment.appointmentDetails?.requestReason) && (
@@ -1458,6 +1463,7 @@ function ApptsLawyer() {
                       </table>
                     </section>
                   )}
+                  <br />
                   <h2>
                     <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                       Basic Information
@@ -1747,6 +1753,7 @@ function ApptsLawyer() {
                     </tbody>
                   </table>
                 </section>
+                <br />
                 {selectedAppointment?.rescheduleHistory &&
                 selectedAppointment.rescheduleHistory.length > 0 ? (
                   <section className="mb-4 print-section no-print">
@@ -1802,8 +1809,8 @@ function ApptsLawyer() {
                 ) : (
                   <p>No reschedule history available.</p>
                 )}
-
-                <section className="mb-4 print-section">
+                <br />
+                <section className="mb-4 print-section employment-profile">
                   <h2>
                     <em
                       style={{
@@ -1851,7 +1858,7 @@ function ApptsLawyer() {
                     </tbody>
                   </table>
                 </section>
-
+                <br />
                 <section className="mb-4 print-section">
                   <h2>
                     <em
@@ -1897,7 +1904,7 @@ function ApptsLawyer() {
                     </tbody>
                   </table>
                 </section>
-
+                <br />
                 <section className="mb-4 print-section no-print">
                   <h2>
                     <em style={{ color: "#a34bc9", fontSize: "16px" }}>
@@ -2032,7 +2039,7 @@ function ApptsLawyer() {
                     </tbody>
                   </table>
                 </section>
-
+                <br />
                 {isModalOpen && (
                   <ImageModal
                     isOpen={isModalOpen}
