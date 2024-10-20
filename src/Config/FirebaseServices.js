@@ -33,10 +33,12 @@ const getAppointments = async (
 ) => {
   let queryRef = collection(fs, "appointments");
 
+  // Dynamic query chaining
+  const conditions = [];
+
   // Apply assistance filter if not "all"
   if (assistanceFilter && assistanceFilter !== "all") {
-    queryRef = query(
-      queryRef,
+    conditions.push(
       where(
         "legalAssistanceRequested.selectedAssistanceType",
         "==",
@@ -47,19 +49,22 @@ const getAppointments = async (
 
   // Apply status filter if not "all"
   if (statusFilter && statusFilter !== "all") {
-    queryRef = query(
-      queryRef,
+    conditions.push(
       where("appointmentDetails.appointmentStatus", "==", statusFilter)
     );
   }
 
   // Apply search text filter for full name, address, or control number
   if (searchText) {
-    queryRef = query(
-      queryRef,
+    conditions.push(
       where("applicantProfile.fullName", ">=", searchText),
       where("applicantProfile.fullName", "<=", searchText + "\uf8ff")
     );
+  }
+
+  // Construct query with dynamic conditions
+  if (conditions.length > 0) {
+    queryRef = query(queryRef, ...conditions);
   }
 
   // Apply pagination with startAfter for last visible document
@@ -103,7 +108,6 @@ const getAppointments = async (
     lastDoc: snapshot.docs[snapshot.docs.length - 1],
   };
 };
-
 
 const getLawyerCalendar = async (assignedLawyer) => {
   const appointmentsRef = collection(fs, "appointments");
