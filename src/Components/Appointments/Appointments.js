@@ -377,22 +377,25 @@ function Appointments() {
         pageSize,
         searchText,
         natureOfLegalAssistanceFilter,
-        pageDirection === "prev" // Determine if previous pagination is being used
+        pageDirection === "prev" // Determine if we are fetching the previous page
       );
   
       const { data, total, firstDoc, lastDoc } = queryRef;
   
       console.log("Fetched data:", data); // Log the fetched data for debugging
   
+      // If moving to the next page, update `lastVisible` to the last document of the current page
       if (pageDirection === "next") {
-        setLastVisible(lastDoc); // Set last visible document for next page
-      } else if (pageDirection === "prev") {
-        setLastVisible(firstDoc); // Set first visible document for previous page
+        setLastVisible(lastDoc);
+      } 
+      // If moving to the previous page, update `lastVisible` to the first document of the current page
+      else if (pageDirection === "prev") {
+        setLastVisible(firstDoc);
       }
   
       // Update the appointments state with the fetched data
       setAppointments(data);
-      setTotalPages(Math.ceil(total / pageSize)); // Update total pages
+      setTotalPages(Math.ceil(total / pageSize));
     } catch (error) {
       console.error("Error fetching appointments:", error);
     }

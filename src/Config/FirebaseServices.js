@@ -31,7 +31,7 @@ const getAppointments = async (
   pageSize = 7,
   searchText = "",
   assistanceFilter = "all",
-  isPrevious = false // Boolean to control direction for pagination
+  isPrevious = false // Boolean to control pagination direction
 ) => {
   let queryRef = collection(fs, "appointments");
 
@@ -64,13 +64,18 @@ const getAppointments = async (
   // Sort by createdDate
   queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
 
-  // Handle pagination
+  // Handle pagination logic
   if (lastVisible) {
-    queryRef = isPrevious
-      ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize)) // Previous page
-      : query(queryRef, startAfter(lastVisible), limit(pageSize)); // Next page
+    if (isPrevious) {
+      // Move to the previous page
+      queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
+    } else {
+      // Move to the next page
+      queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
+    }
   } else {
-    queryRef = query(queryRef, limit(pageSize)); // First page
+    // First page
+    queryRef = query(queryRef, limit(pageSize));
   }
 
   const querySnapshot = await getDocs(queryRef);
@@ -128,7 +133,6 @@ const getAppointments = async (
     lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1], // Last document for pagination
   };
 };
-
 
 const getLawyerCalendar = async (assignedLawyer) => {
   const appointmentsRef = collection(fs, "appointments");
