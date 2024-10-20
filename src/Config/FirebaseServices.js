@@ -933,5 +933,4 @@ export {
   addUser,
   getUsersCount,
   aptsCalendar,
-  endBefore,
 };

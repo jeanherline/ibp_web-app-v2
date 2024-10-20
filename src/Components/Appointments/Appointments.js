@@ -14,6 +14,7 @@ import {
   sendNotification,
   getHeadLawyerUid,
   getAppointments,
+  endBefore,
 } from "../../Config/FirebaseServices";
 import { useAuth } from "../../AuthContext";
 import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
