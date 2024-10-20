@@ -223,91 +223,89 @@ function Appointments() {
         }
         body {
           font-family: 'Arial', sans-serif;
-          font-size: 12px;
-          line-height: 1.6;
+          font-size: 11px; /* Reduced font size for compactness */
+          line-height: 1.4; /* More compact line spacing */
           color: #333;
         }
         .header {
           text-align: center;
-          margin-bottom: 20px;
+          margin-bottom: 15px;
         }
         .header h2 {
-          font-size: 18px;
+          font-size: 16px; /* Slightly reduced header size */
           font-weight: normal;
           color: #333;
           margin-bottom: 5px;
         }
         .header img {
-          width: 60px;
+          width: 50px; /* Reduced image size for compactness */
           display: block;
           margin: 0 auto;
         }
         .section-title {
-          font-size: 14px;
+          font-size: 13px; /* Slightly smaller title for compactness */
           font-weight: bold;
-          margin-top: 30px;
+          margin-top: 20px;
           margin-bottom: 10px;
           color: #555;
           border-bottom: 1px solid #ddd;
-          padding-bottom: 5px;
+          padding-bottom: 3px;
         }
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 20px;
-          font-size: 12px;
+          margin-bottom: 10px;
+          font-size: 11px; /* Reduced table font size */
           color: #333;
         }
         table, th, td {
           border: 1px solid #ddd;
         }
         th, td {
-          padding: 10px;
+          padding: 8px; /* Reduced padding for more content on a page */
           text-align: left;
         }
         th {
           background-color: #f7f7f7;
           font-weight: normal;
-          font-size: 12px;
+          font-size: 11px;
           text-transform: uppercase;
           color: #555;
         }
         td {
-          font-size: 12px;
+          font-size: 11px;
           color: #333;
         }
         .form-label {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: bold;
-          margin-top: 15px;
+          margin-top: 12px;
           color: #333;
         }
         .form-field {
-          font-size: 12px;
+          font-size: 11px;
           padding: 5px 0;
           border-bottom: 1px solid #ddd;
           color: #555;
         }
         .print-image {
-          width: 100%;
-          height: auto;
-          max-height: 10in;
-          object-fit: contain;
-          display: block;
-          margin-bottom: 10px;
+          display: none; /* Images will not be printed */
         }
         .no-print {
           display: none;
         }
-        /* Modern table style */
+        /* Compact table style */
         table thead {
           background-color: #f9f9f9;
         }
         table th {
-          letter-spacing: 1px;
+          letter-spacing: 0.8px; /* Slightly tighter letter spacing */
         }
         table tbody tr:nth-child(even) {
           background-color: #f5f5f5;
+        }
+        .page-break {
+          page-break-before: always; /* Ensures next content starts on a new page */
         }
       }
     `);
@@ -320,7 +318,7 @@ function Appointments() {
         <h2>Integrated Bar of the Philippines - Malolos</h2>
         ${
           selectedAppointment.appointmentDetails.qrCode
-            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 60px; margin: 0 auto;" />`
+            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 50px; margin: 0 auto;" />`
             : ""
         }
       </div>
@@ -329,11 +327,15 @@ function Appointments() {
     // Insert the modified contents
     printWindow.document.write(modifiedPrintContents);
   
+    // Ensuring any further content after "Nature of Legal Assistance Requested" will be printed on a new page
+    printWindow.document.write(`
+      <div class="page-break"></div>
+    `);
+  
     // Handle image printing with modern margins and scaling
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
       if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div class='page-break'></div>");
         printWindow.document.write(
           `<img src='${image.src}' class='print-image' />`
         );
@@ -349,6 +351,7 @@ function Appointments() {
     // Close the print window after printing
     printWindow.onafterprint = () => printWindow.close();
   };
+  
   
 
 
