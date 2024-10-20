@@ -1055,7 +1055,7 @@ function ApptsLawyer() {
             {appointments.length > 0 ? (
               appointments.map((appointment, index) => (
                 <tr key={appointment.id}>
-                                   <td>{(currentPage - 1) * pageSize + index + 1}.</td>
+                  <td>{(currentPage - 1) * pageSize + index + 1}.</td>
                   <td>{appointment.controlNumber}</td>
                   <td>{appointment.fullName}</td>
                   <td>{appointment.selectedAssistanceType}</td>
@@ -2168,6 +2168,18 @@ function ApptsLawyer() {
               </button>
             </div>
             <h2>Remarks</h2>
+            <table className="table table-striped table-bordered">
+              <tbody>
+                <tr>
+                  <th>Control Number:</th>
+                  <td>{selectedAppointment.controlNumber}</td>
+                </tr>
+                <tr>
+                  <th>Full Name:</th>
+                  <td>{selectedAppointment.fullName}</td>
+                </tr>
+              </tbody>
+            </table>
             <form onSubmit={handleSubmitProceedingNotes}>
               <div>
                 <b>
@@ -2267,6 +2279,19 @@ function ApptsLawyer() {
               </button>
             </div>
             <h2>Reschedule Appointment</h2>
+            <table className="table table-striped table-bordered">
+              <tbody>
+                <tr>
+                  <th>Control Number:</th>
+                  <td>{selectedAppointment.controlNumber}</td>
+                </tr>
+                <tr>
+                  <th>Full Name:</th>
+                  <td>{selectedAppointment.fullName}</td>
+                </tr>
+              </tbody>
+            </table>
+            <br />
             <p>
               <strong>Current Appointment Date:</strong> <br></br>
               {getFormattedDate(
@@ -2343,6 +2368,18 @@ function ApptsLawyer() {
               </button>
             </div>
             <h2>Schedule Appointment</h2>
+            <table className="table table-striped table-bordered">
+              <tbody>
+                <tr>
+                  <th>Control Number:</th>
+                  <td>{selectedAppointment.controlNumber}</td>
+                </tr>
+                <tr>
+                  <th>Full Name:</th>
+                  <td>{selectedAppointment.fullName}</td>
+                </tr>
+              </tbody>
+            </table>
             <form onSubmit={handleScheduleSubmit}>
               <div>
                 <b>

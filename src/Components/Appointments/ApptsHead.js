@@ -1988,6 +1988,18 @@ function ApptsHead() {
               </button>
             </div>
             <h2>Remarks</h2>
+            <table className="table table-striped table-bordered">
+              <tbody>
+                <tr>
+                  <th>Control Number:</th>
+                  <td>{selectedAppointment.controlNumber}</td>
+                </tr>
+                <tr>
+                  <th>Full Name:</th>
+                  <td>{selectedAppointment.fullName}</td>
+                </tr>
+              </tbody>
+            </table>
             <form onSubmit={handleSubmitProceedingNotes}>
               <div>
                 <b>
@@ -2087,6 +2099,19 @@ function ApptsHead() {
               </button>
             </div>
             <h2>Reschedule Appointment</h2>
+            <table className="table table-striped table-bordered">
+              <tbody>
+                <tr>
+                  <th>Control Number:</th>
+                  <td>{selectedAppointment.controlNumber}</td>
+                </tr>
+                <tr>
+                  <th>Full Name:</th>
+                  <td>{selectedAppointment.fullName}</td>
+                </tr>
+              </tbody>
+            </table>
+            <br />
             <p>
               <strong>Current Appointment Date:</strong> <br></br>
               {getFormattedDate(
@@ -2140,6 +2165,19 @@ function ApptsHead() {
               </button>
             </div>
             <h2>Schedule Appointment</h2>
+            <table className="table table-striped table-bordered">
+              <tbody>
+                <tr>
+                  <th>Control Number:</th>
+                  <td>{selectedAppointment.controlNumber}</td>
+                </tr>
+                <tr>
+                  <th>Full Name:</th>
+                  <td>{selectedAppointment.fullName}</td>
+                </tr>
+              </tbody>
+            </table>
+            <br />
             <form onSubmit={handleScheduleSubmit}>
               <div>
                 <ReactDatePicker
