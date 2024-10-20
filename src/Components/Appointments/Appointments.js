@@ -386,14 +386,17 @@ function Appointments() {
   
       const conditions = [];
   
-      // Apply filters
+      // Apply filters (appointment status and legal assistance type)
       if (filter && filter !== "all") {
         conditions.push(
           where("appointmentDetails.appointmentStatus", "==", filter)
         );
       }
   
-      if (natureOfLegalAssistanceFilter && natureOfLegalAssistanceFilter !== "all") {
+      if (
+        natureOfLegalAssistanceFilter &&
+        natureOfLegalAssistanceFilter !== "all"
+      ) {
         conditions.push(
           where(
             "legalAssistanceRequested.selectedAssistanceType",
@@ -403,10 +406,20 @@ function Appointments() {
         );
       }
   
+      // Apply search filter (e.g., searching for name, control number, etc.)
+      if (searchText) {
+        conditions.push(
+          where("applicantProfile.fullName", ">=", searchText),
+          where("applicantProfile.fullName", "<=", searchText + "\uf8ff") // End range for search
+        );
+      }
+  
+      // Apply the conditions to the query
       if (conditions.length > 0) {
         queryRef = query(queryRef, ...conditions);
       }
   
+      // Order by created date for consistent pagination
       queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
   
       // Handle pagination direction
@@ -417,9 +430,10 @@ function Appointments() {
           queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
         }
       } else {
-        queryRef = query(queryRef, limit(pageSize));
+        queryRef = query(queryRef, limit(pageSize)); // Initial load
       }
   
+      // Fetch the documents
       const querySnapshot = await getDocs(queryRef);
       if (querySnapshot.empty) {
         return { data: [], total: 0, lastDoc: null };
@@ -445,7 +459,7 @@ function Appointments() {
         };
       });
   
-      // Update state with the fetched data and last visible document
+      // Update state with fetched data and pagination markers
       setAppointments(appointmentsData);
       setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
   
@@ -459,6 +473,7 @@ function Appointments() {
       return { data: [], total: 0, lastDoc: null };
     }
   };
+  
   
   // Pagination Handlers
   const handleNext = async () => {
@@ -490,15 +505,13 @@ function Appointments() {
   // Load appointments on filter or search change
   useEffect(() => {
     const resetPagination = async () => {
-      setCurrentPage(1); // Reset current page
-      setLastVisible(null); // Clear last visible document
-      await fetchAppointments(); // Fetch new appointments for the first page
+      setCurrentPage(1); // Reset current page to 1
+      setLastVisible(null); // Reset the last visible document reference
+      await fetchAppointments(); // Fetch appointments for the first page with the current search/filter
     };
   
-    resetPagination(); // Trigger reset on filters change
+    resetPagination(); // Trigger fetch on filters or search change
   }, [filter, searchText, natureOfLegalAssistanceFilter]);
-  
-  
   
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
