@@ -72,9 +72,9 @@ function ApptsFrontDesk() {
   const [assignedLawyerDetails, setAssignedLawyerDetails] = useState(null);
   const [holidays, setHolidays] = useState([]);
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
-  const [proceedingFile, setProceedingFile] = useState(null); 
+  const [proceedingFile, setProceedingFile] = useState(null);
   const [clientAttend, setClientAttend] = useState(null);
-  
+
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
   };
@@ -145,7 +145,7 @@ function ApptsFrontDesk() {
           `You have scheduled the appointment (ID: ${appointmentId}) for ${clientFullName} in the date provided as an ${appointmentType} appointment.`,
           assignedLawyerDetails.uid,
           "appointment",
-        selectedAppointment.controlNumber
+          selectedAppointment.controlNumber
         );
       }
 
@@ -156,7 +156,7 @@ function ApptsFrontDesk() {
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been scheduled a date and as an ${appointmentType} appointment.`,
           headLawyerUid,
           "appointment",
-        selectedAppointment.controlNumber
+          selectedAppointment.controlNumber
         );
       }
 
@@ -191,27 +191,28 @@ function ApptsFrontDesk() {
       alert("No appointment selected");
       return;
     }
-  
+
     // Get the contents of the appointment details section
-    const printContents = document.getElementById("appointment-details-section")
-      .innerHTML;
-  
+    const printContents = document.getElementById(
+      "appointment-details-section"
+    ).innerHTML;
+
     // Create a temporary div to modify the contents for printing
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = printContents;
-  
+
     // Remove any elements you don't want to print (with class 'no-print')
     const noPrintSection = tempDiv.querySelectorAll(".no-print");
     noPrintSection.forEach((section) => section.remove());
-  
+
     const modifiedPrintContents = tempDiv.innerHTML;
-  
+
     // Open a new window for printing
     const printWindow = window.open("", "", "height=500, width=500");
     printWindow.document.write(
       "<html><head><title>Appointment Details</title></head><body>"
     );
-  
+
     // Add modern, professional styles for printing
     printWindow.document.write("<style>");
     printWindow.document.write(`
@@ -311,7 +312,7 @@ function ApptsFrontDesk() {
       }
     `);
     printWindow.document.write("</style>");
-  
+
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
       <div class="header">
@@ -324,10 +325,10 @@ function ApptsFrontDesk() {
         }
       </div>
     `);
-  
+
     // Insert the modified contents
     printWindow.document.write(modifiedPrintContents);
-  
+
     // Handle image printing with modern margins and scaling
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
@@ -338,13 +339,13 @@ function ApptsFrontDesk() {
         );
       }
     });
-  
+
     // Close and trigger the print dialog
     printWindow.document.write("</body></html>");
     printWindow.document.close();
     printWindow.focus(); // Focus the window to ensure it shows up
     printWindow.print(); // Trigger print
-  
+
     // Close the print window after printing
     printWindow.onafterprint = () => printWindow.close();
   };
@@ -681,42 +682,47 @@ function ApptsFrontDesk() {
 
   const handleSubmitProceedingNotes = async (e) => {
     e.preventDefault();
-  
+
     if (isSubmitting) return;
     setIsSubmitting(true);
-  
+
     try {
       let fileUrl = null;
-  
+
       // Check if a file is selected and upload it to Firebase Storage
       if (proceedingFile) {
         const currentUid = currentUser.uid; // Current user's UID
         const controlNumber = selectedAppointment.controlNumber; // Get control number from selected appointment
         const fullName = selectedAppointment.fullName.replace(/ /g, "_"); // Replace spaces with underscores in full name
-  
+
         // Get Firebase storage reference
         const storage = getStorage(); // Initialize Firebase Storage
-        const fileRef = ref(storage, `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`);
-  
+        const fileRef = ref(
+          storage,
+          `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
+        );
+
         // Upload the file
-        await uploadBytes(fileRef, proceedingFile); 
+        await uploadBytes(fileRef, proceedingFile);
         fileUrl = await getDownloadURL(fileRef); // Get the download URL after upload
       }
-  
+
       // Update appointment data in Firestore
       const updatedData = {
         "appointmentDetails.proceedingNotes": proceedingNotes,
-        "appointmentDetails.ibpParalegalStaff": clientEligibility.ibpParalegalStaff,
-        "appointmentDetails.assistingCounsel": clientEligibility.assistingCounsel,
+        "appointmentDetails.ibpParalegalStaff":
+          clientEligibility.ibpParalegalStaff,
+        "appointmentDetails.assistingCounsel":
+          clientEligibility.assistingCounsel,
         "appointmentDetails.appointmentStatus": "done",
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
         "appointmentDetails.proceedingFileUrl": fileUrl, // Save the file URL (if uploaded)
       };
-  
+
       // Update the appointment document in Firestore with the proceeding notes and file URL
       await updateAppointment(selectedAppointment.id, updatedData);
-  
+
       // Notify success and reset form values
       setSnackbarMessage("Remarks have been successfully submitted.");
       setProceedingNotes(""); // Reset proceeding notes
@@ -727,18 +733,18 @@ function ApptsFrontDesk() {
         ibpParalegalStaff: "",
         assistingCounsel: "",
       });
-  
+
       // Send notifications as needed
       const clientFullName = selectedAppointment.fullName;
       const appointmentId = selectedAppointment.id;
-  
+
       await sendNotification(
         `Your appointment (ID: ${appointmentId}) has been marked as done.`,
         selectedAppointment.uid,
         "appointment",
         selectedAppointment.controlNumber
       );
-  
+
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
           `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
@@ -747,7 +753,7 @@ function ApptsFrontDesk() {
           selectedAppointment.controlNumber
         );
       }
-  
+
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
         await sendNotification(
@@ -757,10 +763,9 @@ function ApptsFrontDesk() {
           selectedAppointment.controlNumber
         );
       }
-  
+
       // Optionally close the form/modal after successful submission
       setShowProceedingNotesForm(false);
-  
     } catch (error) {
       setSnackbarMessage("Error submitting remarks, please try again.");
     } finally {
@@ -769,8 +774,6 @@ function ApptsFrontDesk() {
       setIsSubmitting(false);
     }
   };
-  
-  
 
   const handleRescheduleSubmit = async (e) => {
     e.preventDefault();
@@ -848,7 +851,7 @@ function ApptsFrontDesk() {
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
           assignedLawyerDetails.uid,
           "appointment",
-        selectedAppointment.controlNumber
+          selectedAppointment.controlNumber
         );
       }
 
@@ -858,7 +861,7 @@ function ApptsFrontDesk() {
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
           headLawyerUid,
           "appointment",
-        selectedAppointment.controlNumber
+          selectedAppointment.controlNumber
         );
       }
 
@@ -1078,12 +1081,21 @@ function ApptsFrontDesk() {
             {appointments.length > 0 ? (
               appointments.map((appointment, index) => (
                 <tr key={appointment.id}>
-                  <td>{(currentPage - 1) * pageSize + index + 1}.</td>
+                                    <td>{(currentPage - 1) * pageSize + index + 1}.</td>
                   <td>{appointment.controlNumber}</td>
                   <td>{appointment.fullName}</td>
                   <td>{appointment.selectedAssistanceType}</td>
                   <td>{getFormattedDate(appointment.appointmentDate, true)}</td>
-                  <td>{appointment.appointmentDetails?.apptType}</td>
+                  <td>
+                    {capitalizeFirstLetter(
+                      appointment.appointmentDetails?.apptType || "N/A"
+                    )}
+                  </td>
+                  <td>
+                    {capitalizeFirstLetter(
+                      appointment.appointmentDetails?.appointmentStatus
+                    )}
+                  </td>
                   <td>
                     <span
                       style={{
@@ -1266,7 +1278,7 @@ function ApptsFrontDesk() {
                       </tr>
                       {selectedAppointment.appointmentDetails?.apptType ===
                         "Online" && (
-                          <tr className="no-print">
+                        <tr className="no-print">
                           <th>Meeting Link:</th>
                           <td>
                             {selectedAppointment.appointmentDetails

@@ -1062,8 +1062,16 @@ function Appointments() {
                   <td>{appointment.fullName}</td>
                   <td>{appointment.selectedAssistanceType}</td>
                   <td>{getFormattedDate(appointment.appointmentDate, true)}</td>
-                  <td>{appointment.appointmentDetails?.apptType}</td>
-                  <td>{appointment.appointmentDetails?.appointmentStatus}</td>
+                  <td>
+                    {capitalizeFirstLetter(
+                      appointment.appointmentDetails?.apptType || "N/A"
+                    )}
+                  </td>
+                  <td>
+                    {capitalizeFirstLetter(
+                      appointment.appointmentDetails?.appointmentStatus
+                    )}
+                  </td>
                   <td>
                     {appointment.appointmentDetails?.apptType === "Online" ? (
                       appointment.appointmentDetails?.appointmentStatus ===
