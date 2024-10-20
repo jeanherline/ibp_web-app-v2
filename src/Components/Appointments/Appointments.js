@@ -380,7 +380,16 @@ function Appointments() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (searchText) {
+      fetchAppointments(true); // Fetch all appointments if search text is entered
+    } else {
+      resetPagination();
+    }
+  }, [searchText]);
+
   const fetchAppointments = async (
+    fetchAll = false,
     lastVisible = null,
     pageDirection = "next"
   ) => {
@@ -420,7 +429,21 @@ function Appointments() {
         orderBy("appointmentDetails.createdDate", "desc")
       );
 
-      // Handle pagination direction
+      // If fetchAll is true, load all data instead of using pagination
+      if (fetchAll) {
+        const allQuerySnapshot = await getDocs(queryRef);
+        const allAppointments = allQuerySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        // Store all appointments in state for local filtering and pagination
+        setAppointments(allAppointments);
+        setTotalPages(Math.ceil(allAppointments.length / pageSize));
+        return;
+      }
+
+      // Handle pagination for regular loading
       if (lastVisible) {
         if (pageDirection === "prev") {
           queryRef = query(
@@ -441,7 +464,6 @@ function Appointments() {
         return { data: [], total: 0, firstDoc: null, lastDoc: null };
       }
 
-      // Filter results based on search text
       const filtered = querySnapshot.docs.filter((doc) => {
         const data = doc.data();
         return (
@@ -459,33 +481,12 @@ function Appointments() {
         );
       });
 
-      // Get the total count of documents matching the filter
-      const countSnapshot = await getCountFromServer(
-        query(collection(fs, "appointments"), ...conditions)
-      );
-
-      // Return fetched appointments and updated page markers
       return {
-        data: filtered.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data.applicantProfile,
-            ...data.employmentProfile,
-            ...data.legalAssistanceRequested,
-            ...data.uploadedImages,
-            createdDate: data.appointmentDetails?.createdDate,
-            appointmentStatus: data.appointmentDetails?.appointmentStatus,
-            controlNumber: data.appointmentDetails?.controlNumber,
-            appointmentDate: data.appointmentDetails?.appointmentDate,
-            clientEligibility: data.clientEligibility,
-            appointmentDetails: data.appointmentDetails,
-            reviewerDetails: data.reviewerDetails,
-            proceedingNotes: data.proceedingNotes,
-            rescheduleHistory: data.rescheduleHistory || [],
-          };
-        }),
-        total: countSnapshot.data().count,
+        data: filtered.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })),
+        total: filtered.length,
         firstDoc: querySnapshot.docs[0],
         lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
       };
@@ -613,16 +614,14 @@ function Appointments() {
   };
 
   // Pagination handlers
-  const handleNext = async () => {
+  const handleNext = () => {
     if (currentPage < totalPages) {
-      await fetchAppointments(lastVisible, "next");
       setCurrentPage(currentPage + 1);
     }
   };
 
-  const handlePrevious = async () => {
+  const handlePrevious = () => {
     if (currentPage > 1) {
-      await fetchAppointments(lastVisible, "prev");
       setCurrentPage(currentPage - 1);
     }
   };
@@ -1163,8 +1162,8 @@ function Appointments() {
             </tr>
           </thead>
           <tbody>
-            {appointments.length > 0 ? (
-              appointments.map((appointment, index) => (
+            {currentData.length > 0 ? (
+              currentData.map((appointment, index) => (
                 <tr key={appointment.id}>
                   <td>{(currentPage - 1) * pageSize + index + 1}.</td>
                   <td>{appointment.controlNumber || "N/A"}</td>
