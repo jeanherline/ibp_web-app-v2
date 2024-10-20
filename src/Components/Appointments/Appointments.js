@@ -509,32 +509,14 @@ function Appointments() {
 
   const handleNext = async () => {
     if (currentPage < totalPages) {
-      const { data, lastDoc } = await getAppointments(
-        filter,
-        lastVisible,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setPageMarkers([...pageMarkers, lastVisible]); // Save the current lastVisible before moving forward
-      setLastVisible(lastDoc);
+      await fetchAppointments(lastVisible, "next");
       setCurrentPage(currentPage + 1);
     }
   };
-
+  
   const handlePrevious = async () => {
-    if (currentPage > 1 && pageMarkers.length > 0) {
-      const { data, firstDoc } = await getAppointments(
-        filter,
-        pageMarkers[pageMarkers.length - 1], // Use the previous lastVisible from the stack
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setLastVisible(firstDoc); // Update the lastVisible for future forward navigation
-      setPageMarkers(pageMarkers.slice(0, -1)); // Remove the last marker
+    if (currentPage > 1) {
+      await fetchAppointments(lastVisible, "prev");
       setCurrentPage(currentPage - 1);
     }
   };
@@ -571,17 +553,28 @@ function Appointments() {
 
   // Reset pagination when filters or searchText change
   useEffect(() => {
-    const fetchAppointments = async () => {
-      const { data, total } = await getAppointments(
+    const fetchAppointments = async (lastVisible = null, pageDirection = "next") => {
+      // Fetch the appointments based on the current filter, pagination, etc.
+      const queryRef = await getAppointments(
         filter,
-        null, // Ensure lastVisible is null when resetting pagination
+        lastVisible, // Pass last visible document for pagination
         pageSize,
         searchText,
         natureOfLegalAssistanceFilter
       );
+    
+      const { data, total, firstDoc, lastDoc } = await queryRef;
+    
+      // Update the pagination based on page direction (next or previous)
+      if (pageDirection === "next") {
+        setLastVisible(lastDoc); // Update lastVisible for the next page
+      } else if (pageDirection === "prev") {
+        setLastVisible(firstDoc); // Update lastVisible for the previous page
+      }
+    
+      // Set appointments and total items count
       setAppointments(data);
       setTotalPages(Math.ceil(total / pageSize));
-      setTotalFilteredItems(total);
     };
 
     fetchAppointments();
