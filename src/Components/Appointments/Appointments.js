@@ -367,39 +367,37 @@ function Appointments() {
 
   const fetchAppointments = async (lastVisible = null, pageDirection = "next") => {
     try {
-      // Log the last visible document for debugging
       console.log("Fetching appointments. Last visible:", lastVisible);
   
-      // Fetch the appointments with proper pagination
-      const queryRef = await getAppointments(
+      const queryResult = await getAppointments(
         filter,
         lastVisible, // Pass the last visible document for pagination
         pageSize,
         searchText,
         natureOfLegalAssistanceFilter,
-        pageDirection === "prev" // Determine if we are fetching the previous page
+        pageDirection === "prev" // Determine if this is a previous page
       );
   
-      const { data, total, firstDoc, lastDoc } = queryRef;
+      const { data, total, firstDoc, lastDoc } = queryResult;
   
-      console.log("Fetched data:", data); // Log the fetched data for debugging
+      console.log("Fetched data:", data);
   
-      // If moving to the next page, update `lastVisible` to the last document of the current page
+      // Update the lastVisible document correctly based on pagination direction
       if (pageDirection === "next") {
         setLastVisible(lastDoc);
-      } 
-      // If moving to the previous page, update `lastVisible` to the first document of the current page
-      else if (pageDirection === "prev") {
+      } else if (pageDirection === "prev") {
         setLastVisible(firstDoc);
       }
   
       // Update the appointments state with the fetched data
       setAppointments(data);
       setTotalPages(Math.ceil(total / pageSize));
+  
     } catch (error) {
       console.error("Error fetching appointments:", error);
     }
   };
+  
   
 
   useEffect(() => {

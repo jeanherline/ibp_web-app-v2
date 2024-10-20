@@ -31,7 +31,7 @@ const getAppointments = async (
   pageSize = 7,
   searchText = "",
   assistanceFilter = "all",
-  isPrevious = false // Boolean to control pagination direction
+  isPrevious = false // Boolean to control direction for pagination
 ) => {
   let queryRef = collection(fs, "appointments");
 
@@ -56,7 +56,7 @@ const getAppointments = async (
     );
   }
 
-  // Combine the conditions and apply to the query
+  // Apply the conditions to the query
   if (conditions.length > 0) {
     queryRef = query(queryRef, ...conditions);
   }
@@ -64,23 +64,30 @@ const getAppointments = async (
   // Sort by createdDate
   queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
 
-  // Handle pagination logic
+  // Handle pagination
   if (lastVisible) {
     if (isPrevious) {
-      // Move to the previous page
+      // Fetch the previous page
       queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
     } else {
-      // Move to the next page
+      // Fetch the next page
       queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
     }
   } else {
-    // First page
+    // Fetch the first page
     queryRef = query(queryRef, limit(pageSize));
   }
 
   const querySnapshot = await getDocs(queryRef);
 
-  // Filter results by searchText, if any
+  console.log("Pagination query executed. Number of docs:", querySnapshot.docs.length);
+  
+  // Check if no data was fetched
+  if (querySnapshot.empty) {
+    return { data: [], total: 0, firstDoc: null, lastDoc: null };
+  }
+
+  // Filter results by searchText
   const filtered = querySnapshot.docs.filter((doc) => {
     const data = doc.data();
     return (
@@ -98,7 +105,7 @@ const getAppointments = async (
     );
   });
 
-  // Fetch total appointments count
+  // Fetch the total number of appointments that match the filter
   const totalQuery = await getDocs(
     query(
       collection(fs, "appointments"),
@@ -125,7 +132,7 @@ const getAppointments = async (
         appointmentDetails: data.appointmentDetails,
         reviewerDetails: data.reviewerDetails,
         proceedingNotes: data.proceedingNotes,
-        rescheduleHistory: data.rescheduleHistory || [], // Add rescheduleHistory here
+        rescheduleHistory: data.rescheduleHistory || [], // Include reschedule history
       };
     }),
     total: totalQuery.size,
@@ -133,6 +140,7 @@ const getAppointments = async (
     lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1], // Last document for pagination
   };
 };
+
 
 const getLawyerCalendar = async (assignedLawyer) => {
   const appointmentsRef = collection(fs, "appointments");
