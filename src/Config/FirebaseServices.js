@@ -72,11 +72,17 @@ const getAppointments = async (
   const filtered = querySnapshot.docs.filter((doc) => {
     const data = doc.data();
     return (
-      data.applicantProfile?.fullName?.toLowerCase().includes(searchText.toLowerCase()) ||
-      data.applicantProfile?.address?.toLowerCase().includes(searchText.toLowerCase()) ||
+      data.applicantProfile?.fullName
+        ?.toLowerCase()
+        .includes(searchText.toLowerCase()) ||
+      data.applicantProfile?.address
+        ?.toLowerCase()
+        .includes(searchText.toLowerCase()) ||
       data.applicantProfile?.contactNumber?.includes(searchText) ||
       data.appointmentDetails?.controlNumber?.includes(searchText) ||
-      data.legalAssistanceRequested?.selectedAssistanceType?.toLowerCase().includes(searchText.toLowerCase())
+      data.legalAssistanceRequested?.selectedAssistanceType
+        ?.toLowerCase()
+        .includes(searchText.toLowerCase())
     );
   });
 
@@ -95,19 +101,23 @@ const getAppointments = async (
       const data = doc.data();
       return {
         id: doc.id,
-        ...data.applicantProfile,
-        ...data.employmentProfile,
-        ...data.legalAssistanceRequested,
-        ...data.uploadedImages,
-        createdDate: data.appointmentDetails?.createdDate,
-        appointmentStatus: data.appointmentDetails?.appointmentStatus,
-        controlNumber: data.appointmentDetails?.controlNumber,
-        appointmentDate: data.appointmentDetails?.appointmentDate,
-        clientEligibility: data.clientEligibility,
-        appointmentDetails: data.appointmentDetails,
-        reviewerDetails: data.reviewerDetails,
-        proceedingNotes: data.proceedingNotes, 
-        rescheduleHistory: data.rescheduleHistory || [],  // Add rescheduleHistory here
+        applicantProfile: {
+          fullName: data.applicantProfile?.fullName || "N/A",
+          contactNumber: data.applicantProfile?.contactNumber || "N/A",
+          address: data.applicantProfile?.address || "N/A",
+        },
+        legalAssistanceRequested: {
+          selectedAssistanceType:
+            data.legalAssistanceRequested?.selectedAssistanceType || "N/A",
+        },
+        appointmentDetails: {
+          controlNumber: data.appointmentDetails?.controlNumber || "N/A",
+          appointmentDate: data.appointmentDetails?.appointmentDate || null,
+          appointmentStatus:
+            data.appointmentDetails?.appointmentStatus || "N/A",
+          apptType: data.appointmentDetails?.apptType || "N/A",
+        },
+        rescheduleHistory: data.rescheduleHistory || [], // Include rescheduleHistory if available
       };
     }),
     total: totalQuery.size,
@@ -115,7 +125,6 @@ const getAppointments = async (
     lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
   };
 };
-
 
 const getLawyerCalendar = async (assignedLawyer) => {
   const appointmentsRef = collection(fs, "appointments");
@@ -441,7 +450,7 @@ const getLawyerAppointments = (
           appointmentDate: data.appointmentDetails?.appointmentDate,
           clientEligibility: data.clientEligibility,
           appointmentDetails: data.appointmentDetails,
-          rescheduleHistory: data.rescheduleHistory || [],  // Ensure rescheduleHistory is included
+          rescheduleHistory: data.rescheduleHistory || [], // Ensure rescheduleHistory is included
         };
       });
 
@@ -715,7 +724,6 @@ const getUsers = async (
   }
 };
 
-
 const getUsersCount = async (
   statusFilter,
   filterType,
@@ -824,13 +832,12 @@ export const sendNotification = async (message, uid, type, controlNumber) => {
       timestamp: Timestamp.fromDate(new Date()),
       type: type,
       uid: uid,
-      controlNumber: controlNumber
+      controlNumber: controlNumber,
     });
   } catch (error) {
     console.error("Error sending notification:", error);
   }
 };
-
 
 export const createAppointment = async (appointmentData) => {
   try {
@@ -846,7 +853,7 @@ export const createAppointment = async (appointmentData) => {
 export const getHeadLawyerUid = async () => {
   const usersRef = collection(fs, "users");
   const q = query(usersRef, where("member_type", "==", "headLawyer"));
-  
+
   try {
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {
