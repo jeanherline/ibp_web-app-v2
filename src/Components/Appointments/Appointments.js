@@ -13,7 +13,6 @@ import {
   sendNotification,
   getHeadLawyerUid,
   getAppointments,
-  fetchUsers,
   fetchAppointments,
   filterStatus,
   filterType,
@@ -78,6 +77,33 @@ function Appointments() {
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const fetchUsers = async (page) => {
+    try {
+      const totalUsers = await getUsersCount(
+        filterStatus,
+        filterType,
+        cityFilter,
+        searchText
+      );
+      const newTotalPages = Math.ceil(totalUsers / pageSize);
+      const { users, lastVisibleDoc } = await getUsers(
+        filterStatus,
+        filterType,
+        cityFilter,
+        searchText,
+        page === 1 ? null : lastVisible,
+        pageSize
+      );
+      setUsers(users);
+      setTotalPages(newTotalPages);
+      setLastVisible(lastVisibleDoc);
+      setCurrentPage(page);
+      setTotalFilteredItems(totalUsers);
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+    }
+  };
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
