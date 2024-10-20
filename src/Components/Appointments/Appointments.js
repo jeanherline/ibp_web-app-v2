@@ -491,33 +491,31 @@ function Appointments() {
 
   const handleNext = async () => {
     if (currentPage < totalPages) {
-      const { data, lastDoc } = await getLawyerAppointments(
+      const { data, lastDoc } = await getAppointments(
         filter,
-        lastVisible,
+        lastVisible, // Use the last visible doc from the current page
         pageSize,
         searchText,
-        natureOfLegalAssistanceFilter,
-        currentUser
+        natureOfLegalAssistanceFilter
       );
       setAppointments(data);
-      setLastVisible(lastDoc); // Set lastVisible to the last document of the current page
-      setCurrentPage((prevPage) => prevPage + 1); // Increment currentPage
+      setLastVisible(lastDoc); // Update with the last document
+      setCurrentPage((prevPage) => prevPage + 1); // Increment the page
     }
   };
 
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      const { data, firstDoc } = await getLawyerAppointments(
+      const { data, firstDoc } = await getAppointments(
         filter,
-        null, // Reset lastVisible to null when fetching from previous pages
+        null, // Reset lastVisible for previous page
         pageSize,
         searchText,
-        natureOfLegalAssistanceFilter,
-        currentUser
+        natureOfLegalAssistanceFilter
       );
       setAppointments(data);
-      setLastVisible(firstDoc); // Update lastVisible for the previous page
-      setCurrentPage((prevPage) => prevPage - 1); // Decrement currentPage
+      setLastVisible(firstDoc); // Update with the first document
+      setCurrentPage((prevPage) => prevPage - 1); // Decrement the page
     }
   };
 
