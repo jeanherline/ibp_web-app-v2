@@ -135,6 +135,7 @@ const getAppointments = async (
 };
 
 
+
 const getLawyerCalendar = async (assignedLawyer) => {
   const appointmentsRef = collection(fs, "appointments");
   const q = query(
