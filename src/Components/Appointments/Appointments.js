@@ -366,7 +366,7 @@ function Appointments() {
   }, []);
 
   useEffect(() => {
-    const fetchAppointments = async () => {
+    const getLawyerAppointments = async () => {
       try {
         const { data, total } = await getAppointments(
           filter, // Filter by status
@@ -384,7 +384,7 @@ function Appointments() {
       }
     };
 
-    fetchAppointments();
+    getLawyerAppointments();
   }, [
     filter,
     natureOfLegalAssistanceFilter,
@@ -501,22 +501,22 @@ function Appointments() {
 
   const handleNext = () => {
     if (currentPage < totalPages) {
-      fetchAppointments(currentPage + 1);
+      getLawyerAppointments(currentPage + 1);
     }
   };
 
   const handlePrevious = () => {
     if (currentPage > 1) {
-      fetchAppointments(currentPage - 1);
+      getLawyerAppointments(currentPage - 1);
     }
   };
 
   const handleFirst = () => {
-    fetchAppointments(1);
+    getLawyerAppointments(1);
   };
 
   const handleLast = () => {
-    fetchAppointments(totalPages);
+    getLawyerAppointments(totalPages);
   };
 
   const toggleDetails = (appointment) => {
