@@ -73,7 +73,9 @@ function Appointments() {
   const [holidays, setHolidays] = useState([]);
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
-
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [assistanceFilter, setAssistanceFilter] = useState("all");
+  
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
   };
@@ -367,18 +369,30 @@ function Appointments() {
   }, []);
 
   useEffect(() => {
-    const fetchAppointments = async () => {
-      const { data, total } = await getAppointments(
-        filter,
-        lastVisible,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setTotalPages(Math.ceil(total / pageSize));
-      setTotalFilteredItems(total);
+    const fetchAppointments = async (isPrevious = false) => {
+      setIsLoading(true);
+    
+      try {
+        const { data, total, firstDoc, lastDoc } = await getAppointments(
+          statusFilter,      // Appointment status filter
+          lastVisible,       // Pagination control
+          7,                 // Page size (number of results per page)
+          searchText,        // Search text input
+          assistanceFilter,  // Filter by assistance type
+          isPrevious         // Boolean to check if it's a previous page request
+        );
+    
+        // Update the state
+        setAppointments(data);
+        setTotalAppointments(total);
+        setLastVisible(isPrevious ? firstDoc : lastDoc);
+      } catch (error) {
+        console.error("Error fetching appointments:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
+    
 
     fetchAppointments();
   }, [filter, lastVisible, searchText, natureOfLegalAssistanceFilter]);

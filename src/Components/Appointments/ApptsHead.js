@@ -73,7 +73,9 @@ function ApptsHead() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
   const [clientAttend, setClientAttend] = useState(null);
-
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [assistanceFilter, setAssistanceFilter] = useState("all");
+  
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
   };
@@ -91,43 +93,28 @@ function ApptsHead() {
   useEffect(() => {
     if (!currentUser) return;
 
-    const fetchAppointments = async () => {
-      // Fetch a large number of appointments instead of null for the limit
-      const { data, total } = await getAdminAppointments(
-        filter,
-        null, // No lastVisible, fetch all appointments
-        1000, // Set a large limit instead of null
-        searchText,
-        natureOfLegalAssistanceFilter,
-        currentUser
-      );
-
-      // Sort appointments to have pending first
-      const sortedAppointments = data.sort((a, b) => {
-        if (
-          a.appointmentStatus === "pending" &&
-          b.appointmentStatus !== "pending"
-        ) {
-          return -1; // "pending" comes first
-        }
-        if (
-          a.appointmentStatus !== "pending" &&
-          b.appointmentStatus === "pending"
-        ) {
-          return 1; // "pending" comes first
-        }
-        return 0; // Keep order for other statuses
-      });
-
-      // Set total pages based on sorted data and pageSize
-      const paginatedAppointments = sortedAppointments.slice(
-        (currentPage - 1) * pageSize,
-        currentPage * pageSize
-      );
-
-      setAppointments(paginatedAppointments);
-      setTotalPages(Math.ceil(total / pageSize));
-      setTotalFilteredItems(total);
+    const fetchAppointments = async (isPrevious = false) => {
+      setIsLoading(true);
+    
+      try {
+        const { data, total, firstDoc, lastDoc } = await getAppointments(
+          statusFilter,      // Appointment status filter
+          lastVisible,       // Pagination control
+          7,                 // Page size (number of results per page)
+          searchText,        // Search text input
+          assistanceFilter,  // Filter by assistance type
+          isPrevious         // Boolean to check if it's a previous page request
+        );
+    
+        // Update the state
+        setAppointments(data);
+        setTotalAppointments(total);
+        setLastVisible(isPrevious ? firstDoc : lastDoc);
+      } catch (error) {
+        console.error("Error fetching appointments:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchAppointments();
