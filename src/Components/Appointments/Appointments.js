@@ -6,7 +6,6 @@ import ReactDatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Pagination from "react-bootstrap/Pagination";
 import {
-  getLawyerAppointments,
   updateAppointment,
   getBookedSlots,
   getUserById,
@@ -492,67 +491,80 @@ function Appointments() {
 
   const handleNext = async () => {
     if (currentPage < totalPages) {
-      const { data, lastDoc } = await getLawyerAppointments(
+      const { data, lastDoc } = await getAppointments(
         filter,
         lastVisible,
         pageSize,
         searchText,
-        natureOfLegalAssistanceFilter,
-        currentUser
+        natureOfLegalAssistanceFilter
       );
       setAppointments(data);
       setLastVisible(lastDoc);
       setCurrentPage(currentPage + 1);
     }
   };
-
+  
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      const { data, firstDoc } = await getLawyerAppointments(
+      const { data, firstDoc } = await getAppointments(
         filter,
-        lastVisible,
+        null,  // Reset to null to go to the first page
         pageSize,
         searchText,
-        natureOfLegalAssistanceFilter,
-        currentUser,
-        true
+        natureOfLegalAssistanceFilter
       );
       setAppointments(data);
       setLastVisible(firstDoc);
-      setCurrentPage((prevPage) => prevPage - 1);
+      setCurrentPage(currentPage - 1);
     }
   };
-
+  
   const handleFirst = async () => {
-    const { data, firstDoc } = await getLawyerAppointments(
+    const { data, firstDoc } = await getAppointments(
       filter,
-      null,
+      null,  // Ensure that first page is being fetched
       pageSize,
       searchText,
-      natureOfLegalAssistanceFilter,
-      currentUser
+      natureOfLegalAssistanceFilter
     );
     setAppointments(data);
     setLastVisible(firstDoc);
     setCurrentPage(1);
   };
-
+  
   const handleLast = async () => {
-    const { data, lastDoc } = await getLawyerAppointments(
+    const { data, lastDoc } = await getAppointments(
       filter,
       lastVisible,
       pageSize,
       searchText,
       natureOfLegalAssistanceFilter,
-      currentUser,
       false,
-      true
+      true // Indicating to get the last page
     );
     setAppointments(data);
     setLastVisible(lastDoc);
     setCurrentPage(totalPages);
   };
-
+  
+  // Reset pagination when filters or searchText change
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      const { data, total } = await getAppointments(
+        filter,
+        null,  // Ensure lastVisible is null when resetting pagination
+        pageSize,
+        searchText,
+        natureOfLegalAssistanceFilter
+      );
+      setAppointments(data);
+      setTotalPages(Math.ceil(total / pageSize));
+      setTotalFilteredItems(total);
+    };
+  
+    fetchAppointments();
+  }, [filter, searchText, natureOfLegalAssistanceFilter]);
+  
   const toggleDetails = (appointment) => {
     console.log("Selected Appointment: ", appointment);
 
