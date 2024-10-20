@@ -191,28 +191,28 @@ function Appointments() {
       alert("No appointment selected");
       return;
     }
-  
+
     // Get the contents of the appointment details section
     const printContents = document.getElementById(
       "appointment-details-section"
     ).innerHTML;
-  
+
     // Create a temporary div to modify the contents for printing
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = printContents;
-  
+
     // Remove any elements you don't want to print (with class 'no-print')
     const noPrintSection = tempDiv.querySelectorAll(".no-print");
     noPrintSection.forEach((section) => section.remove());
-  
+
     const modifiedPrintContents = tempDiv.innerHTML;
-  
+
     // Open a new window for printing
     const printWindow = window.open("", "", "height=500, width=500");
     printWindow.document.write(
       "<html><head><title>Appointment Details</title></head><body>"
     );
-  
+
     // Add modern, professional styles for printing
     printWindow.document.write("<style>");
     printWindow.document.write(`
@@ -316,7 +316,7 @@ function Appointments() {
       }
     `);
     printWindow.document.write("</style>");
-  
+
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
       <div class="header">
@@ -329,10 +329,10 @@ function Appointments() {
         }
       </div>
     `);
-  
+
     // Insert the modified contents
     printWindow.document.write(modifiedPrintContents);
-  
+
     // Handle image printing with modern margins and scaling
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
@@ -343,17 +343,16 @@ function Appointments() {
         );
       }
     });
-  
+
     // Close and trigger the print dialog
     printWindow.document.write("</body></html>");
     printWindow.document.close();
     printWindow.focus(); // Focus the window to ensure it shows up
     printWindow.print(); // Trigger print
-  
+
     // Close the print window after printing
     printWindow.onafterprint = () => printWindow.close();
   };
-  
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -365,22 +364,40 @@ function Appointments() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      const { data, total } = await getAppointments(
-        filter,
-        lastVisible,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setTotalPages(Math.ceil(total / pageSize));
-      setTotalFilteredItems(total);
-    };
+  const fetchAppointments = async (
+    lastVisible = null,
+    pageDirection = "next"
+  ) => {
+    const queryRef = getAppointments(
+      filter,
+      lastVisible, // Pass last visible document as the starting point for pagination
+      pageSize,
+      searchText,
+      natureOfLegalAssistanceFilter
+    );
+    const { data, total, firstDoc, lastDoc } = await queryRef;
 
-    fetchAppointments();
-  }, [filter, lastVisible, searchText, natureOfLegalAssistanceFilter]);
+    // Update the pagination based on the page direction
+    if (pageDirection === "next") {
+      setLastVisible(lastDoc); // Update lastVisible for the next page
+    } else if (pageDirection === "prev") {
+      setLastVisible(firstDoc); // Update lastVisible for previous page navigation
+    }
+
+    // Set appointments and total items count
+    setAppointments(data);
+    setTotalPages(Math.ceil(total / pageSize));
+  };
+
+  useEffect(() => {
+    const resetPagination = async () => {
+      setCurrentPage(1); // Reset current page to 1
+      setLastVisible(null); // Reset lastVisible to null to fetch from the first page
+      await fetchAppointments(); // Fetch appointments for the first page
+    };
+  
+    resetPagination();
+  }, [filter, searchText, natureOfLegalAssistanceFilter]);
 
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
@@ -490,69 +507,37 @@ function Appointments() {
   };
 
   const handleNext = async () => {
-    if (currentPage < totalPages) {
-      const { data, lastDoc } = await getAppointments(
-        filter,
-        lastVisible,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setLastVisible(lastDoc);
-      setCurrentPage(currentPage + 1);
-    }
-  };
-  
-  const handlePrevious = async () => {
-    if (currentPage > 1) {
-      const { data, firstDoc } = await getAppointments(
-        filter,
-        null,  // Reset to null to go to the first page
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setLastVisible(firstDoc);
-      setCurrentPage(currentPage - 1);
-    }
-  };
-  
-  const handleFirst = async () => {
-    const { data, firstDoc } = await getAppointments(
-      filter,
-      null,  // Ensure that first page is being fetched
-      pageSize,
-      searchText,
-      natureOfLegalAssistanceFilter
-    );
-    setAppointments(data);
-    setLastVisible(firstDoc);
-    setCurrentPage(1);
-  };
-  
-  const handleLast = async () => {
-    const { data, lastDoc } = await getAppointments(
-      filter,
-      lastVisible,
-      pageSize,
-      searchText,
-      natureOfLegalAssistanceFilter,
-      false,
-      true // Indicating to get the last page
-    );
-    setAppointments(data);
-    setLastVisible(lastDoc);
-    setCurrentPage(totalPages);
-  };
-  
+  if (currentPage < totalPages) {
+    await fetchAppointments(lastVisible, 'next'); // Fetch next set of appointments
+    setCurrentPage(currentPage + 1);
+  }
+};
+
+const handlePrevious = async () => {
+  if (currentPage > 1) {
+    await fetchAppointments(lastVisible, 'prev'); // Fetch previous set of appointments
+    setCurrentPage(currentPage - 1);
+  }
+};
+
+// Similar handlers for First and Last buttons
+const handleFirst = async () => {
+  setLastVisible(null); // Reset lastVisible to fetch from the first page
+  await fetchAppointments(null, 'first');
+  setCurrentPage(1);
+};
+
+const handleLast = async () => {
+  await fetchAppointments(lastVisible, 'last'); // Fetch from the last set of appointments
+  setCurrentPage(totalPages);
+};
+
   // Reset pagination when filters or searchText change
   useEffect(() => {
     const fetchAppointments = async () => {
       const { data, total } = await getAppointments(
         filter,
-        null,  // Ensure lastVisible is null when resetting pagination
+        null, // Ensure lastVisible is null when resetting pagination
         pageSize,
         searchText,
         natureOfLegalAssistanceFilter
@@ -561,10 +546,10 @@ function Appointments() {
       setTotalPages(Math.ceil(total / pageSize));
       setTotalFilteredItems(total);
     };
-  
+
     fetchAppointments();
   }, [filter, searchText, natureOfLegalAssistanceFilter]);
-  
+
   const toggleDetails = (appointment) => {
     console.log("Selected Appointment: ", appointment);
 
@@ -1383,7 +1368,7 @@ function Appointments() {
               <br />
               <h2>Appointment Details</h2>
               <div id="appointment-details-section">
-              <section className="mb-4 print-section">
+                <section className="mb-4 print-section">
                   <h2>
                     <em
                       style={{
