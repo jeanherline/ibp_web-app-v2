@@ -76,31 +76,7 @@ function Appointments() {
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  <Pagination>
-    <Pagination.First onClick={handleFirst} disabled={currentPage === 1} />
-    <Pagination.Prev onClick={handlePrevious} disabled={currentPage === 1} />
-    {[...Array(totalPages).keys()].map((_, index) => (
-      <Pagination.Item
-        key={index + 1}
-        active={index + 1 === currentPage}
-        onClick={() => {
-          setCurrentPage(index + 1);
-          setLastVisible(appointments[index]); // Update visible doc for this page
-        }}
-      >
-        {index + 1}
-      </Pagination.Item>
-    ))}
-    <Pagination.Next
-      onClick={handleNext}
-      disabled={currentPage === totalPages}
-    />
-    <Pagination.Last
-      onClick={handleLast}
-      disabled={currentPage === totalPages}
-    />
-  </Pagination>;
+  W;
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
@@ -538,6 +514,10 @@ function Appointments() {
     }
   };
 
+  useEffect(() => {
+    fetchUsers(1); // Fetch users when component mounts or filters change
+  }, [filterStatus, filterType, cityFilter, searchText]);
+
   const handleNext = () => {
     if (currentPage < totalPages) {
       fetchUsers(currentPage + 1);
@@ -557,6 +537,11 @@ function Appointments() {
   const handleLast = () => {
     fetchUsers(totalPages);
   };
+
+  const handlePageClick = (page) => {
+    fetchUsers(page);
+  };
+
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       fetchAppointments(); // Call your fetch function when searchText changes after a delay
