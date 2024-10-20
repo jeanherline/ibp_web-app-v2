@@ -958,4 +958,5 @@ export {
   addUser,
   getUsersCount,
   aptsCalendar,
+  fetchAppointments,
 };
