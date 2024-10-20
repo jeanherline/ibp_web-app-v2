@@ -18,7 +18,22 @@ import { useAuth } from "../../AuthContext";
 import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { fs, auth, signInWithGoogle } from "../../Config/Firebase";
-import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore"; // Add these imports for Firestore
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  Timestamp,
+  collection,
+  where,
+  query,
+  orderBy,
+  startAfter,
+  endBefore,
+  limit,
+  limitToLast,
+  getDocs,
+  getCountFromServer,
+} from "firebase/firestore"; // Add these imports for Firestore
 
 import {
   faEye,
@@ -365,61 +380,90 @@ function Appointments() {
     return () => unsubscribe();
   }, []);
 
-  const fetchAppointments = async (lastVisible = null, pageDirection = "next") => {
+  const fetchAppointments = async (
+    lastVisible = null,
+    pageDirection = "next"
+  ) => {
     try {
       console.log("Fetching appointments. Last visible:", lastVisible);
-  
+
       let queryRef = collection(fs, "appointments");
-  
+
       // Apply filters
       const conditions = [];
-  
+
       if (filter && filter !== "all") {
-        conditions.push(where("appointmentDetails.appointmentStatus", "==", filter));
+        conditions.push(
+          where("appointmentDetails.appointmentStatus", "==", filter)
+        );
       }
-  
-      if (natureOfLegalAssistanceFilter && natureOfLegalAssistanceFilter !== "all") {
-        conditions.push(where("legalAssistanceRequested.selectedAssistanceType", "==", natureOfLegalAssistanceFilter));
+
+      if (
+        natureOfLegalAssistanceFilter &&
+        natureOfLegalAssistanceFilter !== "all"
+      ) {
+        conditions.push(
+          where(
+            "legalAssistanceRequested.selectedAssistanceType",
+            "==",
+            natureOfLegalAssistanceFilter
+          )
+        );
       }
-  
+
       if (conditions.length > 0) {
         queryRef = query(queryRef, ...conditions);
       }
-  
-      queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
-  
+
+      queryRef = query(
+        queryRef,
+        orderBy("appointmentDetails.createdDate", "desc")
+      );
+
       // Handle pagination direction
       if (lastVisible) {
         if (pageDirection === "prev") {
-          queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
+          queryRef = query(
+            queryRef,
+            endBefore(lastVisible),
+            limitToLast(pageSize)
+          );
         } else {
           queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
         }
       } else {
         queryRef = query(queryRef, limit(pageSize));
       }
-  
+
       const querySnapshot = await getDocs(queryRef);
-  
+
       if (querySnapshot.empty) {
         return { data: [], total: 0, firstDoc: null, lastDoc: null };
       }
-  
+
       // Filter results based on search text
       const filtered = querySnapshot.docs.filter((doc) => {
         const data = doc.data();
         return (
-          data.applicantProfile?.fullName?.toLowerCase().includes(searchText.toLowerCase()) ||
-          data.applicantProfile?.address?.toLowerCase().includes(searchText.toLowerCase()) ||
+          data.applicantProfile?.fullName
+            ?.toLowerCase()
+            .includes(searchText.toLowerCase()) ||
+          data.applicantProfile?.address
+            ?.toLowerCase()
+            .includes(searchText.toLowerCase()) ||
           data.applicantProfile?.contactNumber?.includes(searchText) ||
           data.appointmentDetails?.controlNumber?.includes(searchText) ||
-          data.legalAssistanceRequested?.selectedAssistanceType?.toLowerCase().includes(searchText.toLowerCase())
+          data.legalAssistanceRequested?.selectedAssistanceType
+            ?.toLowerCase()
+            .includes(searchText.toLowerCase())
         );
       });
-  
+
       // Get the total count of documents matching the filter
-      const countSnapshot = await getCountFromServer(query(collection(fs, "appointments"), ...conditions));
-  
+      const countSnapshot = await getCountFromServer(
+        query(collection(fs, "appointments"), ...conditions)
+      );
+
       // Return fetched appointments and updated page markers
       return {
         data: filtered.map((doc) => {
@@ -450,8 +494,7 @@ function Appointments() {
       return { data: [], total: 0, firstDoc: null, lastDoc: null };
     }
   };
-  
-  
+
   useEffect(() => {
     const resetPagination = async () => {
       setCurrentPage(1); // Reset current page to 1
@@ -569,32 +612,32 @@ function Appointments() {
     return !isSlotBookedByAssignedLawyer(dateTime);
   };
 
- // Pagination handlers
-const handleNext = async () => {
-  if (currentPage < totalPages) {
-    await fetchAppointments(lastVisible, "next");
-    setCurrentPage(currentPage + 1);
-  }
-};
+  // Pagination handlers
+  const handleNext = async () => {
+    if (currentPage < totalPages) {
+      await fetchAppointments(lastVisible, "next");
+      setCurrentPage(currentPage + 1);
+    }
+  };
 
-const handlePrevious = async () => {
-  if (currentPage > 1) {
-    await fetchAppointments(lastVisible, "prev");
-    setCurrentPage(currentPage - 1);
-  }
-};
+  const handlePrevious = async () => {
+    if (currentPage > 1) {
+      await fetchAppointments(lastVisible, "prev");
+      setCurrentPage(currentPage - 1);
+    }
+  };
 
-const handleFirst = async () => {
-  setLastVisible(null); // Reset to fetch from the start
-  setPageMarkers([]); // Clear page markers
-  await fetchAppointments(null, "next");
-  setCurrentPage(1);
-};
+  const handleFirst = async () => {
+    setLastVisible(null); // Reset to fetch from the start
+    setPageMarkers([]); // Clear page markers
+    await fetchAppointments(null, "next");
+    setCurrentPage(1);
+  };
 
-const handleLast = async () => {
-  // Implement logic to fetch the last page if needed
-  setCurrentPage(totalPages);
-};
+  const handleLast = async () => {
+    // Implement logic to fetch the last page if needed
+    setCurrentPage(totalPages);
+  };
 
   // Reset pagination when filters or searchText change
   useEffect(() => {
@@ -1127,7 +1170,10 @@ const handleLast = async () => {
                   <td>{appointment.controlNumber || "N/A"}</td>
                   <td>{appointment.fullName || "N/A"}</td>
                   <td>{appointment.selectedAssistanceType || "N/A"}</td>
-                  <td>{getFormattedDate(appointment.appointmentDate, true) || "N/A"}</td>
+                  <td>
+                    {getFormattedDate(appointment.appointmentDate, true) ||
+                      "N/A"}
+                  </td>
                   <td>
                     {capitalizeFirstLetter(
                       appointment.appointmentDetails?.apptType || "N/A"
