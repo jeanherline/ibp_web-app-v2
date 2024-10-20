@@ -6,7 +6,6 @@ import ReactDatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Pagination from "react-bootstrap/Pagination";
 import {
-  getLawyerAppointments,
   updateAppointment,
   getBookedSlots,
   getUserById,
@@ -14,8 +13,11 @@ import {
   sendNotification,
   getHeadLawyerUid,
   getAppointments,
-  endBefore,
+  fetchUsers,
   fetchAppointments,
+  filterStatus,
+  filterType,
+  cityFilter,
 } from "../../Config/FirebaseServices";
 import { useAuth } from "../../AuthContext";
 import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
@@ -76,7 +78,6 @@ function Appointments() {
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
   const [loading, setLoading] = useState(false);
-  W;
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
