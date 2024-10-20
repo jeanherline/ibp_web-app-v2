@@ -25,11 +25,11 @@ import ReactDOMServer from "react-dom/server";
 
 const getAppointments = async (
   statusFilter,
-  lastVisible,
+  lastVisible,  // We will now use this for pagination
   pageSize = 7,
   searchText = "",
   assistanceFilter = "all",
-  isPrevious = false
+  isPrevious = false  // If necessary, we can handle previous page navigation logic
 ) => {
   let queryRef = collection(fs, "appointments");
 
@@ -59,12 +59,20 @@ const getAppointments = async (
     queryRef = query(queryRef, ...conditions);
   }
 
-  // Sort and paginate
+  // Sort by createdDate
   queryRef = query(
     queryRef,
-    orderBy("appointmentDetails.createdDate", "desc"),
-    limit(pageSize)
+    orderBy("appointmentDetails.createdDate", "desc")
   );
+
+  // Handle pagination
+  if (lastVisible) {
+    queryRef = isPrevious
+      ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize))
+      : query(queryRef, startAfter(lastVisible), limit(pageSize));
+  } else {
+    queryRef = query(queryRef, limit(pageSize));
+  }
 
   const querySnapshot = await getDocs(queryRef);
 
@@ -80,7 +88,7 @@ const getAppointments = async (
     );
   });
 
-  // Fetch total appointments count
+  // Fetch total appointments count (can be optimized if necessary)
   const totalQuery = await getDocs(
     query(
       collection(fs, "appointments"),
@@ -111,10 +119,11 @@ const getAppointments = async (
       };
     }),
     total: totalQuery.size,
-    firstDoc: querySnapshot.docs[0],
-    lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
+    firstDoc: querySnapshot.docs[0],  // First document for pagination
+    lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],  // Last document for pagination
   };
 };
+
 
 const getLawyerCalendar = async (assignedLawyer) => {
   const appointmentsRef = collection(fs, "appointments");
