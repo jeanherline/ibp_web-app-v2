@@ -538,37 +538,25 @@ function Appointments() {
     }
   };
 
-  const handleNext = async () => {
+  const handleNext = () => {
     if (currentPage < totalPages) {
-      const { data, lastDoc } = await getAppointments(
-        filter,
-        lastVisible, // Current last visible for pagination
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setLastVisible(lastDoc); // Only update lastVisible once data is fetched
-      setCurrentPage((prevPage) => prevPage + 1); // Increment the page
+      fetchUsers(currentPage + 1);
     }
   };
 
-  const handlePrevious = async () => {
+  const handlePrevious = () => {
     if (currentPage > 1) {
-      const { data, firstDoc } = await getAppointments(
-        filter,
-        lastVisible, // For "previous" pagination
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter,
-        true // Flag for going back in pagination
-      );
-      setAppointments(data);
-      setLastVisible(firstDoc); // Update to firstDoc for going back
-      setCurrentPage((prevPage) => prevPage - 1); // Decrement the page
+      fetchUsers(currentPage - 1);
     }
   };
 
+  const handleFirst = () => {
+    fetchUsers(1);
+  };
+
+  const handleLast = () => {
+    fetchUsers(totalPages);
+  };
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       fetchAppointments(); // Call your fetch function when searchText changes after a delay
@@ -583,36 +571,6 @@ function Appointments() {
       fetchAppointments();
     }
   }, [searchText]);
-
-  const handleFirst = async () => {
-    const { data, firstDoc } = await getLawyerAppointments(
-      filter,
-      null,
-      pageSize,
-      searchText,
-      natureOfLegalAssistanceFilter,
-      currentUser
-    );
-    setAppointments(data);
-    setLastVisible(firstDoc);
-    setCurrentPage(1); // Set page to 1
-  };
-
-  const handleLast = async () => {
-    const { data, lastDoc } = await getLawyerAppointments(
-      filter,
-      lastVisible,
-      pageSize,
-      searchText,
-      natureOfLegalAssistanceFilter,
-      currentUser,
-      false,
-      true
-    );
-    setAppointments(data);
-    setLastVisible(lastDoc); // Update lastVisible for last page
-    setCurrentPage(totalPages); // Set page to the last page
-  };
 
   const toggleDetails = (appointment) => {
     console.log("Selected Appointment: ", appointment);
@@ -1397,7 +1355,7 @@ function Appointments() {
             <Pagination.Item
               key={index + 1}
               active={index + 1 === currentPage}
-              onClick={() => handlePageChange(index + 1)} // Correct page handling function
+              onClick={() => handlePageClick(index + 1)}
             >
               {index + 1}
             </Pagination.Item>
