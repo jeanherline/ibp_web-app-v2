@@ -24,55 +24,111 @@ import { QRCodeCanvas } from "qrcode.react";
 import ReactDOMServer from "react-dom/server";
 
 const getAppointments = async (
-  filter,
+  statusFilter,
   lastVisible,
-  pageSize,
-  searchText,
-  natureOfLegalAssistanceFilter
+  pageSize = 7,
+  searchText = "",
+  assistanceFilter = "all",
+  isPrevious = false
 ) => {
-  let query = fs.collection("appointments").limit(pageSize);
+  let pendingQueryRef = collection(fs, "appointments");
+  let otherStatusQueryRef = collection(fs, "appointments");
 
-  // Apply status filter
-  if (filter && filter !== "all") {
-    query = query.where("appointmentDetails.appointmentStatus", "==", filter);
-  }
-
-  // Apply nature of legal assistance filter
-  if (
-    natureOfLegalAssistanceFilter &&
-    natureOfLegalAssistanceFilter !== "all"
-  ) {
-    query = query.where(
-      "legalAssistanceRequested.selectedAssistanceType",
-      "==",
-      natureOfLegalAssistanceFilter
+  // Apply assistance filter if not "all"
+  if (assistanceFilter && assistanceFilter !== "all") {
+    pendingQueryRef = query(
+      pendingQueryRef,
+      where(
+        "legalAssistanceRequested.selectedAssistanceType",
+        "==",
+        assistanceFilter
+      )
+    );
+    otherStatusQueryRef = query(
+      otherStatusQueryRef,
+      where(
+        "legalAssistanceRequested.selectedAssistanceType",
+        "==",
+        assistanceFilter
+      )
     );
   }
 
-  // Apply search text filter
-  if (searchText) {
-    query = query
-      .where("applicantProfile.fullName", ">=", searchText)
-      .where("applicantProfile.fullName", "<=", searchText + "\uf8ff");
-  }
+  // Query pending appointments first
+  pendingQueryRef = query(
+    pendingQueryRef,
+    where("appointmentDetails.appointmentStatus", "==", "pending"),
+    orderBy("appointmentDetails.createdDate", "desc"),
+    limit(pageSize)
+  );
 
-  // Handle pagination
-  if (lastVisible) {
-    query = query.startAfter(lastVisible);
-  }
+  // Query other appointments (not pending)
+  otherStatusQueryRef = query(
+    otherStatusQueryRef,
+    where("appointmentDetails.appointmentStatus", "!=", "pending"),
+    orderBy("appointmentDetails.appointmentStatus"),
+    orderBy("appointmentDetails.createdDate", "desc"),
+    limit(pageSize)
+  );
 
-  const snapshot = await query.get();
+  const pendingSnapshot = await getDocs(pendingQueryRef);
+  const otherStatusSnapshot = await getDocs(otherStatusQueryRef);
 
-  const data = snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  // Combine results, with pending appointments first
+  const combinedResults = [...pendingSnapshot.docs, ...otherStatusSnapshot.docs];
 
-  const total = snapshot.size; // Get total filtered items
+  // Filter results by searchText, if any
+  const filtered = combinedResults.filter(
+    (doc) =>
+      doc
+        .data()
+        .applicantProfile?.fullName?.toLowerCase()
+        .includes(searchText.toLowerCase()) ||
+      doc
+        .data()
+        .applicantProfile?.address?.toLowerCase()
+        .includes(searchText.toLowerCase()) ||
+      doc.data().applicantProfile?.contactNumber?.includes(searchText) ||
+      doc.data().appointmentDetails?.controlNumber?.includes(searchText) ||
+      doc
+        .data()
+        .legalAssistanceRequested?.selectedAssistanceType?.toLowerCase()
+        .includes(searchText.toLowerCase())
+  );
 
-  const lastDoc = snapshot.docs[snapshot.docs.length - 1]; // Get last document for pagination
+  const totalQuery = await getDocs(
+    query(
+      collection(fs, "appointments"),
+      statusFilter && statusFilter !== "all"
+        ? where("appointmentDetails.appointmentStatus", "==", statusFilter)
+        : {}
+    )
+  );
 
-  return { data, total, lastDoc };
+  return {
+    data: filtered.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data.applicantProfile,
+        ...data.employmentProfile,
+        ...data.legalAssistanceRequested,
+        ...data.uploadedImages,
+        createdDate: data.appointmentDetails?.createdDate,
+        appointmentStatus: data.appointmentDetails?.appointmentStatus,
+        controlNumber: data.appointmentDetails?.controlNumber,
+        appointmentDate: data.appointmentDetails?.appointmentDate,
+        clientEligibility: data.clientEligibility,
+        appointmentDetails: data.appointmentDetails,
+        reviewerDetails: data.reviewerDetails,
+        proceedingNotes: data.proceedingNotes, 
+        rescheduleHistory: data.rescheduleHistory || [],  // Add rescheduleHistory here
+      };
+    }),
+    total: totalQuery.size,
+    firstDoc: combinedResults[0],
+    lastDoc: combinedResults[combinedResults.length - 1],
+  };
 };
 
 const getLawyerCalendar = async (assignedLawyer) => {
@@ -399,7 +455,7 @@ const getLawyerAppointments = (
           appointmentDate: data.appointmentDetails?.appointmentDate,
           clientEligibility: data.clientEligibility,
           appointmentDetails: data.appointmentDetails,
-          rescheduleHistory: data.rescheduleHistory || [], // Ensure rescheduleHistory is included
+          rescheduleHistory: data.rescheduleHistory || [],  // Ensure rescheduleHistory is included
         };
       });
 
@@ -673,6 +729,7 @@ const getUsers = async (
   }
 };
 
+
 const getUsersCount = async (
   statusFilter,
   filterType,
@@ -781,12 +838,13 @@ export const sendNotification = async (message, uid, type, controlNumber) => {
       timestamp: Timestamp.fromDate(new Date()),
       type: type,
       uid: uid,
-      controlNumber: controlNumber,
+      controlNumber: controlNumber
     });
   } catch (error) {
     console.error("Error sending notification:", error);
   }
 };
+
 
 export const createAppointment = async (appointmentData) => {
   try {
@@ -802,7 +860,7 @@ export const createAppointment = async (appointmentData) => {
 export const getHeadLawyerUid = async () => {
   const usersRef = collection(fs, "users");
   const q = query(usersRef, where("member_type", "==", "headLawyer"));
-
+  
   try {
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {
