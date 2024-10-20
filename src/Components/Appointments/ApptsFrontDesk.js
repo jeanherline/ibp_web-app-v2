@@ -74,10 +74,6 @@ function ApptsFrontDesk() {
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
   const [clientAttend, setClientAttend] = useState(null);
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [assistanceFilter, setAssistanceFilter] = useState("all");
-  const [isLoading, setIsLoading] = useState(false);
-  const [totalAppointments, setTotalAppointments] = useState(0);
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
@@ -222,7 +218,7 @@ function ApptsFrontDesk() {
     printWindow.document.write(`
       @media print {
         @page {
-          size: 8.5in 13in;
+          size: A4;
           margin: 0.8in;
         }
         body {
@@ -369,29 +365,51 @@ function ApptsFrontDesk() {
   }, []);
 
   useEffect(() => {
-    const fetchAppointments = async (isPrevious = false) => {
-      setIsLoading(true);
-    
-      try {
-        const { data, total, firstDoc, lastDoc } = await getAppointments(
-          statusFilter,      // Appointment status filter
-          lastVisible,       // Pagination control
-          7,                 // Page size (number of results per page)
-          searchText,        // Search text input
-          assistanceFilter,  // Filter by assistance type
-          isPrevious         // Boolean to check if it's a previous page request
-        );
-    
-        // Update the state
-        setAppointments(data);
-        setTotalAppointments(total);
-        setLastVisible(isPrevious ? firstDoc : lastDoc);
-      } catch (error) {
-        console.error("Error fetching appointments:", error);
-      } finally {
-        setIsLoading(false);
-      }
+    const fetchAppointments = async () => {
+      const { data, total } = await getAppointments(
+        filter,
+        lastVisible,
+        pageSize,
+        searchText,
+        natureOfLegalAssistanceFilter
+      );
+
+      const sortedAppointments = data.sort((a, b) => {
+        const today = new Date();
+        const aDate = a.appointmentDetails?.appointmentDate?.toDate
+          ? a.appointmentDetails.appointmentDate.toDate()
+          : null;
+        const bDate = b.appointmentDetails?.appointmentDate?.toDate
+          ? b.appointmentDetails.appointmentDate.toDate()
+          : null;
+
+        const isAWalkIn = a.appointmentDetails?.apptType === "Walk-in";
+        const isBWalkIn = b.appointmentDetails?.apptType === "Walk-in";
+
+        const isAToday = aDate && aDate.toDateString() === today.toDateString();
+        const isBToday = bDate && bDate.toDateString() === today.toDateString();
+
+        // Walk-in first
+        if (isAWalkIn && !isBWalkIn) return -1;
+        if (!isAWalkIn && isBWalkIn) return 1;
+
+        // Today's appointments second
+        if (isAToday && !isBToday) return -1;
+        if (!isAToday && isBToday) return 1;
+
+        // Descending order by date (handle cases where date might be missing)
+        if (aDate && bDate) return bDate - aDate;
+        if (aDate) return -1;
+        if (bDate) return 1;
+
+        return 0; // No valid date for comparison, keep order unchanged
+      });
+
+      setAppointments(sortedAppointments);
+      setTotalPages(Math.ceil(total / pageSize));
+      setTotalFilteredItems(total);
     };
+
     fetchAppointments();
   }, [filter, lastVisible, searchText, natureOfLegalAssistanceFilter]);
 
@@ -1255,7 +1273,7 @@ function ApptsFrontDesk() {
                 <section className="mb-4 print-section">
                   {(selectedAppointment.appointmentDetails?.newRequest ||
                     selectedAppointment.appointmentDetails?.requestReason) && (
-                    <section className="mb-4 print-section no-print">
+                      <section className="mb-4 print-section no-print">
                       <h2>
                         <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                           New Request Details
