@@ -28,18 +28,15 @@ import ReactDOMServer from "react-dom/server";
 
 const getAppointments = async (
   statusFilter,
-  lastVisible,
-  pageSize = 7,
+  pageSize = 7, // No need for lastVisible anymore
   searchText = "",
   assistanceFilter = "all",
-  isPrevious = false
 ) => {
   try {
     let queryRef = collection(fs, "appointments");
-    
-    // Apply filters (appointment status and legal assistance type)
-    const conditions = [];
 
+    // Apply filters (status and assistance)
+    const conditions = [];
     if (statusFilter && statusFilter !== "all") {
       conditions.push(
         where("appointmentDetails.appointmentStatus", "==", statusFilter)
@@ -52,49 +49,44 @@ const getAppointments = async (
       );
     }
 
-    // Apply conditions
+    // Apply conditions to Firestore query
     if (conditions.length > 0) {
       queryRef = query(queryRef, ...conditions);
     }
 
-    // Order by created date to ensure consistent pagination
+    // Fetch all matching documents
     queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
-
-    // Handle pagination (startAfter for next, endBefore for previous)
-    if (lastVisible) {
-      queryRef = isPrevious
-        ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize))
-        : query(queryRef, startAfter(lastVisible), limit(pageSize));
-    } else {
-      queryRef = query(queryRef, limit(pageSize)); // Initial load
-    }
-
-    // Fetch documents from Firestore
     const querySnapshot = await getDocs(queryRef);
 
     if (querySnapshot.empty) {
-      return { data: [], total: 0, firstDoc: null, lastDoc: null };
+      return { data: [], total: 0 };
     }
 
-    // Client-side search filtering (apply after fetching)
+    // Filter by search text (after fetching)
     const filteredData = querySnapshot.docs.filter((doc) => {
       const data = doc.data();
       return (
-        data.applicantProfile?.fullName?.toLowerCase().includes(searchText.toLowerCase()) ||
-        data.applicantProfile?.address?.toLowerCase().includes(searchText.toLowerCase()) ||
+        data.applicantProfile?.fullName
+          ?.toLowerCase()
+          .includes(searchText.toLowerCase()) ||
+        data.applicantProfile?.address
+          ?.toLowerCase()
+          .includes(searchText.toLowerCase()) ||
         data.applicantProfile?.contactNumber?.includes(searchText) ||
         data.appointmentDetails?.controlNumber?.includes(searchText) ||
-        data.legalAssistanceRequested?.selectedAssistanceType?.toLowerCase().includes(searchText.toLowerCase())
+        data.legalAssistanceRequested?.selectedAssistanceType
+          ?.toLowerCase()
+          .includes(searchText.toLowerCase())
       );
     });
 
-    // Get total count for pagination
-    const countSnapshot = await getCountFromServer(
-      query(collection(fs, "appointments"), ...conditions)
-    );
+    // Now apply pagination in-memory
+    const totalRecords = filteredData.length;
+    const totalPages = Math.ceil(totalRecords / pageSize);
+    const paginatedData = filteredData.slice(0, pageSize); // First page
 
     return {
-      data: filteredData.map((doc) => {
+      data: paginatedData.map((doc) => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -113,16 +105,21 @@ const getAppointments = async (
           rescheduleHistory: data.rescheduleHistory || [],
         };
       }),
-      total: countSnapshot.data().count,
-      firstDoc: querySnapshot.docs[0],
-      lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
+      total: totalRecords,
+      totalPages: totalPages,
     };
   } catch (error) {
     console.error("Error fetching appointments:", error);
-    return { data: [], total: 0, firstDoc: null, lastDoc: null };
+    return { data: [], total: 0 };
   }
 };
 
+// To paginate in your front-end, you can slice the data like:
+const handlePageChange = (pageNumber, pageSize, allAppointments) => {
+  const start = (pageNumber - 1) * pageSize;
+  const paginatedData = allAppointments.slice(start, start + pageSize);
+  return paginatedData;
+};
 
 
 const getLawyerCalendar = async (assignedLawyer) => {
