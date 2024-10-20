@@ -31,14 +31,21 @@ const getAppointments = async (
   assistanceFilter = "all",
   isPrevious = false
 ) => {
-  let queryRef = collection(fs, "appointments");
-
-  // Dynamic query chaining
-  const conditions = [];
+  let pendingQueryRef = collection(fs, "appointments");
+  let otherStatusQueryRef = collection(fs, "appointments");
 
   // Apply assistance filter if not "all"
   if (assistanceFilter && assistanceFilter !== "all") {
-    conditions.push(
+    pendingQueryRef = query(
+      pendingQueryRef,
+      where(
+        "legalAssistanceRequested.selectedAssistanceType",
+        "==",
+        assistanceFilter
+      )
+    );
+    otherStatusQueryRef = query(
+      otherStatusQueryRef,
       where(
         "legalAssistanceRequested.selectedAssistanceType",
         "==",
@@ -47,46 +54,59 @@ const getAppointments = async (
     );
   }
 
-  // Apply status filter if not "all"
-  if (statusFilter && statusFilter !== "all") {
-    conditions.push(
-      where("appointmentDetails.appointmentStatus", "==", statusFilter)
-    );
-  }
-
-  // Apply search text filter for full name, address, or control number
-  if (searchText) {
-    conditions.push(
-      where("applicantProfile.fullName", ">=", searchText),
-      where("applicantProfile.fullName", "<=", searchText + "\uf8ff")
-    );
-  }
-
-  // Construct query with dynamic conditions
-  if (conditions.length > 0) {
-    queryRef = query(queryRef, ...conditions);
-  }
-
-  // Apply pagination with startAfter for last visible document
-  if (lastVisible) {
-    queryRef = isPrevious
-      ? query(queryRef, startAt(lastVisible))
-      : query(queryRef, startAfter(lastVisible));
-  }
-
-  // Apply order and limit for pagination
-  queryRef = query(
-    queryRef,
+  // Query pending appointments first
+  pendingQueryRef = query(
+    pendingQueryRef,
+    where("appointmentDetails.appointmentStatus", "==", "pending"),
     orderBy("appointmentDetails.createdDate", "desc"),
     limit(pageSize)
   );
 
-  // Fetch the documents
-  const snapshot = await getDocs(queryRef);
+  // Query other appointments (not pending)
+  otherStatusQueryRef = query(
+    otherStatusQueryRef,
+    where("appointmentDetails.appointmentStatus", "!=", "pending"),
+    orderBy("appointmentDetails.appointmentStatus"),
+    orderBy("appointmentDetails.createdDate", "desc"),
+    limit(pageSize)
+  );
 
-  // Map the results and return them
+  const pendingSnapshot = await getDocs(pendingQueryRef);
+  const otherStatusSnapshot = await getDocs(otherStatusQueryRef);
+
+  // Combine results, with pending appointments first
+  const combinedResults = [...pendingSnapshot.docs, ...otherStatusSnapshot.docs];
+
+  // Filter results by searchText, if any
+  const filtered = combinedResults.filter(
+    (doc) =>
+      doc
+        .data()
+        .applicantProfile?.fullName?.toLowerCase()
+        .includes(searchText.toLowerCase()) ||
+      doc
+        .data()
+        .applicantProfile?.address?.toLowerCase()
+        .includes(searchText.toLowerCase()) ||
+      doc.data().applicantProfile?.contactNumber?.includes(searchText) ||
+      doc.data().appointmentDetails?.controlNumber?.includes(searchText) ||
+      doc
+        .data()
+        .legalAssistanceRequested?.selectedAssistanceType?.toLowerCase()
+        .includes(searchText.toLowerCase())
+  );
+
+  const totalQuery = await getDocs(
+    query(
+      collection(fs, "appointments"),
+      statusFilter && statusFilter !== "all"
+        ? where("appointmentDetails.appointmentStatus", "==", statusFilter)
+        : {}
+    )
+  );
+
   return {
-    data: snapshot.docs.map((doc) => {
+    data: filtered.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -100,12 +120,14 @@ const getAppointments = async (
         appointmentDate: data.appointmentDetails?.appointmentDate,
         clientEligibility: data.clientEligibility,
         appointmentDetails: data.appointmentDetails,
-        rescheduleHistory: data.rescheduleHistory || [],
+        reviewerDetails: data.reviewerDetails,
+        proceedingNotes: data.proceedingNotes, 
+        rescheduleHistory: data.rescheduleHistory || [],  // Add rescheduleHistory here
       };
     }),
-    total: snapshot.size,
-    firstDoc: snapshot.docs[0],
-    lastDoc: snapshot.docs[snapshot.docs.length - 1],
+    total: totalQuery.size,
+    firstDoc: combinedResults[0],
+    lastDoc: combinedResults[combinedResults.length - 1],
   };
 };
 
