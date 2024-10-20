@@ -385,20 +385,24 @@ function Appointments() {
       let queryRef = collection(fs, "appointments");
   
       const conditions = [];
-      
-      // Apply filters (status filter and legal assistance filter)
+  
+      // Apply filters
       if (filter && filter !== "all") {
         conditions.push(
           where("appointmentDetails.appointmentStatus", "==", filter)
         );
       }
-      
+  
       if (natureOfLegalAssistanceFilter && natureOfLegalAssistanceFilter !== "all") {
         conditions.push(
-          where("legalAssistanceRequested.selectedAssistanceType", "==", natureOfLegalAssistanceFilter)
+          where(
+            "legalAssistanceRequested.selectedAssistanceType",
+            "==",
+            natureOfLegalAssistanceFilter
+          )
         );
       }
-      
+  
       if (conditions.length > 0) {
         queryRef = query(queryRef, ...conditions);
       }
@@ -409,7 +413,7 @@ function Appointments() {
       if (lastVisible) {
         if (direction === "next") {
           queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
-        } else {
+        } else if (direction === "prev") {
           queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
         }
       } else {
@@ -418,7 +422,7 @@ function Appointments() {
   
       const querySnapshot = await getDocs(queryRef);
       if (querySnapshot.empty) {
-        return { data: [], total: 0, firstDoc: null, lastDoc: null };
+        return { data: [], total: 0, lastDoc: null };
       }
   
       const appointmentsData = querySnapshot.docs.map((doc) => {
@@ -441,20 +445,18 @@ function Appointments() {
         };
       });
   
-      // Update the appointments state and lastVisible for pagination
+      // Update state with the fetched data and last visible document
       setAppointments(appointmentsData);
       setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
-      setFirstVisible(querySnapshot.docs[0]);
   
       return {
         appointmentsData,
         total: querySnapshot.size,
-        firstDoc: querySnapshot.docs[0],
         lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
       };
     } catch (error) {
       console.error("Error fetching appointments:", error);
-      return { data: [], total: 0, firstDoc: null, lastDoc: null };
+      return { data: [], total: 0, lastDoc: null };
     }
   };
   
@@ -468,7 +470,7 @@ function Appointments() {
   
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      await fetchAppointments(firstVisible, "prev");
+      await fetchAppointments(lastVisible, "prev");
       setCurrentPage((prevPage) => prevPage - 1); // Update page number
     }
   };
@@ -480,9 +482,9 @@ function Appointments() {
   };
   
   const handleLast = async () => {
-    // Calculate logic for fetching last page if necessary
+    // Fetch the last page if needed
     setCurrentPage(totalPages);
-    // You can also use a Firestore function to fetch the last page directly if needed.
+    // You may implement fetching the last page data depending on Firestore pagination logic.
   };
   
   // Load appointments on filter or search change
@@ -495,6 +497,7 @@ function Appointments() {
   
     resetPagination(); // Trigger reset on filters change
   }, [filter, searchText, natureOfLegalAssistanceFilter]);
+  
   
   
   useEffect(() => {
