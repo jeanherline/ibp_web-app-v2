@@ -33,112 +33,97 @@ const getAppointments = async (
   assistanceFilter = "all",
   isPrevious = false // Boolean to control direction for pagination
 ) => {
-  let queryRef = collection(fs, "appointments");
+  try {
+    let queryRef = collection(fs, "appointments");
+    
+    // Apply filters
+    const conditions = [];
 
-  // Apply filters
-  const conditions = [];
-
-  // Apply status filter if not "all"
-  if (statusFilter && statusFilter !== "all") {
-    conditions.push(
-      where("appointmentDetails.appointmentStatus", "==", statusFilter)
-    );
-  }
-
-  // Apply assistance filter if not "all"
-  if (assistanceFilter && assistanceFilter !== "all") {
-    conditions.push(
-      where(
-        "legalAssistanceRequested.selectedAssistanceType",
-        "==",
-        assistanceFilter
-      )
-    );
-  }
-
-  // Apply the conditions to the query
-  if (conditions.length > 0) {
-    queryRef = query(queryRef, ...conditions);
-  }
-
-  // Sort by createdDate
-  queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
-
-  // Handle pagination
-  if (lastVisible) {
-    if (isPrevious) {
-      // Fetch the previous page
-      queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
-    } else {
-      // Fetch the next page
-      queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
+    if (statusFilter && statusFilter !== "all") {
+      conditions.push(
+        where("appointmentDetails.appointmentStatus", "==", statusFilter)
+      );
     }
-  } else {
-    // Fetch the first page
-    queryRef = query(queryRef, limit(pageSize));
-  }
 
-  const querySnapshot = await getDocs(queryRef);
+    if (assistanceFilter && assistanceFilter !== "all") {
+      conditions.push(
+        where("legalAssistanceRequested.selectedAssistanceType", "==", assistanceFilter)
+      );
+    }
 
-  console.log("Pagination query executed. Number of docs:", querySnapshot.docs.length);
-  
-  // Check if no data was fetched
-  if (querySnapshot.empty) {
+    if (conditions.length > 0) {
+      queryRef = query(queryRef, ...conditions);
+    }
+
+    queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
+
+    if (lastVisible) {
+      if (isPrevious) {
+        queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
+      } else {
+        queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
+      }
+    } else {
+      queryRef = query(queryRef, limit(pageSize));
+    }
+
+    const querySnapshot = await getDocs(queryRef);
+
+    if (querySnapshot.empty) {
+      return { data: [], total: 0, firstDoc: null, lastDoc: null };
+    }
+
+    // Search text filter
+    const filtered = querySnapshot.docs.filter((doc) => {
+      const data = doc.data();
+      return (
+        data.applicantProfile?.fullName
+          ?.toLowerCase()
+          .includes(searchText.toLowerCase()) ||
+        data.applicantProfile?.address
+          ?.toLowerCase()
+          .includes(searchText.toLowerCase()) ||
+        data.applicantProfile?.contactNumber?.includes(searchText) ||
+        data.appointmentDetails?.controlNumber?.includes(searchText) ||
+        data.legalAssistanceRequested?.selectedAssistanceType
+          ?.toLowerCase()
+          .includes(searchText.toLowerCase())
+      );
+    });
+
+    // Get total count
+    const countSnapshot = await getCountFromServer(
+      query(collection(fs, "appointments"), ...conditions)
+    );
+
+    return {
+      data: filtered.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data.applicantProfile,
+          ...data.employmentProfile,
+          ...data.legalAssistanceRequested,
+          ...data.uploadedImages,
+          createdDate: data.appointmentDetails?.createdDate,
+          appointmentStatus: data.appointmentDetails?.appointmentStatus,
+          controlNumber: data.appointmentDetails?.controlNumber,
+          appointmentDate: data.appointmentDetails?.appointmentDate,
+          clientEligibility: data.clientEligibility,
+          appointmentDetails: data.appointmentDetails,
+          reviewerDetails: data.reviewerDetails,
+          proceedingNotes: data.proceedingNotes,
+          rescheduleHistory: data.rescheduleHistory || [],
+        };
+      }),
+      total: countSnapshot.data().count,
+      firstDoc: querySnapshot.docs[0],
+      lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
+    };
+  } catch (error) {
+    console.error("Error fetching appointments:", error);
     return { data: [], total: 0, firstDoc: null, lastDoc: null };
   }
-
-  // Filter results by searchText
-  const filtered = querySnapshot.docs.filter((doc) => {
-    const data = doc.data();
-    return (
-      data.applicantProfile?.fullName
-        ?.toLowerCase()
-        .includes(searchText.toLowerCase()) ||
-      data.applicantProfile?.address
-        ?.toLowerCase()
-        .includes(searchText.toLowerCase()) ||
-      data.applicantProfile?.contactNumber?.includes(searchText) ||
-      data.appointmentDetails?.controlNumber?.includes(searchText) ||
-      data.legalAssistanceRequested?.selectedAssistanceType
-        ?.toLowerCase()
-        .includes(searchText.toLowerCase())
-    );
-  });
-
-  // Fetch the total number of appointments that match the filter
-  const totalQuery = await getDocs(
-    query(
-      collection(fs, "appointments"),
-      statusFilter && statusFilter !== "all"
-        ? where("appointmentDetails.appointmentStatus", "==", statusFilter)
-        : {}
-    )
-  );
-
-  return {
-    data: filtered.map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data.applicantProfile,
-        ...data.employmentProfile,
-        ...data.legalAssistanceRequested,
-        ...data.uploadedImages,
-        createdDate: data.appointmentDetails?.createdDate,
-        appointmentStatus: data.appointmentDetails?.appointmentStatus,
-        controlNumber: data.appointmentDetails?.controlNumber,
-        appointmentDate: data.appointmentDetails?.appointmentDate,
-        clientEligibility: data.clientEligibility,
-        appointmentDetails: data.appointmentDetails,
-        reviewerDetails: data.reviewerDetails,
-        proceedingNotes: data.proceedingNotes,
-        rescheduleHistory: data.rescheduleHistory || [], // Include reschedule history
-      };
-    }),
-    total: totalQuery.size,
-    firstDoc: querySnapshot.docs[0], // First document for pagination
-    lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1], // Last document for pagination
-  };
 };
 
 
