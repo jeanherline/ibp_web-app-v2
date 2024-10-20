@@ -28,14 +28,16 @@ import ReactDOMServer from "react-dom/server";
 
 const getAppointments = async (
   statusFilter,
+  lastVisible,
   pageSize = 7,
   searchText = "",
-  assistanceFilter = "all"
+  assistanceFilter = "all",
+  isPrevious = false // Boolean to control direction for pagination
 ) => {
   try {
     let queryRef = collection(fs, "appointments");
-
-    // Apply filters
+    
+    // Apply filters based on status and assistance
     const conditions = [];
 
     if (statusFilter && statusFilter !== "all") {
@@ -50,41 +52,81 @@ const getAppointments = async (
       );
     }
 
+    // Apply Firestore query with conditions
     if (conditions.length > 0) {
       queryRef = query(queryRef, ...conditions);
     }
 
-    // Order by created date to ensure consistent pagination
+    // Order by appointment creation date for consistency in pagination
     queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
 
-    // Fetch all matching documents from Firestore
+    // Handle pagination markers
+    if (lastVisible) {
+      queryRef = isPrevious
+        ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize))
+        : query(queryRef, startAfter(lastVisible), limit(pageSize));
+    } else {
+      queryRef = query(queryRef, limit(pageSize));
+    }
+
+    // Fetch records from Firestore
     const querySnapshot = await getDocs(queryRef);
-    
-    // Filter by search text (client-side search after fetching)
+
+    if (querySnapshot.empty) {
+      return { data: [], total: 0, firstDoc: null, lastDoc: null };
+    }
+
+    // Apply search filtering in-memory (client-side)
     const filteredData = querySnapshot.docs.filter((doc) => {
       const data = doc.data();
       return (
-        data.applicantProfile?.fullName?.toLowerCase().includes(searchText.toLowerCase()) ||
-        data.applicantProfile?.address?.toLowerCase().includes(searchText.toLowerCase()) ||
+        data.applicantProfile?.fullName
+          ?.toLowerCase()
+          .includes(searchText.toLowerCase()) ||
+        data.applicantProfile?.address
+          ?.toLowerCase()
+          .includes(searchText.toLowerCase()) ||
         data.applicantProfile?.contactNumber?.includes(searchText) ||
         data.appointmentDetails?.controlNumber?.includes(searchText) ||
-        data.legalAssistanceRequested?.selectedAssistanceType?.toLowerCase().includes(searchText.toLowerCase())
+        data.legalAssistanceRequested?.selectedAssistanceType
+          ?.toLowerCase()
+          .includes(searchText.toLowerCase())
       );
     });
 
-    // Return filtered data (you will paginate in-memory)
+    // Get total count for pagination
+    const countSnapshot = await getCountFromServer(query(collection(fs, "appointments"), ...conditions));
+
     return {
-      data: filteredData.map((doc) => ({
-        id: doc.id,
-        ...doc.data()
-      })),
-      total: filteredData.length, // Total number of filtered documents
+      data: filteredData.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data.applicantProfile,
+          ...data.employmentProfile,
+          ...data.legalAssistanceRequested,
+          ...data.uploadedImages,
+          createdDate: data.appointmentDetails?.createdDate,
+          appointmentStatus: data.appointmentDetails?.appointmentStatus,
+          controlNumber: data.appointmentDetails?.controlNumber,
+          appointmentDate: data.appointmentDetails?.appointmentDate,
+          clientEligibility: data.clientEligibility,
+          appointmentDetails: data.appointmentDetails,
+          reviewerDetails: data.reviewerDetails,
+          proceedingNotes: data.proceedingNotes,
+          rescheduleHistory: data.rescheduleHistory || [],
+        };
+      }),
+      total: countSnapshot.data().count,
+      firstDoc: querySnapshot.docs[0],
+      lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
     };
   } catch (error) {
     console.error("Error fetching appointments:", error);
-    return { data: [], total: 0 };
+    return { data: [], total: 0, firstDoc: null, lastDoc: null };
   }
 };
+
 
 
 const getLawyerCalendar = async (assignedLawyer) => {
