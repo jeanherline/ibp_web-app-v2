@@ -1088,10 +1088,10 @@ function Appointments() {
               appointments.map((appointment, index) => (
                 <tr key={appointment.id}>
                   <td>{(currentPage - 1) * pageSize + index + 1}.</td>
-                  <td>{appointment.controlNumber}</td>
-                  <td>{appointment.fullName}</td>
-                  <td>{appointment.selectedAssistanceType}</td>
-                  <td>{getFormattedDate(appointment.appointmentDate, true)}</td>
+                  <td>{appointment.controlNumber || "N/A"}</td>
+                  <td>{appointment.fullName || "N/A"}</td>
+                  <td>{appointment.selectedAssistanceType || "N/A"}</td>
+                  <td>{getFormattedDate(appointment.appointmentDate, true) || "N/A"}</td>
                   <td>
                     {capitalizeFirstLetter(
                       appointment.appointmentDetails?.apptType || "N/A"
@@ -1099,7 +1099,7 @@ function Appointments() {
                   </td>
                   <td>
                     {capitalizeFirstLetter(
-                      appointment.appointmentDetails?.appointmentStatus
+                      appointment.appointmentDetails?.appointmentStatus || "N/A"
                     )}
                   </td>
                   <td>
