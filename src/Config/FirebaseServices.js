@@ -27,23 +27,25 @@ import ReactDOMServer from "react-dom/server";
 
 const getAppointments = async (
   statusFilter,
-  lastVisible = null,  // Default to null for the first page
+  lastVisible,  // We will now use this for pagination
   pageSize = 7,
   searchText = "",
   assistanceFilter = "all",
-  isPrevious = false  // Handle backward pagination
+  isPrevious = false  // If necessary, we can handle previous page navigation logic
 ) => {
   let queryRef = collection(fs, "appointments");
 
   // Apply filters
   const conditions = [];
 
+  // Apply status filter if not "all"
   if (statusFilter && statusFilter !== "all") {
     conditions.push(
       where("appointmentDetails.appointmentStatus", "==", statusFilter)
     );
   }
 
+  // Apply assistance filter if not "all"
   if (assistanceFilter && assistanceFilter !== "all") {
     conditions.push(
       where(
@@ -54,14 +56,18 @@ const getAppointments = async (
     );
   }
 
+  // Combine the conditions and apply to the query
   if (conditions.length > 0) {
     queryRef = query(queryRef, ...conditions);
   }
 
   // Sort by createdDate
-  queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
+  queryRef = query(
+    queryRef,
+    orderBy("appointmentDetails.createdDate", "desc")
+  );
 
-  // Pagination logic
+  // Handle pagination
   if (lastVisible) {
     queryRef = isPrevious
       ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize))
@@ -72,7 +78,7 @@ const getAppointments = async (
 
   const querySnapshot = await getDocs(queryRef);
 
-  // Filter the data based on search text, if necessary
+  // Filter results by searchText, if any
   const filtered = querySnapshot.docs.filter((doc) => {
     const data = doc.data();
     return (
@@ -84,7 +90,7 @@ const getAppointments = async (
     );
   });
 
-  // Fetch the total count (optional, if you need it for pagination)
+  // Fetch total appointments count (can be optimized if necessary)
   const totalQuery = await getDocs(
     query(
       collection(fs, "appointments"),
@@ -94,18 +100,31 @@ const getAppointments = async (
     )
   );
 
-  // Return the data and pagination info
   return {
-    data: filtered.map((doc) => ({
-      id: doc.id,
-      ...doc.data()
-    })),
+    data: filtered.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data.applicantProfile,
+        ...data.employmentProfile,
+        ...data.legalAssistanceRequested,
+        ...data.uploadedImages,
+        createdDate: data.appointmentDetails?.createdDate,
+        appointmentStatus: data.appointmentDetails?.appointmentStatus,
+        controlNumber: data.appointmentDetails?.controlNumber,
+        appointmentDate: data.appointmentDetails?.appointmentDate,
+        clientEligibility: data.clientEligibility,
+        appointmentDetails: data.appointmentDetails,
+        reviewerDetails: data.reviewerDetails,
+        proceedingNotes: data.proceedingNotes, 
+        rescheduleHistory: data.rescheduleHistory || [],  // Add rescheduleHistory here
+      };
+    }),
     total: totalQuery.size,
     firstDoc: querySnapshot.docs[0],  // First document for pagination
     lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],  // Last document for pagination
   };
 };
-
 
 
 const getLawyerCalendar = async (assignedLawyer) => {
