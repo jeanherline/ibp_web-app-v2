@@ -1413,7 +1413,7 @@ function ApptsLawyer() {
                 <section className="mb-4 print-section">
                   {(selectedAppointment.appointmentDetails?.newRequest ||
                     selectedAppointment.appointmentDetails?.requestReason) && (
-                    <section className="mb-4 print-section">
+                      <section className="mb-4 print-section no-print">
                       <h2>
                         <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                           New Request Details

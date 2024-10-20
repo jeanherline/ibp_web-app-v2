@@ -75,7 +75,9 @@ function ApptsHead() {
   const [clientAttend, setClientAttend] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [assistanceFilter, setAssistanceFilter] = useState("all");
-  
+  const [isLoading, setIsLoading] = useState(false);
+  const [totalAppointments, setTotalAppointments] = useState(0);
+
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
   };
@@ -1218,7 +1220,7 @@ function ApptsHead() {
                 <section className="mb-4 print-section">
                   {(selectedAppointment.appointmentDetails?.newRequest ||
                     selectedAppointment.appointmentDetails?.requestReason) && (
-                    <section className="mb-4 print-section">
+                    <section className="mb-4 print-section no-print">
                       <h2>
                         <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                           New Request Details
