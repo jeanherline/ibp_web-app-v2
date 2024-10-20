@@ -27,11 +27,11 @@ import ReactDOMServer from "react-dom/server";
 
 const getAppointments = async (
   statusFilter,
-  lastVisible,  // We will now use this for pagination
+  lastVisible,
   pageSize = 7,
   searchText = "",
   assistanceFilter = "all",
-  isPrevious = false  // If necessary, we can handle previous page navigation logic
+  isPrevious = false // Boolean to control direction for pagination
 ) => {
   let queryRef = collection(fs, "appointments");
 
@@ -62,18 +62,15 @@ const getAppointments = async (
   }
 
   // Sort by createdDate
-  queryRef = query(
-    queryRef,
-    orderBy("appointmentDetails.createdDate", "desc")
-  );
+  queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
 
   // Handle pagination
   if (lastVisible) {
     queryRef = isPrevious
-      ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize))
-      : query(queryRef, startAfter(lastVisible), limit(pageSize));
+      ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize)) // Previous page
+      : query(queryRef, startAfter(lastVisible), limit(pageSize)); // Next page
   } else {
-    queryRef = query(queryRef, limit(pageSize));
+    queryRef = query(queryRef, limit(pageSize)); // First page
   }
 
   const querySnapshot = await getDocs(queryRef);
@@ -82,15 +79,21 @@ const getAppointments = async (
   const filtered = querySnapshot.docs.filter((doc) => {
     const data = doc.data();
     return (
-      data.applicantProfile?.fullName?.toLowerCase().includes(searchText.toLowerCase()) ||
-      data.applicantProfile?.address?.toLowerCase().includes(searchText.toLowerCase()) ||
+      data.applicantProfile?.fullName
+        ?.toLowerCase()
+        .includes(searchText.toLowerCase()) ||
+      data.applicantProfile?.address
+        ?.toLowerCase()
+        .includes(searchText.toLowerCase()) ||
       data.applicantProfile?.contactNumber?.includes(searchText) ||
       data.appointmentDetails?.controlNumber?.includes(searchText) ||
-      data.legalAssistanceRequested?.selectedAssistanceType?.toLowerCase().includes(searchText.toLowerCase())
+      data.legalAssistanceRequested?.selectedAssistanceType
+        ?.toLowerCase()
+        .includes(searchText.toLowerCase())
     );
   });
 
-  // Fetch total appointments count (can be optimized if necessary)
+  // Fetch total appointments count
   const totalQuery = await getDocs(
     query(
       collection(fs, "appointments"),
@@ -116,13 +119,13 @@ const getAppointments = async (
         clientEligibility: data.clientEligibility,
         appointmentDetails: data.appointmentDetails,
         reviewerDetails: data.reviewerDetails,
-        proceedingNotes: data.proceedingNotes, 
-        rescheduleHistory: data.rescheduleHistory || [],  // Add rescheduleHistory here
+        proceedingNotes: data.proceedingNotes,
+        rescheduleHistory: data.rescheduleHistory || [], // Add rescheduleHistory here
       };
     }),
     total: totalQuery.size,
-    firstDoc: querySnapshot.docs[0],  // First document for pagination
-    lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],  // Last document for pagination
+    firstDoc: querySnapshot.docs[0], // First document for pagination
+    lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1], // Last document for pagination
   };
 };
 
@@ -451,7 +454,7 @@ const getLawyerAppointments = (
           appointmentDate: data.appointmentDetails?.appointmentDate,
           clientEligibility: data.clientEligibility,
           appointmentDetails: data.appointmentDetails,
-          rescheduleHistory: data.rescheduleHistory || [],  // Ensure rescheduleHistory is included
+          rescheduleHistory: data.rescheduleHistory || [], // Ensure rescheduleHistory is included
         };
       });
 
@@ -725,7 +728,6 @@ const getUsers = async (
   }
 };
 
-
 const getUsersCount = async (
   statusFilter,
   filterType,
@@ -834,13 +836,12 @@ export const sendNotification = async (message, uid, type, controlNumber) => {
       timestamp: Timestamp.fromDate(new Date()),
       type: type,
       uid: uid,
-      controlNumber: controlNumber
+      controlNumber: controlNumber,
     });
   } catch (error) {
     console.error("Error sending notification:", error);
   }
 };
-
 
 export const createAppointment = async (appointmentData) => {
   try {
@@ -856,7 +857,7 @@ export const createAppointment = async (appointmentData) => {
 export const getHeadLawyerUid = async () => {
   const usersRef = collection(fs, "users");
   const q = query(usersRef, where("member_type", "==", "headLawyer"));
-  
+
   try {
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {

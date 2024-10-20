@@ -365,41 +365,39 @@ function Appointments() {
     return () => unsubscribe();
   }, []);
 
-  const fetchAppointments = async (
-    lastVisible = null,
-    pageDirection = "next"
-  ) => {
+  const fetchAppointments = async (lastVisible = null, pageDirection = "next") => {
     try {
       // Log the last visible document for debugging
       console.log("Fetching appointments. Last visible:", lastVisible);
-
-      // Fetch the appointments
+  
+      // Fetch the appointments with proper pagination
       const queryRef = await getAppointments(
         filter,
         lastVisible, // Pass the last visible document for pagination
         pageSize,
         searchText,
-        natureOfLegalAssistanceFilter
+        natureOfLegalAssistanceFilter,
+        pageDirection === "prev" // Determine if previous pagination is being used
       );
-
+  
       const { data, total, firstDoc, lastDoc } = queryRef;
-
+  
       console.log("Fetched data:", data); // Log the fetched data for debugging
-
-      // Update the pagination based on the page direction
+  
       if (pageDirection === "next") {
-        setLastVisible(lastDoc); // Update lastVisible for next page
+        setLastVisible(lastDoc); // Set last visible document for next page
       } else if (pageDirection === "prev") {
-        setLastVisible(firstDoc); // Update lastVisible for previous page
+        setLastVisible(firstDoc); // Set first visible document for previous page
       }
-
+  
       // Update the appointments state with the fetched data
       setAppointments(data);
-      setTotalPages(Math.ceil(total / pageSize));
+      setTotalPages(Math.ceil(total / pageSize)); // Update total pages
     } catch (error) {
       console.error("Error fetching appointments:", error);
     }
   };
+  
 
   useEffect(() => {
     const resetPagination = async () => {
@@ -531,7 +529,6 @@ function Appointments() {
       setCurrentPage(currentPage - 1);
     }
   };
-  
 
   const handleFirst = async () => {
     const { data, lastDoc } = await getAppointments(
