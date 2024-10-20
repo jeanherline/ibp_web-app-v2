@@ -395,13 +395,13 @@ function Appointments() {
     currentPage * pageSize
   );
 
+  const resetPagination = async () => {
+    setCurrentPage(1); // Reset current page to 1
+    setLastVisible(null); // Reset lastVisible to null to fetch from the first page
+    await fetchAppointments(); // Fetch appointments for the first page
+  };
+
   useEffect(() => {
-    const resetPagination = async () => {
-      setCurrentPage(1); // Reset current page to 1
-      setLastVisible(null); // Reset lastVisible to null to fetch from the first page
-      await fetchAppointments(); // Fetch appointments for the first page
-    };
-  
     resetPagination();
   }, [searchText, filter, natureOfLegalAssistanceFilter]);
   
