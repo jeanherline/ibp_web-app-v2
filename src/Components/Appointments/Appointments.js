@@ -352,6 +352,8 @@ function Appointments() {
     printWindow.onafterprint = () => printWindow.close();
   };
   
+  
+
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
