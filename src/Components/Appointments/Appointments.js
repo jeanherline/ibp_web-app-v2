@@ -1703,7 +1703,7 @@ function Appointments() {
                 </section>
                 {selectedAppointment?.rescheduleHistory &&
                 selectedAppointment.rescheduleHistory.length > 0 ? (
-                  <section className="mb-4">
+                  <section className="mb-4 print-section no-print">
                     <h2
                       style={{ cursor: "pointer" }}
                       onClick={toggleRescheduleHistory}
