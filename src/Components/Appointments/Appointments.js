@@ -365,39 +365,36 @@ function Appointments() {
     return () => unsubscribe();
   }, []);
 
-  const fetchAppointments = async (lastVisible = null, pageDirection = "next") => {
+  const fetchAppointments = async (page = 1, pageDirection = "next") => {
     try {
       console.log("Fetching appointments. Last visible:", lastVisible);
-      
+
+      // Fetch appointments based on current page, lastVisible, filters, and searchText
       const queryResult = await getAppointments(
         filter,
-        lastVisible, // Pass the last visible document for pagination
+        page === 1 ? null : lastVisible, // If first page, no lastVisible
         pageSize,
         searchText,
-        natureOfLegalAssistanceFilter,
-        pageDirection === "prev" // Determine if this is a previous page
+        pageDirection === "prev" // Check if fetching previous page
       );
-  
+
       const { data, total, firstDoc, lastDoc } = queryResult;
-  
-      console.log("Fetched data:", data);
-      console.log("First Doc: ", firstDoc, "Last Doc: ", lastDoc);
-  
-      if (pageDirection === "next") {
-        setLastVisible(lastDoc);  // Update the lastVisible document for next page
-      } else if (pageDirection === "prev") {
-        setLastVisible(firstDoc);  // Use firstDoc when going back
-      }
-  
-      // Update the appointments state
+
+      // Update the appointments data and lastVisible accordingly
       setAppointments(data);
       setTotalPages(Math.ceil(total / pageSize));
-      
+
+      // If going to the next page, update last visible for forward pagination
+      // If going back to a previous page, update lastVisible with first document
+      if (pageDirection === "next") {
+        setLastVisible(lastDoc);
+      } else if (pageDirection === "prev") {
+        setLastVisible(firstDoc);
+      }
     } catch (error) {
       console.error("Error fetching appointments:", error);
     }
   };
-  
 
   useEffect(() => {
     const resetPagination = async () => {
@@ -518,14 +515,14 @@ function Appointments() {
 
   const handleNext = async () => {
     if (currentPage < totalPages) {
-      await fetchAppointments(lastVisible, "next");  // Fetch the next page of appointments
+      await fetchAppointments(currentPage + 1, "next"); // Fetch the next page of appointments
       setCurrentPage(currentPage + 1);
     }
   };
-  
+
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      await fetchAppointments(lastVisible, "prev");  // Fetch the previous page of appointments
+      await fetchAppointments(currentPage - 1, "prev"); // Fetch the previous page of appointments
       setCurrentPage(currentPage - 1);
     }
   };
@@ -1091,7 +1088,10 @@ function Appointments() {
                   <td>{appointment.controlNumber || "N/A"}</td>
                   <td>{appointment.fullName || "N/A"}</td>
                   <td>{appointment.selectedAssistanceType || "N/A"}</td>
-                  <td>{getFormattedDate(appointment.appointmentDate, true) || "N/A"}</td>
+                  <td>
+                    {getFormattedDate(appointment.appointmentDate, true) ||
+                      "N/A"}
+                  </td>
                   <td>
                     {capitalizeFirstLetter(
                       appointment.appointmentDetails?.apptType || "N/A"
