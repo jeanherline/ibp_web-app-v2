@@ -537,6 +537,45 @@ function Appointments() {
     setCurrentPage(totalPages);
   };
 
+  const fetchAppointments = async (resetPagination = false) => {
+    try {
+      let q = query(
+        collection(fs, "appointments"),
+        where("appointmentDetails.appointmentStatus", "in", [filter]), // Use filter for status
+        orderBy("appointmentDetails.appointmentDate", "desc"), // Order by date
+        limit(pageSize) // Limit to page size
+      );
+  
+      if (searchText) {
+        q = query(
+          collection(fs, "appointments"),
+          where("applicantProfile.fullName", ">=", searchText),
+          where("applicantProfile.fullName", "<=", searchText + "\uf8ff"),
+          limit(pageSize)
+        );
+      }
+  
+      if (!resetPagination && lastVisible) {
+        q = query(q, startAfter(lastVisible));
+      }
+  
+      const querySnapshot = await getDocs(q);
+  
+      const appointmentsData = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+  
+      setAppointments(appointmentsData);
+  
+      if (!resetPagination && querySnapshot.docs.length > 0) {
+        setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+      }
+    } catch (error) {
+      console.error("Error fetching appointments:", error);
+    }
+  };
+
   // Reset pagination when filters or searchText change
   useEffect(() => {
     const fetchAppointments = async () => {
