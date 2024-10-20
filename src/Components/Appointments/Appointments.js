@@ -523,18 +523,19 @@ function Appointments() {
     return !isSlotBookedByAssignedLawyer(dateTime);
   };
 
-  const handlePageChange = async (newPage) => {
-    if (newPage === currentPage) return; // Prevents unnecessary refetch
-    setCurrentPage(newPage);
-    const { data, lastDoc } = await getAppointments(
-      filter,
-      lastVisible,
-      pageSize,
-      searchText,
-      natureOfLegalAssistanceFilter
-    );
-    setAppointments(data);
-    setLastVisible(lastDoc);
+  const handlePageChange = async (page) => {
+    if (page !== currentPage) {
+      setCurrentPage(page);
+      const { data, lastDoc } = await getAppointments(
+        filter,
+        lastVisible, // Current last visible document
+        pageSize,
+        searchText,
+        natureOfLegalAssistanceFilter
+      );
+      setAppointments(data);
+      setLastVisible(lastDoc); // Update last visible document for Firestore pagination
+    }
   };
 
   const handleNext = async () => {
@@ -596,7 +597,7 @@ function Appointments() {
     setLastVisible(firstDoc);
     setCurrentPage(1); // Set page to 1
   };
-  
+
   const handleLast = async () => {
     const { data, lastDoc } = await getLawyerAppointments(
       filter,
@@ -1396,20 +1397,7 @@ function Appointments() {
             <Pagination.Item
               key={index + 1}
               active={index + 1 === currentPage}
-              onClick={async () => {
-                if (index + 1 !== currentPage) {
-                  const { data, lastDoc } = await getAppointments(
-                    filter,
-                    lastVisible,
-                    pageSize,
-                    searchText,
-                    natureOfLegalAssistanceFilter
-                  );
-                  setAppointments(data);
-                  setLastVisible(lastDoc);
-                  setCurrentPage(index + 1); // Update page only when clicked item is different from current page
-                }
-              }}
+              onClick={() => handlePageChange(index + 1)} // Correct page handling function
             >
               {index + 1}
             </Pagination.Item>
