@@ -73,6 +73,7 @@ function Appointments() {
   const [holidays, setHolidays] = useState([]);
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
+  const [firstDoc, setFirstDoc] = useState(null);
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
@@ -366,21 +367,27 @@ function Appointments() {
   }, []);
 
   useEffect(() => {
-    const fetchAppointments = async () => {
-      const { data, total } = await getAppointments(
-        filter,
-        lastVisible,
+    const fetchAppointments = async (isPrevious = false) => {
+      const { data, firstDoc, lastDoc, total } = await getAppointments(
+        filter, // Assuming you have a filter in your component
+        isPrevious ? firstDoc : lastVisible, // Use firstDoc for previous and lastVisible for next
         pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
+        searchText, // Assuming you have a searchText in your component
+        assistanceFilter // Assistance type filter
       );
+
       setAppointments(data);
-      setTotalPages(Math.ceil(total / pageSize));
-      setTotalFilteredItems(total);
+      setFirstDoc(firstDoc); // Save the first document for "previous" pagination
+      setLastVisible(lastDoc); // Save the last document for "next" pagination
+      setTotalPages(Math.ceil(total / pageSize)); // Update the total pages
     };
 
     fetchAppointments();
   }, [filter, lastVisible, searchText, natureOfLegalAssistanceFilter]);
+
+  useEffect(() => {
+    fetchAppointments(); // Fetch appointments on mount or when filters change
+  }, [filter, searchText, assistanceFilter]);
 
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
@@ -491,60 +498,66 @@ function Appointments() {
 
   const handleNext = async () => {
     if (currentPage < totalPages) {
-      const { data, lastDoc } = await getAppointments(
-        filter,
-        lastVisible, // Use the last visible doc from the current page
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setLastVisible(lastDoc); // Update with the last document
-      setCurrentPage((prevPage) => prevPage + 1); // Increment the page
+      await fetchAppointments(false); // Fetch the next set of appointments
+      setCurrentPage((prevPage) => prevPage + 1); // Increment current page
     }
   };
 
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      const { data, firstDoc } = await getAppointments(
-        filter,
-        null, // Reset lastVisible for previous page
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setLastVisible(firstDoc); // Update with the first document
-      setCurrentPage((prevPage) => prevPage - 1); // Decrement the page
+      await fetchAppointments(true); // Fetch the previous set of appointments
+      setCurrentPage((prevPage) => prevPage - 1); // Decrement current page
     }
   };
 
   const handleFirst = async () => {
-    const { data, firstDoc } = await getLawyerAppointments(
-      filter,
-      null, // Fetch from the first page
-      pageSize,
-      searchText,
-      natureOfLegalAssistanceFilter,
-      currentUser
-    );
-    setAppointments(data);
-    setLastVisible(firstDoc); // Update lastVisible for the first page
-    setCurrentPage(1); // Set currentPage to 1
+    setLastVisible(null); // Reset to fetch the first page
+    setCurrentPage(1); // Reset to first page
+    await fetchAppointments();
   };
 
   const handleLast = async () => {
-    const { data, lastDoc } = await getLawyerAppointments(
-      filter,
-      lastVisible, // Fetch the last page using lastVisible
-      pageSize,
-      searchText,
-      natureOfLegalAssistanceFilter,
-      currentUser
-    );
-    setAppointments(data);
-    setLastVisible(lastDoc); // Correctly set lastVisible for the last page
-    setCurrentPage(totalPages); // Set currentPage to totalPages
+    try {
+      // Fetch total number of documents in the collection
+      const appointmentsSnapshot = await getDocs(
+        collection(fs, "appointments")
+      );
+      const totalAppointments = appointmentsSnapshot.size;
+
+      // Calculate how many pages there are in total
+      const totalPages = Math.ceil(totalAppointments / pageSize);
+
+      // Calculate how many documents to skip to get to the last page
+      const skipDocuments = (totalPages - 1) * pageSize;
+
+      // Fetch the last page of appointments, starting after the skipped documents
+      const lastPageQuery = query(
+        collection(fs, "appointments"),
+        orderBy("appointmentDetails.createdDate", "asc"), // Order by created date in ascending order
+        limit(pageSize),
+        offset(skipDocuments) // Skip to the start of the last page
+      );
+
+      const querySnapshot = await getDocs(lastPageQuery);
+
+      if (!querySnapshot.empty) {
+        const lastVisibleDoc =
+          querySnapshot.docs[querySnapshot.docs.length - 1];
+
+        // Update the state to display the last page of appointments
+        setAppointments(
+          querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+        );
+
+        setLastVisible(lastVisibleDoc); // Update lastVisible to the last doc of this page
+        setCurrentPage(totalPages); // Set current page to the last one
+      }
+    } catch (error) {
+      console.error("Error fetching last page:", error);
+    }
   };
 
   const toggleDetails = (appointment) => {
@@ -1330,10 +1343,7 @@ function Appointments() {
             <Pagination.Item
               key={index + 1}
               active={index + 1 === currentPage}
-              onClick={() => {
-                setCurrentPage(index + 1);
-                setLastVisible(appointments[index]); // You may need to adjust how `lastVisible` is updated here
-              }}
+              onClick={() => setCurrentPage(index + 1)}
             >
               {index + 1}
             </Pagination.Item>
