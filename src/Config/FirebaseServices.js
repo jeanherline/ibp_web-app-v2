@@ -28,7 +28,7 @@ import ReactDOMServer from "react-dom/server";
 
 const getAppointments = async (
   statusFilter,
-  lastVisible,
+  lastVisible = null,
   pageSize = 7,
   searchText = "",
   assistanceFilter = "all",
@@ -40,14 +40,12 @@ const getAppointments = async (
     // Apply filters
     const conditions = [];
 
-    // Filter by status
     if (statusFilter && statusFilter !== "all") {
       conditions.push(
         where("appointmentDetails.appointmentStatus", "==", statusFilter)
       );
     }
 
-    // Filter by legal assistance type
     if (assistanceFilter && assistanceFilter !== "all") {
       conditions.push(
         where(
@@ -63,20 +61,16 @@ const getAppointments = async (
       queryRef = query(queryRef, ...conditions);
     }
 
-    // Order by created date for consistent pagination
+    // Order by created date for pagination
     queryRef = query(
       queryRef,
       orderBy("appointmentDetails.createdDate", "desc")
     );
 
-    // Handle pagination: using startAfter for next, endBefore for previous
+    // Handle pagination logic
     if (lastVisible) {
       if (isPrevious) {
-        queryRef = query(
-          queryRef,
-          endBefore(lastVisible),
-          limitToLast(pageSize)
-        );
+        queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
       } else {
         queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
       }
@@ -84,7 +78,6 @@ const getAppointments = async (
       queryRef = query(queryRef, limit(pageSize)); // Initial load
     }
 
-    // Fetch the documents
     const querySnapshot = await getDocs(queryRef);
 
     if (querySnapshot.empty) {
@@ -115,8 +108,6 @@ const getAppointments = async (
     // Manually filter results based on search text
     const filteredAppointments = appointmentsData.filter((appointment) => {
       const searchLower = searchText.toLowerCase();
-
-      // Check if search text matches any relevant fields
       return (
         appointment.fullName?.toLowerCase().includes(searchLower) ||
         appointment.address?.toLowerCase().includes(searchLower) ||
@@ -126,7 +117,7 @@ const getAppointments = async (
       );
     });
 
-    // Get total count (if needed for pagination UI)
+    // Get the total count for pagination
     const countSnapshot = await getCountFromServer(
       query(collection(fs, "appointments"), ...conditions)
     );
@@ -134,14 +125,15 @@ const getAppointments = async (
     return {
       data: filteredAppointments,
       total: countSnapshot.data().count,
-      firstDoc: querySnapshot.docs[0],
-      lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
+      firstDoc: querySnapshot.docs[0], // Store the first document for previous pages
+      lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1], // Store the last document for next pages
     };
   } catch (error) {
     console.error("Error fetching appointments:", error);
     return { data: [], total: 0, firstDoc: null, lastDoc: null };
   }
 };
+
 
 const getLawyerCalendar = async (assignedLawyer) => {
   const appointmentsRef = collection(fs, "appointments");
