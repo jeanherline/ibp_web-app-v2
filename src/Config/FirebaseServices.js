@@ -28,15 +28,16 @@ import ReactDOMServer from "react-dom/server";
 
 const getAppointments = async (
   statusFilter,
-  pageSize = 7, // No need for lastVisible anymore
+  pageSize = 7,
   searchText = "",
-  assistanceFilter = "all",
+  assistanceFilter = "all"
 ) => {
   try {
     let queryRef = collection(fs, "appointments");
 
-    // Apply filters (status and assistance)
+    // Apply filters
     const conditions = [];
+
     if (statusFilter && statusFilter !== "all") {
       conditions.push(
         where("appointmentDetails.appointmentStatus", "==", statusFilter)
@@ -49,76 +50,40 @@ const getAppointments = async (
       );
     }
 
-    // Apply conditions to Firestore query
     if (conditions.length > 0) {
       queryRef = query(queryRef, ...conditions);
     }
 
-    // Fetch all matching documents
+    // Order by created date to ensure consistent pagination
     queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
+
+    // Fetch all matching documents from Firestore
     const querySnapshot = await getDocs(queryRef);
-
-    if (querySnapshot.empty) {
-      return { data: [], total: 0 };
-    }
-
-    // Filter by search text (after fetching)
+    
+    // Filter by search text (client-side search after fetching)
     const filteredData = querySnapshot.docs.filter((doc) => {
       const data = doc.data();
       return (
-        data.applicantProfile?.fullName
-          ?.toLowerCase()
-          .includes(searchText.toLowerCase()) ||
-        data.applicantProfile?.address
-          ?.toLowerCase()
-          .includes(searchText.toLowerCase()) ||
+        data.applicantProfile?.fullName?.toLowerCase().includes(searchText.toLowerCase()) ||
+        data.applicantProfile?.address?.toLowerCase().includes(searchText.toLowerCase()) ||
         data.applicantProfile?.contactNumber?.includes(searchText) ||
         data.appointmentDetails?.controlNumber?.includes(searchText) ||
-        data.legalAssistanceRequested?.selectedAssistanceType
-          ?.toLowerCase()
-          .includes(searchText.toLowerCase())
+        data.legalAssistanceRequested?.selectedAssistanceType?.toLowerCase().includes(searchText.toLowerCase())
       );
     });
 
-    // Now apply pagination in-memory
-    const totalRecords = filteredData.length;
-    const totalPages = Math.ceil(totalRecords / pageSize);
-    const paginatedData = filteredData.slice(0, pageSize); // First page
-
+    // Return filtered data (you will paginate in-memory)
     return {
-      data: paginatedData.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data.applicantProfile,
-          ...data.employmentProfile,
-          ...data.legalAssistanceRequested,
-          ...data.uploadedImages,
-          createdDate: data.appointmentDetails?.createdDate,
-          appointmentStatus: data.appointmentDetails?.appointmentStatus,
-          controlNumber: data.appointmentDetails?.controlNumber,
-          appointmentDate: data.appointmentDetails?.appointmentDate,
-          clientEligibility: data.clientEligibility,
-          appointmentDetails: data.appointmentDetails,
-          reviewerDetails: data.reviewerDetails,
-          proceedingNotes: data.proceedingNotes,
-          rescheduleHistory: data.rescheduleHistory || [],
-        };
-      }),
-      total: totalRecords,
-      totalPages: totalPages,
+      data: filteredData.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+      total: filteredData.length, // Total number of filtered documents
     };
   } catch (error) {
     console.error("Error fetching appointments:", error);
     return { data: [], total: 0 };
   }
-};
-
-// To paginate in your front-end, you can slice the data like:
-const handlePageChange = (pageNumber, pageSize, allAppointments) => {
-  const start = (pageNumber - 1) * pageSize;
-  const paginatedData = allAppointments.slice(start, start + pageSize);
-  return paginatedData;
 };
 
 
