@@ -50,7 +50,11 @@ const getAppointments = async (
     // Filter by legal assistance type
     if (assistanceFilter && assistanceFilter !== "all") {
       conditions.push(
-        where("legalAssistanceRequested.selectedAssistanceType", "==", assistanceFilter)
+        where(
+          "legalAssistanceRequested.selectedAssistanceType",
+          "==",
+          assistanceFilter
+        )
       );
     }
 
@@ -60,12 +64,19 @@ const getAppointments = async (
     }
 
     // Order by created date for consistent pagination
-    queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
+    queryRef = query(
+      queryRef,
+      orderBy("appointmentDetails.createdDate", "desc")
+    );
 
     // Handle pagination: using startAfter for next, endBefore for previous
     if (lastVisible) {
       if (isPrevious) {
-        queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
+        queryRef = query(
+          queryRef,
+          endBefore(lastVisible),
+          limitToLast(pageSize)
+        );
       } else {
         queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
       }
@@ -131,7 +142,6 @@ const getAppointments = async (
     return { data: [], total: 0, firstDoc: null, lastDoc: null };
   }
 };
-
 
 const getLawyerCalendar = async (assignedLawyer) => {
   const appointmentsRef = collection(fs, "appointments");
