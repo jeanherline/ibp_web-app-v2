@@ -15,6 +15,8 @@ import {
   serverTimestamp,
   onSnapshot,
   Timestamp,
+  endBefore,
+  limitToLast,
 } from "firebase/firestore"; // Import necessary functions directly from Firebase Firestore
 import { fs, storage, signOut } from "./Firebase"; // Import fs from your Firebase configuration file
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
