@@ -383,11 +383,12 @@ function Appointments() {
       console.log("Fetched data:", data);
       console.log("First Doc: ", firstDoc, "Last Doc: ", lastDoc);
   
-      // Update the lastVisible document and the appointments based on the direction of pagination
       if (pageDirection === "next") {
+        setPageMarkers((prev) => [...prev, lastDoc]); // Store the lastDoc for the current page
         setLastVisible(lastDoc);
       } else if (pageDirection === "prev") {
-        setLastVisible(firstDoc);
+        setPageMarkers((prev) => prev.slice(0, -1)); // Remove the last page marker when going back
+        setLastVisible(pageMarkers[pageMarkers.length - 2]); // Set to the previous page's lastVisible
       }
   
       setAppointments(data);
@@ -531,15 +532,16 @@ function Appointments() {
   };
   
   const handleFirst = async () => {
-    await fetchAppointments(null, "next"); // Fetch the first page of appointments
+    setLastVisible(null); // Reset to fetch from the start
+    setPageMarkers([]); // Clear page markers
+    await fetchAppointments(null, "next");
     setCurrentPage(1);
   };
   
   const handleLast = async () => {
-    await fetchAppointments(null, "last"); // Fetch the last page of appointments
+    // Fetch last page logic here, e.g., use `pageMarkers` to navigate to the end if implemented
     setCurrentPage(totalPages);
   };
-  
 
   // Reset pagination when filters or searchText change
   useEffect(() => {
