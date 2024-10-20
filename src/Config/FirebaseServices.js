@@ -15,6 +15,7 @@ import {
   serverTimestamp,
   onSnapshot,
   Timestamp,
+  endBefore,
 } from "firebase/firestore"; // Import necessary functions directly from Firebase Firestore
 import { fs, storage, signOut } from "./Firebase"; // Import fs from your Firebase configuration file
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -33,7 +34,7 @@ const getAppointments = async (
 ) => {
   let queryRef = collection(fs, "appointments");
 
-  // Apply assistance filter if not "all"
+  // Apply filters conditionally
   if (assistanceFilter && assistanceFilter !== "all") {
     queryRef = query(
       queryRef,
@@ -45,7 +46,6 @@ const getAppointments = async (
     );
   }
 
-  // Apply status filter if not "all"
   if (statusFilter && statusFilter !== "all") {
     queryRef = query(
       queryRef,
@@ -462,6 +462,31 @@ const getLawyerAppointments = (
   } catch (error) {
     console.error("Failed to fetch appointments:", error);
     throw error;
+  }
+};
+
+const fetchAppointments = async (
+  filter,
+  lastVisible,
+  pageSize,
+  searchText,
+  natureOfLegalAssistanceFilter
+) => {
+  try {
+    // Fetch appointments from your Firebase service with the provided parameters
+    const { data, lastDoc } = await getAppointments(
+      filter,
+      lastVisible,
+      pageSize,
+      searchText,
+      natureOfLegalAssistanceFilter
+    );
+
+    // Update the state with the fetched data
+    return { appointments: data, lastVisible: lastDoc };
+  } catch (error) {
+    console.error("Error fetching appointments: ", error);
+    return { appointments: [], lastVisible: null };
   }
 };
 
