@@ -368,7 +368,7 @@ function Appointments() {
   const fetchAppointments = async (lastVisible = null, pageDirection = "next") => {
     try {
       console.log("Fetching appointments. Last visible:", lastVisible);
-      
+  
       const queryResult = await getAppointments(
         filter,
         lastVisible, // Pass the last visible document for pagination
@@ -383,22 +383,22 @@ function Appointments() {
       console.log("Fetched data:", data);
       console.log("First Doc: ", firstDoc, "Last Doc: ", lastDoc);
   
+      // Update the lastVisible document and the appointments based on the direction of pagination
       if (pageDirection === "next") {
-        setLastVisible(lastDoc);  // Update the lastVisible document for next page
+        setLastVisible(lastDoc);
       } else if (pageDirection === "prev") {
-        setLastVisible(firstDoc);  // Use firstDoc when going back
+        setLastVisible(firstDoc);
       }
   
-      // Update the appointments state
       setAppointments(data);
       setTotalPages(Math.ceil(total / pageSize));
-      
+      setTotalFilteredItems(total);
+  
     } catch (error) {
       console.error("Error fetching appointments:", error);
     }
   };
   
-
   useEffect(() => {
     const resetPagination = async () => {
       setCurrentPage(1); // Reset current page to 1
@@ -518,47 +518,28 @@ function Appointments() {
 
   const handleNext = async () => {
     if (currentPage < totalPages) {
-      await fetchAppointments(lastVisible, "next");  // Fetch the next page of appointments
+      await fetchAppointments(lastVisible, "next");
       setCurrentPage(currentPage + 1);
     }
   };
   
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      await fetchAppointments(lastVisible, "prev");  // Fetch the previous page of appointments
+      await fetchAppointments(lastVisible, "prev");
       setCurrentPage(currentPage - 1);
     }
   };
-
+  
   const handleFirst = async () => {
-    const { data, lastDoc } = await getAppointments(
-      filter,
-      null, // Start from the beginning (no lastVisible)
-      pageSize,
-      searchText,
-      natureOfLegalAssistanceFilter
-    );
-
-    setAppointments(data); // Update the appointments list with the new data
-    setLastVisible(lastDoc); // Update the last visible document
-    setCurrentPage(1); // Reset the current page to 1
+    await fetchAppointments(null, "next"); // Fetch the first page of appointments
+    setCurrentPage(1);
   };
-
+  
   const handleLast = async () => {
-    const { data, firstDoc } = await getAppointments(
-      filter,
-      null, // No need for lastVisible
-      pageSize, // Use pageSize but fetch the last documents
-      searchText,
-      natureOfLegalAssistanceFilter,
-      false, // Not for backward pagination
-      true // Ensure this fetches the last page with limitToLast
-    );
-
-    setAppointments(data); // Update the appointments list
-    setLastVisible(firstDoc); // Set first visible doc from last page
-    setCurrentPage(Math.ceil(totalFilteredItems / pageSize)); // Update current page
+    await fetchAppointments(null, "last"); // Fetch the last page of appointments
+    setCurrentPage(totalPages);
   };
+  
 
   // Reset pagination when filters or searchText change
   useEffect(() => {
@@ -1088,10 +1069,10 @@ function Appointments() {
               appointments.map((appointment, index) => (
                 <tr key={appointment.id}>
                   <td>{(currentPage - 1) * pageSize + index + 1}.</td>
-                  <td>{appointment.controlNumber}</td>
-                  <td>{appointment.fullName}</td>
-                  <td>{appointment.selectedAssistanceType}</td>
-                  <td>{getFormattedDate(appointment.appointmentDate, true)}</td>
+                  <td>{appointment.controlNumber || "N/A"}</td>
+                  <td>{appointment.fullName || "N/A"}</td>
+                  <td>{appointment.selectedAssistanceType || "N/A"}</td>
+                  <td>{getFormattedDate(appointment.appointmentDate, true) || "N/A"}</td>
                   <td>
                     {capitalizeFirstLetter(
                       appointment.appointmentDetails?.apptType || "N/A"
@@ -1099,7 +1080,7 @@ function Appointments() {
                   </td>
                   <td>
                     {capitalizeFirstLetter(
-                      appointment.appointmentDetails?.appointmentStatus
+                      appointment.appointmentDetails?.appointmentStatus || "N/A"
                     )}
                   </td>
                   <td>
