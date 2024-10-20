@@ -191,62 +191,63 @@ function ApptsFrontDesk() {
       alert("No appointment selected");
       return;
     }
-
+  
     // Get the contents of the appointment details section
-    const printContents = document.getElementById(
-      "appointment-details-section"
-    ).innerHTML;
-
+    const printContents = document.getElementById("appointment-details-section")
+      .innerHTML;
+  
     // Create a temporary div to modify the contents for printing
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = printContents;
-
+  
     // Remove any elements you don't want to print (with class 'no-print')
     const noPrintSection = tempDiv.querySelectorAll(".no-print");
     noPrintSection.forEach((section) => section.remove());
-
+  
     const modifiedPrintContents = tempDiv.innerHTML;
-
+  
     // Open a new window for printing
     const printWindow = window.open("", "", "height=500, width=500");
     printWindow.document.write(
       "<html><head><title>Appointment Details</title></head><body>"
     );
-
+  
     // Add modern, professional styles for printing
     printWindow.document.write("<style>");
     printWindow.document.write(`
       @media print {
         @page {
           size: A4;
-          margin: 0.6in; /* Narrow margin to fit more content */
+          margin: 0.8in;
         }
         body {
           font-family: 'Arial', sans-serif;
           font-size: 12px;
-          line-height: 1.4;
-          color: #000;
+          line-height: 1.6;
+          color: #333;
         }
         .header {
           text-align: center;
-          margin-bottom: 10px;
+          margin-bottom: 20px;
         }
         .header h2 {
-          font-size: 16px;
-          letter-spacing: 1px;
+          font-size: 18px;
+          font-weight: normal;
+          color: #333;
+          margin-bottom: 5px;
         }
         .header img {
-          width: 80px;
+          width: 60px;
           display: block;
           margin: 0 auto;
         }
         .section-title {
           font-size: 14px;
           font-weight: bold;
-          margin-top: 20px;
-          margin-bottom: 5px;
-          text-transform: uppercase;
-          border-bottom: 1px solid #000;
+          margin-top: 30px;
+          margin-bottom: 10px;
+          color: #555;
+          border-bottom: 1px solid #ddd;
           padding-bottom: 5px;
         }
         table {
@@ -254,34 +255,63 @@ function ApptsFrontDesk() {
           border-collapse: collapse;
           margin-bottom: 20px;
           font-size: 12px;
+          color: #333;
         }
         table, th, td {
-          border: 1px solid #000;
+          border: 1px solid #ddd;
         }
         th, td {
-          padding: 6px;
+          padding: 10px;
           text-align: left;
         }
         th {
-          background-color: #f4f4f4;
+          background-color: #f7f7f7;
+          font-weight: normal;
+          font-size: 12px;
+          text-transform: uppercase;
+          color: #555;
+        }
+        td {
+          font-size: 12px;
+          color: #333;
+        }
+        .form-label {
+          font-size: 12px;
           font-weight: bold;
+          margin-top: 15px;
+          color: #333;
+        }
+        .form-field {
+          font-size: 12px;
+          padding: 5px 0;
+          border-bottom: 1px solid #ddd;
+          color: #555;
         }
         .print-image {
-          width: 100%; 
-          height: auto; 
-          max-height: 10in; /* Ensure image fits within the page */
-          object-fit: contain; /* Maintain aspect ratio */
+          width: 100%;
+          height: auto;
+          max-height: 10in;
+          object-fit: contain;
           display: block;
           margin-bottom: 10px;
-          page-break-before: always;
         }
         .no-print {
           display: none;
         }
+        /* Modern table style */
+        table thead {
+          background-color: #f9f9f9;
+        }
+        table th {
+          letter-spacing: 1px;
+        }
+        table tbody tr:nth-child(even) {
+          background-color: #f5f5f5;
+        }
       }
     `);
     printWindow.document.write("</style>");
-
+  
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
       <div class="header">
@@ -289,15 +319,15 @@ function ApptsFrontDesk() {
         <h2>Integrated Bar of the Philippines - Malolos</h2>
         ${
           selectedAppointment.appointmentDetails.qrCode
-            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 80px; display: block; margin: 0 auto;" />`
+            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 60px; margin: 0 auto;" />`
             : ""
         }
       </div>
     `);
-
+  
     // Insert the modified contents
     printWindow.document.write(modifiedPrintContents);
-
+  
     // Handle image printing with modern margins and scaling
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
@@ -308,13 +338,13 @@ function ApptsFrontDesk() {
         );
       }
     });
-
+  
     // Close and trigger the print dialog
     printWindow.document.write("</body></html>");
     printWindow.document.close();
     printWindow.focus(); // Focus the window to ensure it shows up
     printWindow.print(); // Trigger print
-
+  
     // Close the print window after printing
     printWindow.onafterprint = () => printWindow.close();
   };
@@ -1491,7 +1521,7 @@ function ApptsFrontDesk() {
                 </section>
                 {selectedAppointment?.rescheduleHistory &&
                 selectedAppointment.rescheduleHistory.length > 0 ? (
-                  <section className="mb-4">
+                  <section className="mb-4 print-section no-print">
                     <h2
                       style={{ cursor: "pointer" }}
                       onClick={toggleRescheduleHistory}
