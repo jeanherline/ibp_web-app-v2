@@ -192,27 +192,28 @@ function Appointments() {
       alert("No appointment selected");
       return;
     }
-  
+
     // Get the contents of the appointment details section
-    const printContents = document.getElementById("appointment-details-section")
-      .innerHTML;
-  
+    const printContents = document.getElementById(
+      "appointment-details-section"
+    ).innerHTML;
+
     // Create a temporary div to modify the contents for printing
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = printContents;
-  
+
     // Remove any elements you don't want to print (with class 'no-print')
     const noPrintSection = tempDiv.querySelectorAll(".no-print");
     noPrintSection.forEach((section) => section.remove());
-  
+
     const modifiedPrintContents = tempDiv.innerHTML;
-  
+
     // Open a new window for printing
     const printWindow = window.open("", "", "height=500, width=500");
     printWindow.document.write(
       "<html><head><title>Appointment Details</title></head><body>"
     );
-  
+
     // Add modern, professional styles for printing
     printWindow.document.write("<style>");
     printWindow.document.write(`
@@ -223,94 +224,96 @@ function Appointments() {
         }
         body {
           font-family: 'Arial', sans-serif;
-          font-size: 11px; /* Reduced font size for compactness */
-          line-height: 1.4; /* More compact line spacing */
+          font-size: 12px;
+          line-height: 1.6;
           color: #333;
         }
         .header {
           text-align: center;
-          margin-bottom: 15px;
+          margin-bottom: 20px;
         }
         .header h2 {
-          font-size: 16px; /* Slightly reduced header size */
+          font-size: 18px;
           font-weight: normal;
           color: #333;
           margin-bottom: 5px;
         }
         .header img {
-          width: 50px; /* Reduced image size for compactness */
+          width: 60px;
           display: block;
           margin: 0 auto;
         }
         .section-title {
-          font-size: 13px; /* Slightly smaller title for compactness */
+          font-size: 14px;
           font-weight: bold;
-          margin-top: 20px;
+          margin-top: 30px;
           margin-bottom: 10px;
           color: #555;
           border-bottom: 1px solid #ddd;
-          padding-bottom: 3px;
+          padding-bottom: 5px;
         }
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 10px;
-          font-size: 11px; /* Reduced table font size */
+          margin-bottom: 20px;
+          font-size: 12px;
           color: #333;
         }
         table, th, td {
           border: 1px solid #ddd;
         }
         th, td {
-          padding: 8px; /* Reduced padding for more content on a page */
+          padding: 10px;
           text-align: left;
         }
         th {
           background-color: #f7f7f7;
           font-weight: normal;
-          font-size: 11px;
+          font-size: 12px;
           text-transform: uppercase;
           color: #555;
         }
         td {
-          font-size: 11px;
+          font-size: 12px;
           color: #333;
         }
         .form-label {
-          font-size: 11px;
+          font-size: 12px;
           font-weight: bold;
-          margin-top: 12px;
+          margin-top: 15px;
           color: #333;
         }
         .form-field {
-          font-size: 11px;
+          font-size: 12px;
           padding: 5px 0;
           border-bottom: 1px solid #ddd;
           color: #555;
         }
         .print-image {
-          display: none; /* Images will not be printed */
+          width: 100%;
+          height: auto;
+          max-height: 10in;
+          object-fit: contain;
+          display: block;
+          margin-bottom: 10px;
         }
         .no-print {
           display: none;
         }
-        /* Compact table style */
+        /* Modern table style */
         table thead {
           background-color: #f9f9f9;
         }
         table th {
-          letter-spacing: 0.8px; /* Slightly tighter letter spacing */
+          letter-spacing: 1px;
         }
         table tbody tr:nth-child(even) {
           background-color: #f5f5f5;
         }
-        .page-break {
-          page-break-before: always; /* Ensures next content starts on a new page */
-        }
       }
     `);
     printWindow.document.write("</style>");
-  
+
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
       <div class="header">
@@ -318,42 +321,35 @@ function Appointments() {
         <h2>Integrated Bar of the Philippines - Malolos</h2>
         ${
           selectedAppointment.appointmentDetails.qrCode
-            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 50px; margin: 0 auto;" />`
+            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 60px; margin: 0 auto;" />`
             : ""
         }
       </div>
     `);
-  
+
     // Insert the modified contents
     printWindow.document.write(modifiedPrintContents);
-  
-    // Ensuring any further content after "Nature of Legal Assistance Requested" will be printed on a new page
-    printWindow.document.write(`
-      <div class="page-break"></div>
-    `);
-  
+
     // Handle image printing with modern margins and scaling
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
       if (!image.classList.contains("qr-code-image")) {
+        printWindow.document.write("<div class='page-break'></div>");
         printWindow.document.write(
           `<img src='${image.src}' class='print-image' />`
         );
       }
     });
-  
+
     // Close and trigger the print dialog
     printWindow.document.write("</body></html>");
     printWindow.document.close();
     printWindow.focus(); // Focus the window to ensure it shows up
     printWindow.print(); // Trigger print
-  
+
     // Close the print window after printing
     printWindow.onafterprint = () => printWindow.close();
   };
-  
-  
-
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -690,7 +686,7 @@ function Appointments() {
         "appointmentDetails.appointmentStatus": "done",
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
-        "appointmentDetails.proceedingFileUrl": fileUrl, // Save the file URL (if uploaded)
+        "uploadedImages.proceedingFileUrl": fileUrl,
       };
 
       // Update the appointment document in Firestore with the proceeding notes and file URL
@@ -1392,25 +1388,6 @@ function Appointments() {
                                 ?.requestReason || "N/A"}
                             </td>
                           </tr>
-                          {/* Only show Attached File if it exists */}
-                          {selectedAppointment.appointmentDetails
-                            ?.newRequestFile && (
-                            <tr>
-                              <th>Attached File:</th>
-                              <td>
-                                <a
-                                  href={
-                                    selectedAppointment.appointmentDetails
-                                      ?.newRequestFile
-                                  }
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  View File
-                                </a>
-                              </td>
-                            </tr>
-                          )}
                         </tbody>
                       </table>
                     </section>
@@ -2004,6 +1981,56 @@ function Appointments() {
                               <img
                                 src={selectedAppointment.paoImageUrl}
                                 alt="Disqualification Letter from PAO"
+                                className="img-thumbnail"
+                                style={{ width: "100px", cursor: "pointer" }}
+                              />
+                            </a>
+                          ) : (
+                            "Not Available"
+                          )}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Consultation Remarks Attached File:</th>
+                        <td>
+                          {selectedAppointment.proceedingFileUrl ? (
+                            <a
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openImageModal(
+                                  selectedAppointment.proceedingFileUrl
+                                );
+                              }}
+                            >
+                              <img
+                                src={selectedAppointment.proceedingFileUrl}
+                                alt="Consultation Remarks Attached File"
+                                className="img-thumbnail"
+                                style={{ width: "100px", cursor: "pointer" }}
+                              />
+                            </a>
+                          ) : (
+                            "Not Available"
+                          )}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>New Appointment Request File:</th>
+                        <td>
+                          {selectedAppointment.newRequestUrl ? (
+                            <a
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openImageModal(
+                                  selectedAppointment.newRequestUrl
+                                );
+                              }}
+                            >
+                              <img
+                                src={selectedAppointment.newRequestUrl}
+                                alt="New Appointment Request File"
                                 className="img-thumbnail"
                                 style={{ width: "100px", cursor: "pointer" }}
                               />

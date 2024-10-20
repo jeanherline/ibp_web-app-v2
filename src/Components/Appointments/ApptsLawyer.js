@@ -1355,14 +1355,14 @@ function ApptsLawyer() {
                           </tr>
                           {/* Only show Attached File if it exists */}
                           {selectedAppointment.appointmentDetails
-                            ?.newRequestFile && (
+                            ?.newRequestUrl && (
                             <tr>
                               <th>Attached File:</th>
                               <td>
                                 <a
                                   href={
                                     selectedAppointment.appointmentDetails
-                                      ?.newRequestFile
+                                      ?.newRequestUrl
                                   }
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -1965,6 +1965,56 @@ function ApptsLawyer() {
                               <img
                                 src={selectedAppointment.paoImageUrl}
                                 alt="Disqualification Letter from PAO"
+                                className="img-thumbnail"
+                                style={{ width: "100px", cursor: "pointer" }}
+                              />
+                            </a>
+                          ) : (
+                            "Not Available"
+                          )}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Consultation Remarks Attached File:</th>
+                        <td>
+                          {selectedAppointment.proceedingFileUrl ? (
+                            <a
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openImageModal(
+                                  selectedAppointment.proceedingFileUrl
+                                );
+                              }}
+                            >
+                              <img
+                                src={selectedAppointment.proceedingFileUrl}
+                                alt="Consultation Remarks Attached File"
+                                className="img-thumbnail"
+                                style={{ width: "100px", cursor: "pointer" }}
+                              />
+                            </a>
+                          ) : (
+                            "Not Available"
+                          )}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>New Appointment Request File:</th>
+                        <td>
+                          {selectedAppointment.newRequestUrl ? (
+                            <a
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openImageModal(
+                                  selectedAppointment.newRequestUrl
+                                );
+                              }}
+                            >
+                              <img
+                                src={selectedAppointment.newRequestUrl}
+                                alt="New Appointment Request File"
                                 className="img-thumbnail"
                                 style={{ width: "100px", cursor: "pointer" }}
                               />
