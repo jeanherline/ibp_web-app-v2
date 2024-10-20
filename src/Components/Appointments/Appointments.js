@@ -616,34 +616,6 @@ function Appointments() {
 
     return !isSlotBookedByAssignedLawyer(dateTime);
   };
-
-  // Pagination handlers
-  const handleNext = async () => {
-    if (currentPage < totalPages) {
-      await fetchAppointments(lastVisible, "next");
-      setCurrentPage(currentPage + 1);
-    }
-  };
-
-  const handlePrevious = async () => {
-    if (currentPage > 1) {
-      await fetchAppointments(lastVisible, "prev");
-      setCurrentPage(currentPage - 1);
-    }
-  };
-
-  const handleFirst = async () => {
-    setLastVisible(null); // Reset to fetch from the start
-    setPageMarkers([]); // Clear page markers
-    await fetchAppointments(null, "next");
-    setCurrentPage(1);
-  };
-
-  const handleLast = async () => {
-    // Implement logic to fetch the last page if needed
-    setCurrentPage(totalPages);
-  };
-
   // Reset pagination when filters or searchText change
   useEffect(() => {
     const fetchAppointments = async () => {
