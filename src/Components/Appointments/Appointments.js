@@ -500,7 +500,7 @@ function Appointments() {
         currentUser
       );
       setAppointments(data);
-      setLastVisible(lastDoc); // Correctly update lastVisible with the last doc from the query
+      setLastVisible(lastDoc); // Set lastVisible to the last document of the current page
       setCurrentPage((prevPage) => prevPage + 1); // Increment currentPage
     }
   };
@@ -509,14 +509,14 @@ function Appointments() {
     if (currentPage > 1) {
       const { data, firstDoc } = await getLawyerAppointments(
         filter,
-        null, // Set lastVisible to null to fetch from the beginning for the previous page
+        null, // Reset lastVisible to null when fetching from previous pages
         pageSize,
         searchText,
         natureOfLegalAssistanceFilter,
         currentUser
       );
       setAppointments(data);
-      setLastVisible(firstDoc); // Correctly update lastVisible with the first doc from the query
+      setLastVisible(firstDoc); // Update lastVisible for the previous page
       setCurrentPage((prevPage) => prevPage - 1); // Decrement currentPage
     }
   };
@@ -1334,7 +1334,7 @@ function Appointments() {
               active={index + 1 === currentPage}
               onClick={() => {
                 setCurrentPage(index + 1);
-                setLastVisible(appointments[index]);
+                setLastVisible(appointments[index]); // You may need to adjust how `lastVisible` is updated here
               }}
             >
               {index + 1}
