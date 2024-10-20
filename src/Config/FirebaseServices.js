@@ -36,87 +36,92 @@ const getAppointments = async (
 ) => {
   try {
     let queryRef = collection(fs, "appointments");
-    
-    // Apply filters based on status and assistance
+
+    // Apply filters
     const conditions = [];
 
+    // Filter by status
     if (statusFilter && statusFilter !== "all") {
       conditions.push(
         where("appointmentDetails.appointmentStatus", "==", statusFilter)
       );
     }
 
+    // Filter by legal assistance type
     if (assistanceFilter && assistanceFilter !== "all") {
       conditions.push(
         where("legalAssistanceRequested.selectedAssistanceType", "==", assistanceFilter)
       );
     }
 
-    // Apply Firestore query with conditions
+    // Apply the conditions to the query
     if (conditions.length > 0) {
       queryRef = query(queryRef, ...conditions);
     }
 
-    // Order by appointment creation date for consistency in pagination
+    // Order by created date for consistent pagination
     queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
 
-    // Handle pagination markers
+    // Handle pagination: using startAfter for next, endBefore for previous
     if (lastVisible) {
-      queryRef = isPrevious
-        ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize))
-        : query(queryRef, startAfter(lastVisible), limit(pageSize));
+      if (isPrevious) {
+        queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
+      } else {
+        queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
+      }
     } else {
-      queryRef = query(queryRef, limit(pageSize));
+      queryRef = query(queryRef, limit(pageSize)); // Initial load
     }
 
-    // Fetch records from Firestore
+    // Fetch the documents
     const querySnapshot = await getDocs(queryRef);
 
     if (querySnapshot.empty) {
       return { data: [], total: 0, firstDoc: null, lastDoc: null };
     }
 
-    // Apply search filtering in-memory (client-side)
-    const filteredData = querySnapshot.docs.filter((doc) => {
+    // Map the results into usable data
+    const appointmentsData = querySnapshot.docs.map((doc) => {
       const data = doc.data();
+      return {
+        id: doc.id,
+        ...data.applicantProfile,
+        ...data.employmentProfile,
+        ...data.legalAssistanceRequested,
+        ...data.uploadedImages,
+        createdDate: data.appointmentDetails?.createdDate,
+        appointmentStatus: data.appointmentDetails?.appointmentStatus,
+        controlNumber: data.appointmentDetails?.controlNumber,
+        appointmentDate: data.appointmentDetails?.appointmentDate,
+        clientEligibility: data.clientEligibility,
+        appointmentDetails: data.appointmentDetails,
+        reviewerDetails: data.reviewerDetails,
+        proceedingNotes: data.proceedingNotes,
+        rescheduleHistory: data.rescheduleHistory || [],
+      };
+    });
+
+    // Manually filter results based on search text
+    const filteredAppointments = appointmentsData.filter((appointment) => {
+      const searchLower = searchText.toLowerCase();
+
+      // Check if search text matches any relevant fields
       return (
-        data.applicantProfile?.fullName
-          ?.toLowerCase()
-          .includes(searchText.toLowerCase()) ||
-        data.applicantProfile?.address
-          ?.toLowerCase()
-          .includes(searchText.toLowerCase()) ||
-        data.applicantProfile?.contactNumber?.includes(searchText) ||
-        data.appointmentDetails?.controlNumber?.includes(searchText) ||
-        data.legalAssistanceRequested?.selectedAssistanceType
-          ?.toLowerCase()
-          .includes(searchText.toLowerCase())
+        appointment.fullName?.toLowerCase().includes(searchLower) ||
+        appointment.address?.toLowerCase().includes(searchLower) ||
+        appointment.contactNumber?.includes(searchLower) ||
+        appointment.controlNumber?.includes(searchLower) ||
+        appointment.selectedAssistanceType?.toLowerCase().includes(searchLower)
       );
     });
 
-    // Get total count for pagination
-    const countSnapshot = await getCountFromServer(query(collection(fs, "appointments"), ...conditions));
+    // Get total count (if needed for pagination UI)
+    const countSnapshot = await getCountFromServer(
+      query(collection(fs, "appointments"), ...conditions)
+    );
 
     return {
-      data: filteredData.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data.applicantProfile,
-          ...data.employmentProfile,
-          ...data.legalAssistanceRequested,
-          ...data.uploadedImages,
-          createdDate: data.appointmentDetails?.createdDate,
-          appointmentStatus: data.appointmentDetails?.appointmentStatus,
-          controlNumber: data.appointmentDetails?.controlNumber,
-          appointmentDate: data.appointmentDetails?.appointmentDate,
-          clientEligibility: data.clientEligibility,
-          appointmentDetails: data.appointmentDetails,
-          reviewerDetails: data.reviewerDetails,
-          proceedingNotes: data.proceedingNotes,
-          rescheduleHistory: data.rescheduleHistory || [],
-        };
-      }),
+      data: filteredAppointments,
       total: countSnapshot.data().count,
       firstDoc: querySnapshot.docs[0],
       lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
@@ -126,7 +131,6 @@ const getAppointments = async (
     return { data: [], total: 0, firstDoc: null, lastDoc: null };
   }
 };
-
 
 
 const getLawyerCalendar = async (assignedLawyer) => {

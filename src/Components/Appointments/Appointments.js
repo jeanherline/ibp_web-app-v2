@@ -380,13 +380,18 @@ function Appointments() {
     return () => unsubscribe();
   }, []);
 
-  const fetchAppointments = async (lastVisible = null, direction = "next") => {
+  const fetchAppointments = async (
+    lastVisible = null,
+    pageDirection = "next"
+  ) => {
     try {
+      console.log("Fetching appointments. Last visible:", lastVisible);
+
       let queryRef = collection(fs, "appointments");
 
+      // Apply filters
       const conditions = [];
 
-      // Apply filters (appointment status and legal assistance type)
       if (filter && filter !== "all") {
         conditions.push(
           where("appointmentDetails.appointmentStatus", "==", filter)
@@ -406,20 +411,10 @@ function Appointments() {
         );
       }
 
-      // Apply search filter (e.g., searching for name, control number, etc.)
-      if (searchText) {
-        conditions.push(
-          where("applicantProfile.fullName", ">=", searchText),
-          where("applicantProfile.fullName", "<=", searchText + "\uf8ff") // End range for search
-        );
-      }
-
-      // Apply the conditions to the query
       if (conditions.length > 0) {
         queryRef = query(queryRef, ...conditions);
       }
 
-      // Order by created date for consistent pagination
       queryRef = query(
         queryRef,
         orderBy("appointmentDetails.createdDate", "desc")
@@ -427,123 +422,87 @@ function Appointments() {
 
       // Handle pagination direction
       if (lastVisible) {
-        if (direction === "next") {
-          queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
-        } else if (direction === "prev") {
+        if (pageDirection === "prev") {
           queryRef = query(
             queryRef,
             endBefore(lastVisible),
             limitToLast(pageSize)
           );
+        } else {
+          queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
         }
       } else {
-        queryRef = query(queryRef, limit(pageSize)); // Initial load
+        queryRef = query(queryRef, limit(pageSize));
       }
 
-      // Fetch the documents
       const querySnapshot = await getDocs(queryRef);
+
       if (querySnapshot.empty) {
-        return { data: [], total: 0, lastDoc: null };
+        return { data: [], total: 0, firstDoc: null, lastDoc: null };
       }
 
-      const appointmentsData = querySnapshot.docs.map((doc) => {
+      // Filter results based on search text
+      const filtered = querySnapshot.docs.filter((doc) => {
         const data = doc.data();
-        return {
-          id: doc.id,
-          ...data.applicantProfile,
-          ...data.employmentProfile,
-          ...data.legalAssistanceRequested,
-          ...data.uploadedImages,
-          createdDate: data.appointmentDetails?.createdDate,
-          appointmentStatus: data.appointmentDetails?.appointmentStatus,
-          controlNumber: data.appointmentDetails?.controlNumber,
-          appointmentDate: data.appointmentDetails?.appointmentDate,
-          clientEligibility: data.clientEligibility,
-          appointmentDetails: data.appointmentDetails,
-          reviewerDetails: data.reviewerDetails,
-          proceedingNotes: data.proceedingNotes,
-          rescheduleHistory: data.rescheduleHistory || [],
-        };
+        return (
+          data.applicantProfile?.fullName
+            ?.toLowerCase()
+            .includes(searchText.toLowerCase()) ||
+          data.applicantProfile?.address
+            ?.toLowerCase()
+            .includes(searchText.toLowerCase()) ||
+          data.applicantProfile?.contactNumber?.includes(searchText) ||
+          data.appointmentDetails?.controlNumber?.includes(searchText) ||
+          data.legalAssistanceRequested?.selectedAssistanceType
+            ?.toLowerCase()
+            .includes(searchText.toLowerCase())
+        );
       });
 
-      // Update state with fetched data and pagination markers
-      setAppointments(appointmentsData);
-      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+      // Get the total count of documents matching the filter
+      const countSnapshot = await getCountFromServer(
+        query(collection(fs, "appointments"), ...conditions)
+      );
 
+      // Return fetched appointments and updated page markers
       return {
-        appointmentsData,
-        total: querySnapshot.size,
+        data: filtered.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data.applicantProfile,
+            ...data.employmentProfile,
+            ...data.legalAssistanceRequested,
+            ...data.uploadedImages,
+            createdDate: data.appointmentDetails?.createdDate,
+            appointmentStatus: data.appointmentDetails?.appointmentStatus,
+            controlNumber: data.appointmentDetails?.controlNumber,
+            appointmentDate: data.appointmentDetails?.appointmentDate,
+            clientEligibility: data.clientEligibility,
+            appointmentDetails: data.appointmentDetails,
+            reviewerDetails: data.reviewerDetails,
+            proceedingNotes: data.proceedingNotes,
+            rescheduleHistory: data.rescheduleHistory || [],
+          };
+        }),
+        total: countSnapshot.data().count,
+        firstDoc: querySnapshot.docs[0],
         lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
       };
     } catch (error) {
       console.error("Error fetching appointments:", error);
-      return { data: [], total: 0, lastDoc: null };
+      return { data: [], total: 0, firstDoc: null, lastDoc: null };
     }
   };
 
-  // Pagination Handlers
-  const handleNext = async () => {
-    if (currentPage < totalPages) {
-      await fetchAppointments(lastVisible, "next");
-      setCurrentPage((prevPage) => prevPage + 1); // Update page number
-    }
-  };
-
-  const handlePrevious = async () => {
-    if (currentPage > 1) {
-      await fetchAppointments(lastVisible, "prev");
-      setCurrentPage((prevPage) => prevPage - 1); // Update page number
-    }
-  };
-
-  const handleFirst = async () => {
-    // Fetch the first page data
-    setCurrentPage(1);
-    await fetchAppointments(null, "next");
-  };
-
-  const handleLast = async () => {
-    // Fetch the last page if needed
-    setCurrentPage(totalPages);
-    // You may implement fetching the last page data depending on Firestore pagination logic.
-  };
-  const paginate = (appointments, currentPage, pageSize) => {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return appointments.slice(startIndex, endIndex); // Slice the data for the current page
-  };
-
-  // Inside your component
-  useEffect(() => {
-    const fetchAndPaginate = async () => {
-      const { data, total } = await getAppointments(
-        filter,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-
-      setTotalFilteredItems(total); // Update the total filtered items count
-      setAppointments(paginate(data, currentPage, pageSize)); // Paginate the results
-      setTotalPages(Math.ceil(total / pageSize)); // Calculate total pages
-    };
-
-    fetchAndPaginate();
-  }, [filter, searchText, natureOfLegalAssistanceFilter, currentPage]);
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
-  // Load appointments on filter or search change
   useEffect(() => {
     const resetPagination = async () => {
       setCurrentPage(1); // Reset current page to 1
-      setLastVisible(null); // Reset the last visible document reference
-      await fetchAppointments(); // Fetch appointments for the first page with the current search/filter
+      setLastVisible(null); // Reset lastVisible to null to fetch from the first page
+      await fetchAppointments(); // Fetch appointments for the first page
     };
 
-    resetPagination(); // Trigger fetch on filters or search change
+    resetPagination();
   }, [filter, searchText, natureOfLegalAssistanceFilter]);
 
   useEffect(() => {
@@ -652,6 +611,34 @@ function Appointments() {
 
     return !isSlotBookedByAssignedLawyer(dateTime);
   };
+
+  // Pagination handlers
+  const handleNext = async () => {
+    if (currentPage < totalPages) {
+      await fetchAppointments(lastVisible, "next");
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePrevious = async () => {
+    if (currentPage > 1) {
+      await fetchAppointments(lastVisible, "prev");
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleFirst = async () => {
+    setLastVisible(null); // Reset to fetch from the start
+    setPageMarkers([]); // Clear page markers
+    await fetchAppointments(null, "next");
+    setCurrentPage(1);
+  };
+
+  const handleLast = async () => {
+    // Implement logic to fetch the last page if needed
+    setCurrentPage(totalPages);
+  };
+
   // Reset pagination when filters or searchText change
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -1445,28 +1432,31 @@ function Appointments() {
         </table>
         <Pagination>
           <Pagination.First
-            onClick={() => handlePageChange(1)}
+            onClick={handleFirst}
             disabled={currentPage === 1}
           />
           <Pagination.Prev
-            onClick={() => handlePageChange(currentPage - 1)}
+            onClick={handlePrevious}
             disabled={currentPage === 1}
           />
-          {[...Array(totalPages)].map((_, index) => (
+          {[...Array(totalPages).keys()].map((_, index) => (
             <Pagination.Item
-              key={index}
+              key={index + 1}
               active={index + 1 === currentPage}
-              onClick={() => handlePageChange(index + 1)}
+              onClick={() => {
+                setCurrentPage(index + 1);
+                setLastVisible(appointments[index]);
+              }}
             >
               {index + 1}
             </Pagination.Item>
           ))}
           <Pagination.Next
-            onClick={() => handlePageChange(currentPage + 1)}
+            onClick={handleNext}
             disabled={currentPage === totalPages}
           />
           <Pagination.Last
-            onClick={() => handlePageChange(totalPages)}
+            onClick={handleLast}
             disabled={currentPage === totalPages}
           />
         </Pagination>
