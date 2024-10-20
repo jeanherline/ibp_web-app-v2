@@ -380,64 +380,43 @@ function Appointments() {
     return () => unsubscribe();
   }, []);
 
-  const fetchAppointments = async (lastVisible = null, pageDirection = "next") => {
+  const fetchAppointments = async (lastVisible = null, direction = "next") => {
     try {
-      console.log("Fetching appointments. Last visible:", lastVisible);
-  
       let queryRef = collection(fs, "appointments");
   
-      // Apply filters (for status and legal assistance)
       const conditions = [];
-  
+      
+      // Apply filters (status filter and legal assistance filter)
       if (filter && filter !== "all") {
         conditions.push(
           where("appointmentDetails.appointmentStatus", "==", filter)
         );
       }
-  
-      if (
-        natureOfLegalAssistanceFilter &&
-        natureOfLegalAssistanceFilter !== "all"
-      ) {
+      
+      if (natureOfLegalAssistanceFilter && natureOfLegalAssistanceFilter !== "all") {
         conditions.push(
-          where(
-            "legalAssistanceRequested.selectedAssistanceType",
-            "==",
-            natureOfLegalAssistanceFilter
-          )
+          where("legalAssistanceRequested.selectedAssistanceType", "==", natureOfLegalAssistanceFilter)
         );
       }
-  
+      
       if (conditions.length > 0) {
         queryRef = query(queryRef, ...conditions);
       }
   
-      queryRef = query(
-        queryRef,
-        orderBy("appointmentDetails.createdDate", "desc")
-      );
+      queryRef = query(queryRef, orderBy("appointmentDetails.createdDate", "desc"));
   
       // Handle pagination direction
       if (lastVisible) {
-        if (pageDirection === "prev") {
-          queryRef = query(
-            queryRef,
-            endBefore(lastVisible), // Use endBefore for previous page
-            limitToLast(pageSize)
-          );
+        if (direction === "next") {
+          queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
         } else {
-          queryRef = query(
-            queryRef,
-            startAfter(lastVisible), // Use startAfter for next page
-            limit(pageSize)
-          );
+          queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
         }
       } else {
         queryRef = query(queryRef, limit(pageSize));
       }
   
       const querySnapshot = await getDocs(queryRef);
-  
       if (querySnapshot.empty) {
         return { data: [], total: 0, firstDoc: null, lastDoc: null };
       }
@@ -462,54 +441,62 @@ function Appointments() {
         };
       });
   
-      // Set the fetched data and update the last visible document
-      setAppointments(appointmentsData);  // Update the state for appointments
-      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);  // Update the lastVisible for pagination
+      // Update the appointments state and lastVisible for pagination
+      setAppointments(appointmentsData);
+      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+      setFirstVisible(querySnapshot.docs[0]);
+  
+      return {
+        appointmentsData,
+        total: querySnapshot.size,
+        firstDoc: querySnapshot.docs[0],
+        lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
+      };
     } catch (error) {
       console.error("Error fetching appointments:", error);
       return { data: [], total: 0, firstDoc: null, lastDoc: null };
     }
   };
   
-  // Pagination handlers
+  // Pagination Handlers
   const handleNext = async () => {
     if (currentPage < totalPages) {
       await fetchAppointments(lastVisible, "next");
-      setCurrentPage((prevPage) => prevPage + 1); // Update the current page
+      setCurrentPage((prevPage) => prevPage + 1); // Update page number
     }
   };
   
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      await fetchAppointments(lastVisible, "prev");
-      setCurrentPage((prevPage) => prevPage - 1); // Update the current page
+      await fetchAppointments(firstVisible, "prev");
+      setCurrentPage((prevPage) => prevPage - 1); // Update page number
     }
   };
   
   const handleFirst = async () => {
-    // Reset to first page
-    setLastVisible(null);
-    await fetchAppointments(null, "next");
+    // Fetch the first page data
     setCurrentPage(1);
+    await fetchAppointments(null, "next");
   };
   
   const handleLast = async () => {
-    // Fetch the last page
-    // This logic can be more complex depending on your requirements
+    // Calculate logic for fetching last page if necessary
     setCurrentPage(totalPages);
+    // You can also use a Firestore function to fetch the last page directly if needed.
   };
   
-
+  // Load appointments on filter or search change
   useEffect(() => {
     const resetPagination = async () => {
-      setCurrentPage(1); // Reset current page to 1
-      setLastVisible(null); // Reset lastVisible to null to fetch from the first page
-      await fetchAppointments(); // Fetch appointments for the first page
+      setCurrentPage(1); // Reset current page
+      setLastVisible(null); // Clear last visible document
+      await fetchAppointments(); // Fetch new appointments for the first page
     };
-
-    resetPagination();
+  
+    resetPagination(); // Trigger reset on filters change
   }, [filter, searchText, natureOfLegalAssistanceFilter]);
-
+  
+  
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
       setBookedSlots(slots);
