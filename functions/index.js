@@ -3,10 +3,11 @@ const { SecretManagerServiceClient } = require("@google-cloud/secret-manager");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
+const { logoutAllDevices } = require("./logoutFunctions");
 
 const app = express();
 app.use(cors({ origin: true }));
-
+app.use(express.json());
 const secretManagerClient = new SecretManagerServiceClient();
 
 // Fetch private key from Secret Manager
@@ -35,7 +36,7 @@ app.get("/generate-jwt", async (req, res) => {
     const privateKey = await getSecret(); // Fetch the secret key from Secret Manager
 
     // Determine if the user is a moderator based on query parameter
-    const moderator = isModerator === 'true';
+    const moderator = isModerator === "true";
 
     // JWT Payload
     const payload = {
@@ -60,9 +61,9 @@ app.get("/generate-jwt", async (req, res) => {
     const token = jwt.sign(payload, privateKey, {
       algorithm: "RS256",
       header: {
-        alg: 'RS256',
+        alg: "RS256",
         kid: "vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/ab9a6e",
-        typ: 'JWT',
+        typ: "JWT",
       },
     });
 
@@ -73,4 +74,8 @@ app.get("/generate-jwt", async (req, res) => {
   }
 });
 
+// Export the logout function
+exports.logoutAllDevices = logoutAllDevices;
+
+// Your existing exports (like API)...
 exports.api = functions.https.onRequest(app);

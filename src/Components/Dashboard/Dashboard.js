@@ -13,6 +13,8 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
 
 ChartJS.register(
   CategoryScale,
@@ -29,6 +31,19 @@ function Dashboard() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isLawyer, setIsLawyer] = useState(false);
   const [nextAppointment, setNextAppointment] = useState(null);
+  const navigate = useNavigate();
+  const auth = getAuth();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        // If user is not authenticated, redirect to the login page
+        navigate("/");
+      }
+    });
+
+    return () => unsubscribe(); // Clean up the listener on component unmount
+  }, [auth, navigate]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -377,9 +392,7 @@ function Dashboard() {
                         .toDate()
                         .toLocaleString()}
                     </p>
-                    <p>
-                      {nextAppointment.applicantProfile.fullName}
-                    </p>
+                    <p>{nextAppointment.applicantProfile.fullName}</p>
                   </div>
                 )}
               </>

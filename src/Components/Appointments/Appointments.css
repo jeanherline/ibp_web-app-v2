@@ -1,4 +1,3 @@
-
 .dashboard-container {
   display: flex;
 }
@@ -67,14 +66,14 @@ tr:hover {
   background-color: #f5f5f5;
 }
 
-/* Ensure this only applies to tables with the 'flexible-table' class */
-.flexible-table {
+/* Ensure this only applies to tables with the 'table table-striped table-bordered' class */
+.table table-striped table-bordered {
   table-layout: auto;
   width: 100%;
   border-collapse: collapse;
 }
 
-.flexible-table thead th {
+.table table-striped table-bordered thead th {
   padding: 12px;
   text-align: left;
   background-color: #f2f2f2;
@@ -82,51 +81,51 @@ tr:hover {
 }
 
 /* Unique width settings for each header column */
-.flexible-table thead th:nth-child(1) {
+.table table-striped table-bordered thead th:nth-child(1) {
   width: 5%; /* Control number column */
 }
 
-.flexible-table thead th:nth-child(2) {
+.table table-striped table-bordered thead th:nth-child(2) {
   width: 20%; /* Full Name column */
 }
 
-.flexible-table thead th:nth-child(3) {
+.table table-striped table-bordered thead th:nth-child(3) {
   width: 25%; /* Legal Assistance column */
 }
 
-.flexible-table thead th:nth-child(4) {
+.table table-striped table-bordered thead th:nth-child(4) {
   width: 20%; /* Scheduled Date column */
 }
 
-.flexible-table thead th:nth-child(5) {
+.table table-striped table-bordered thead th:nth-child(5) {
   width: 10%; /* Type column */
 }
 
-.flexible-table thead th:nth-child(6) {
+.table table-striped table-bordered thead th:nth-child(6) {
   width: 10%; /* Status column */
 }
 
-.flexible-table thead th:nth-child(7) {
+.table table-striped table-bordered thead th:nth-child(7) {
   width: 5%; /* Link column */
 }
 
-.flexible-table thead th:nth-child(8) {
+.table table-striped table-bordered thead th:nth-child(8) {
   width: 15%; /* Action column */
 }
 
 /* Make rows dependent on content, not aligned */
-.flexible-table td {
+.table table-striped table-bordered td {
   padding: 8px;
   border: 1px solid #ddd;
   white-space: nowrap; /* Prevent text from breaking in the table cells */
 }
 
 /* Additional tweaks for irregularity */
-.flexible-table tr td:nth-child(3) {
+.table table-striped table-bordered tr td:nth-child(3) {
   padding-left: 10px;
 }
 
-.flexible-table tr td:nth-child(5) {
+.table table-striped table-bordered tr td:nth-child(5) {
   padding-right: 20px;
 }
 

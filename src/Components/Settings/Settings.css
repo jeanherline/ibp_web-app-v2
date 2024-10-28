@@ -1,0 +1,261 @@
+/* Overall Layout */
+.dashboard-container {
+  display: flex;
+}
+
+.main-content {
+  flex: 1;
+  padding: 40px;
+}
+
+.settings-section {
+  margin-bottom: 50px;
+  padding: 30px;
+  background-color: white;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Heading styles */
+h3 {
+  font-size: 32px;
+  color: #212529;
+  font-weight: 600;
+  margin-bottom: 30px;
+}
+
+/* Section heading styles */
+.security-settings-card {
+  background-color: #ffffff;
+  border: 1px solid #e3e4e5;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+h4 {
+  font-size: 22px;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+
+.two-factor-section {
+  display: flex;
+  align-items: center; /* Aligns items vertically */
+  justify-content: flex-start; /* Aligns items horizontally to the left */
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.link-phone-section {
+  display: flex;
+  align-items: center;
+}
+
+.link-phone-section .MuiTextField-root {
+  flex-grow: 1;
+}
+
+.link-phone-section .MuiButton-root {
+  margin-left: 15px;
+  background: #0052d4;
+  color: white;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 8px;
+}
+
+.link-phone-section .MuiButton-root:hover {
+  background: #0052d4;
+}
+
+.two-factor-toggle {
+  display: flex;
+  align-items: center; /* Ensures both toggle and text are vertically aligned */
+  margin-right: 20px;
+}
+
+.two-factor-toggle p {
+  margin: 0;
+  padding-left: 10px;
+  font-size: 16px;
+  color: #495057;
+}
+
+.MuiSwitch-root {
+  margin-right: 10px; /* Adjusts spacing between switch and text */
+}
+
+.link-phone-section {
+  display: flex;
+  align-items: center;
+  margin-left: auto; /* Aligns the phone link section to the right */
+}
+
+.link-phone-section .MuiTextField-root {
+  flex-grow: 1;
+}
+
+/* Trusted Devices Table */
+.table-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #fff;
+}
+
+table th,
+table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #dee2e6;
+  text-align: left;
+  font-size: 16px;
+  color: #495057;
+}
+
+table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}
+
+table tr:last-child td {
+  border-bottom: none;
+}
+
+table tr:hover {
+  background-color: #f8f9fa;
+  transition: background-color 0.3s ease;
+}
+
+/* Logout from All Devices Button */
+.logout-all-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.logout-all-btn {
+  background-color: #dc3545;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.logout-all-btn:hover {
+  background-color: #c82333;
+}
+
+.snackbar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333; /* Red background for warning */
+  color: white;
+  padding: 16px;
+  border-radius: 4px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  font-size: 16px;
+  font-weight: 500;
+  z-index: 1000;
+  animation: fadeInOut 3s ease-in-out;
+}
+/* Snackbar animation */
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 60%); /* Slight offset for animation */
+  }
+  10%,
+  90% {
+    opacity: 1;
+    transform: translate(-50%, 50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 60%);
+  }
+}
+
+/* Additional Styles for Better Responsiveness */
+@media (max-width: 768px) {
+  .main-content {
+    padding: 20px;
+  }
+
+  .two-factor-section {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .two-factor-toggle,
+  .link-phone-section {
+    margin-top: 10px;
+  }
+}
+.collapsible {
+  margin: 5px 0;
+}
+
+.collapsible-button {
+  background-color: #f1f1f1; /* Light background */
+  border: 1px solid #ccc; /* Border for better visibility */
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  font-size: 16px;
+  color: #333; /* Text color */
+  border-radius: 5px; /* Rounded corners */
+  transition: background-color 0.3s; /* Smooth transition */
+}
+
+.collapsible-button:hover {
+  background-color: #e7f0f7; /* Change on hover */
+}
+
+.collapsible-content {
+  padding: 10px;
+  border: 1px solid #ddd; /* Light border */
+  border-radius: 5px; /* Rounded corners */
+  background-color: #fff; /* White background for content */
+  display: block; /* Make sure it's block to show when toggled */
+}
+
+.collapsible-button:after {
+  content: "▼"; /* Down arrow */
+  float: right;
+}
+
+.collapsible-button.active:after {
+  content: "▲"; /* Up arrow when active */
+}
+
+.collapsible-button.active + .collapsible-content {
+  display: block; /* Show content when active */
+}
+
+.table-container {
+  width: 100%;
+  overflow-x: auto; /* Allows horizontal scrolling on small screens */
+}
+
+.table-container pre {
+  white-space: pre-wrap; /* Allows wrapping of long text */
+  max-height: 150px; /* Limits height for overflow */
+  overflow: auto; /* Adds scroll if content overflows */
+}

@@ -14,7 +14,7 @@ import QRCode from "qrcode";
 import { format } from "date-fns";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
-import { auth, fs } from "../../Config/Firebase";
+import { auth, fs, signOut } from "../../Config/Firebase";
 import {
   collection,
   addDoc,
@@ -23,30 +23,10 @@ import {
   getDocs,
   query,
   where,
-} from "firebase/firestore"; // Add getDocs, query, and where
-
+} from "firebase/firestore"; // Import Firestore functions // Import Firestore functions // Add getDocs, query, and where
+import { useNavigate } from "react-router-dom";
 const storage = getStorage();
-
-const signUpAndAuthenticate = async (email, password) => {
-  try {
-    const currentUser = auth.currentUser; // Store the current user
-    const tempAuth = getAuth(); // Create a temporary auth instance
-    const newUserCredential = await createUserWithEmailAndPassword(
-      tempAuth,
-      email,
-      password
-    );
-
-    await tempAuth.signOut(); // Sign out the temporary auth instance
-    if (currentUser) {
-      await auth.updateCurrentUser(currentUser); // Restore the current user session
-    }
-    return newUserCredential.user;
-  } catch (error) {
-    console.error("Error signing up: ", error);
-    throw error;
-  }
-};
+const currentUser = auth.currentUser;
 
 const generateQrCodeImageUrl = async (data, folder, controlNumber) => {
   try {
@@ -54,7 +34,7 @@ const generateQrCodeImageUrl = async (data, folder, controlNumber) => {
       errorCorrectionLevel: "L",
       color: {
         dark: "#000000", // QR code color
-        light: "rgba(0,0,0,0)", // Transparent background
+        light: "#FFFFFF00", // Transparent background
       },
       width: 200, // Set the width to 200
       margin: 2, // Set the margin
@@ -174,7 +154,7 @@ function WalkInForm() {
         }
 
         const formatDob = (dob) => {
-          if (!dob) return "";
+          if (!dob || isNaN(new Date(dob))) return ""; // Check if dob is valid
           const date = new Date(dob);
           return date.toISOString().split("T")[0]; // Format as YYYY-MM-DD
         };
@@ -191,7 +171,7 @@ function WalkInForm() {
               dob: formatDob(appointment.applicantProfile.dob),
               streetAddress: appointment.applicantProfile.address || "",
               city: appointment.applicantProfile.city || "",
-              phone: appointment.applicantProfile.contactNumber || "",
+              phone: appointment.applicantProfile.contactNumber || "+63", // Add "+63" if phone is empty
               gender: appointment.applicantProfile.selectedGender || "",
               spouseName: appointment.applicantProfile.spouseName || "",
               spouseOccupation:
@@ -231,7 +211,7 @@ function WalkInForm() {
               dob: formatDob(user.dob),
               streetAddress: user.streetAddress || "",
               city: user.city || "",
-              phone: user.phone || "",
+              phone: user.phone || "+63", // Add "+63" if phone is empty
               gender: user.gender || "",
               spouseName: user.spouse || "",
               spouseOccupation: user.spouseOccupation || "",
@@ -314,12 +294,28 @@ function WalkInForm() {
     return new Blob([ab], { type: mimeString });
   };
 
+  const signUpAndAuthenticate = async (email, password) => {
+    try {
+      const tempAuth = getAuth();
+      const userCredential = await createUserWithEmailAndPassword(
+        tempAuth,
+        email,
+        password
+      );
+      const firebaseUid = userCredential.user.uid; // Retrieve the Firebase UID
+      return firebaseUid; // Return the UID
+    } catch (error) {
+      console.error("Error signing up: ", error);
+      throw error;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-
+  
     try {
-      // Validate required fields
+      // Validation of required fields
       if (
         !userData.display_name ||
         !userData.last_name ||
@@ -331,10 +327,11 @@ function WalkInForm() {
       ) {
         throw new Error("All required fields must be filled out.");
       }
-
+  
       const now = new Date();
       const datetime = format(now, "yyyyMMdd_HHmmss");
-
+  
+      // Utility for uploading documents
       const uploadDocument = async (file, path) => {
         if (file) {
           const storageRef = ref(storage, path);
@@ -343,49 +340,45 @@ function WalkInForm() {
         }
         return null;
       };
-
+  
       const controlNumber = generateControlNumber();
-      setControlNumber(controlNumber); // Store control number in state
+      setControlNumber(controlNumber);
+  
+      // Generate control number QR code URL
       const controlNumberQrCodeUrl = await generateQrCodeImageUrl(
         controlNumber,
         "appt_qr_codes",
         controlNumber
       );
-
-      setAppointmentQrCodeUrl(controlNumberQrCodeUrl); // Store appointment QR code URL in state
-
+      setAppointmentQrCodeUrl(controlNumberQrCodeUrl);
+  
       let userQrCodeUrl = null;
-      let user = null;
-
-      if (!uid) {
-        const email =
-          userData.existingEmail === "yes"
-            ? userData.generatedEmail
-            : `${userData.display_name[0].toLowerCase()}${
-                userData.middle_name
-                  ? userData.middle_name[0].toLowerCase()
-                  : ""
-              }${userData.last_name
-                .replace(/\s+/g, "")
-                .toLowerCase()}${userData.dob.replace(/-/g, "")}@gmail.com`;
-        const password = `${userData.last_name.replace(
-          /\s+/g,
-          ""
-        )}!${userData.dob.replace(/-/g, "")}`;
-        setGeneratedEmail(email); // Store generated email in state
-        setGeneratedPassword(password); // Store generated password in state
-        user = await signUpAndAuthenticate(email, password);
-        const userQrCodeUrl = await generateQrCodeImageUrl(
-          user.uid,
-          "profile_qr_codes",
-          controlNumber
-        );
-
-        setUserQrCodeUrl(userQrCodeUrl); // Store user QR code URL in state
-        setUid(user.uid); // Set UID from newly created user
-
+      let firebaseUid = uid; // Retrieve UID if available from search term
+  
+      if (!firebaseUid) {
+        // Use provided email if available, otherwise generate one
+        const email = userData.generatedEmail
+          ? userData.generatedEmail
+          : `${userData.display_name[0].toLowerCase()}${
+              userData.middle_name ? userData.middle_name[0].toLowerCase() : ""
+            }${userData.last_name
+              .replace(/\s+/g, "")
+              .toLowerCase()}${userData.dob.replace(/-/g, "")}@gmail.com`;
+        const password = `${userData.last_name.replace(/\s+/g, "")}!${userData.dob.replace(/-/g, "")}`;
+  
+        setGeneratedEmail(email);
+        setGeneratedPassword(password);
+  
+        // Create user and retrieve Firebase UID
+        const tempAuth = getAuth();
+        const userCredential = await createUserWithEmailAndPassword(tempAuth, email, password);
+        firebaseUid = userCredential.user.uid; // Firebase-generated UID
+  
+        userQrCodeUrl = await generateQrCodeImageUrl(firebaseUid, "profile_qr_codes", firebaseUid);
+        setUserQrCodeUrl(userQrCodeUrl);
+  
+        // Populate user data to save in Firestore
         const userDataToSave = {
-          uid: user.uid,
           display_name: userData.display_name,
           middle_name: userData.middle_name,
           last_name: userData.last_name,
@@ -401,43 +394,37 @@ function WalkInForm() {
           created_time: now,
           userQrCode: userQrCodeUrl,
         };
-        await setDoc(doc(fs, "users", user.uid), userDataToSave);
+  
+        await setDoc(doc(fs, "users", firebaseUid), userDataToSave);
       }
-
-      // Validate UID
-      if (!user && !uid) {
-        throw new Error("User UID is not set. Unable to create appointment.");
-      }
-
-      const currentUid = user ? user.uid : uid;
+  
       const fullName = `${userData.display_name} ${
         userData.middle_name ? userData.middle_name + " " : ""
       }${userData.last_name}`;
-
+  
+      // Upload documents if available
       const barangayImageUrl = await uploadDocument(
         dataURItoBlob(scannedDocuments.certificateBarangay),
-        `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_barangayCertificateOfIndigency`
+        `konsulta_user_uploads/${controlNumber}/${fullName}_${controlNumber}_barangayCertificateOfIndigency`
       );
       const dswdImageUrl = await uploadDocument(
         dataURItoBlob(scannedDocuments.certificateDSWD),
-        `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_certificateDSWD.png`
+        `konsulta_user_uploads/${controlNumber}/${fullName}_${controlNumber}_certificateDSWD.png`
       );
       const paoImageUrl = await uploadDocument(
         dataURItoBlob(scannedDocuments.disqualificationLetterPAO),
-        `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_disqualificationLetterPAO.png`
+        `konsulta_user_uploads/${controlNumber}/${fullName}_${controlNumber}_disqualificationLetterPAO.png`
       );
-
+  
+      // Save appointment data in Firestore
       const appointmentData = {
         applicantProfile: {
-          uid: currentUid,
           address: userData.streetAddress,
           city: userData.city,
           childrenNamesAges: userData.childrenNamesAges,
           contactNumber: userData.phone,
           dob: userData.dob,
-          fullName: `${userData.display_name} ${
-            userData.middle_name ? userData.middle_name + " " : ""
-          }${userData.last_name}`,
+          fullName: fullName,
           selectedGender: userData.gender,
           spouseName: userData.spouseName,
           spouseOccupation: userData.spouseOccupation,
@@ -447,7 +434,6 @@ function WalkInForm() {
           controlNumber,
           apptType: "Walk-in",
           createdDate: now,
-          read: "false",
           qrCode: controlNumberQrCodeUrl,
         },
         legalAssistanceRequested: {
@@ -469,60 +455,10 @@ function WalkInForm() {
           paoImageUrl,
         },
       };
-
+  
       await setDoc(doc(fs, "appointments", controlNumber), appointmentData);
-
-      setSnackbarMessage("Walk-In form has been successfully submitted.");
-      setUserData(initialUserData);
-      setScannedDocuments(initialScannedDocuments);
-      setIsSubmissionModalOpen(true); // Show submission modal
-
-      const notificationsCollection = collection(fs, "notifications");
-
-      // Notify the newly created user or searched user
-      await addDoc(notificationsCollection, {
-        uid: currentUid,
-        message: `You have created a new appointment. Ticket# ${controlNumber}`,
-        type: "appointment",
-        read: false,
-        timestamp: now,
-      });
-
-      // Notify all head lawyers
-      const headLawyersSnapshot = await getDocs(
-        query(collection(fs, "users"), where("member_type", "==", "head"))
-      );
-      headLawyersSnapshot.forEach(async (doc) => {
-        await addDoc(notificationsCollection, {
-          uid: doc.id,
-          message: `A new appointment request has been submitted by ${
-            userData.display_name
-          } ${userData.middle_name ? userData.middle_name + " " : ""}${
-            userData.last_name
-          } with Ticket Number ${controlNumber} and is awaiting your approval.`,
-          type: "appointment",
-          read: false,
-          timestamp: now,
-        });
-      });
-
-      // Notify all frontdesk members
-      const frontDeskSnapshot = await getDocs(
-        query(collection(fs, "users"), where("member_type", "==", "frontdesk"))
-      );
-      frontDeskSnapshot.forEach(async (doc) => {
-        await addDoc(notificationsCollection, {
-          uid: doc.id,
-          message: `A new walk-in appointment has been created by ${
-            userData.display_name
-          } ${userData.middle_name ? userData.middle_name + " " : ""}${
-            userData.last_name
-          } with Ticket Number ${controlNumber}.`,
-          type: "appointment",
-          read: false,
-          timestamp: now,
-        });
-      });
+  
+      setIsSubmissionModalOpen(true);
     } catch (error) {
       console.error("Error submitting form: ", error.message);
       setSnackbarMessage(`Failed to submit form. Error: ${error.message}`);
@@ -532,6 +468,16 @@ function WalkInForm() {
       setTimeout(() => setShowSnackbar(false), 3000);
     }
   };
+  
+
+  useEffect(() => {
+    if (!userData.phone) {
+      setUserData((prevData) => ({
+        ...prevData,
+        phone: "+63",
+      }));
+    }
+  }, []);
 
   const nextStep = () => {
     if (step === 1) {
@@ -688,7 +634,7 @@ function WalkInForm() {
                   onChange={handleChange}
                   required
                 >
-                  <option value="" selected disabled>
+                  <option value="" disabled>
                     Pumili ng Lungsod (Select City/Municipality)
                   </option>
                   <option value="Angat">Angat</option>
@@ -723,7 +669,7 @@ function WalkInForm() {
                   <span style={{ color: "red", marginLeft: "5px" }}>*</span>
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   id="phone"
                   name="phone"
                   value={userData.phone}
@@ -832,7 +778,7 @@ function WalkInForm() {
                   onChange={handleChange}
                   required
                 >
-                  <option value="" selected disabled>
+                  <option value="" disabled>
                     Pumili ng Klase ng Trabaho (Select Type of Employment)
                   </option>
                   <option value="Lokal na Trabaho (Local Employer/Agency)">
@@ -913,10 +859,11 @@ function WalkInForm() {
                 <select
                   id="selectedAssistanceType"
                   name="selectedAssistanceType"
+                  value={userData.selectedAssistanceType} // Set value here
                   onChange={handleChange}
                   required
                 >
-                  <option value="" selected disabled>
+                  <option value="" disabled>
                     Nature of Legal Assistance
                   </option>
                   <option value="Payong Legal (Legal Advice)">
@@ -1180,9 +1127,11 @@ function WalkInForm() {
     }
   };
 
-  const handleModalClose = () => {
+  const navigate = useNavigate(); // Initialize navigate
+
+  const handleModalClose = async () => {
     setIsSubmissionModalOpen(false);
-    setUserData(initialUserData); // Clear the form state
+    setUserData(initialUserData); // Clear form state
     setScannedDocuments(initialScannedDocuments); // Clear scanned documents
     setControlNumber(""); // Clear control number
     setGeneratedEmail(""); // Clear generated email
@@ -1191,7 +1140,9 @@ function WalkInForm() {
     setUserQrCodeUrl(""); // Clear user QR code URL
     setUid(""); // Clear UID
     setSearchTerm(""); // Clear search term
-    window.location.reload(); // Reload the page
+
+    await signOut(auth); // Sign out the user
+    navigate("/"); // Redirect to /login
   };
 
   return (

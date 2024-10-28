@@ -10,20 +10,36 @@ import {
   orderBy,
   writeBatch,
   Timestamp,
+  limit,
+  getDocs,
+  addDoc,
 } from "firebase/firestore";
 import { format } from "date-fns"; // Import date-fns for date formatting
 import "./SideNavBar.css";
-
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { debounce } from "@mui/material";
 function SideNavBar() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
-  const navigate = useNavigate();
 
   const notificationsIconRef = useRef();
   const notificationsDropdownRef = useRef();
+  const navigate = useNavigate();
+  const auth = getAuth();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        // If user is not authenticated, redirect to the login page
+        navigate("/");
+      }
+    });
+
+    return () => unsubscribe(); // Clean up the listener on component unmount
+  }, [auth, navigate]);
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -180,9 +196,62 @@ function SideNavBar() {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
-    window.location.replace("/");
+    try {
+      const currentUser = auth.currentUser;
+  
+      if (currentUser) {
+        const loginActivityRef = collection(
+          fs,
+          "users",
+          currentUser.uid,
+          "loginActivity"
+        );
+        const loginActivityQuery = query(
+          loginActivityRef,
+          orderBy("loginTime", "desc"),
+          limit(1) // Get the latest login activity
+        );
+        const loginActivitySnapshot = await getDocs(loginActivityQuery);
+  
+        let ipAddress = "Unknown"; // Default value
+        let deviceName = "Unknown"; // Default value
+        let location = "Unknown"; // Default value (if you want to capture location too)
+  
+        // Check if the snapshot is not empty
+        if (!loginActivitySnapshot.empty) {
+          const loginData = loginActivitySnapshot.docs[0].data();
+          ipAddress = loginData.ipAddress || "Unknown";
+          deviceName = loginData.deviceName || "Unknown";
+          location = loginData.location || "Unknown"; // Capture location if needed
+        } else {
+          console.warn("No login activity found for the current user.");
+        }
+  
+        const auditLogEntry = {
+          actionType: "ACCESS",
+          timestamp: new Date(),
+          uid: currentUser.uid,
+          changes: { action: "Logout", status: "Success" },
+          affectedData: {
+            userId: currentUser.uid,
+            userName: currentUser.displayName || "Unknown",
+          },
+          metadata: { ipAddress, userAgent: deviceName, location }, // Log the IP address, device name, and location
+        };
+  
+        const auditLogsRef = collection(fs, "audit_logs");
+        await addDoc(auditLogsRef, auditLogEntry); // Log the audit entry
+  
+        await signOut(auth); // Perform logout
+        window.location.replace("/"); // Redirect after logout
+      } else {
+        console.error("No user is currently signed in.");
+      }
+    } catch (error) {
+      console.error("Error during logout:", error);
+    }
   };
+  
 
   const handleNotificationsClick = async () => {
     setShowNotifications((prevState) => !prevState);
@@ -249,15 +318,6 @@ function SideNavBar() {
         ) : (
           <div className="member-type">User data not available</div>
         )}
-        <Link to="/profile">
-          <span
-            className="material-icons icon"
-            data-tooltip-id="tooltip-profile"
-            data-tooltip-content="Profile"
-          >
-            person
-          </span>
-        </Link>
 
         <span
           className="material-icons icon"
@@ -269,6 +329,25 @@ function SideNavBar() {
           notifications
           {unreadCount > 0 && (
             <span className="notification-badge">{unreadCount}</span> // Show the badge only if unreadCount > 0
+          )}
+        </span>
+        <span
+          className="material-icons icon"
+          data-tooltip-id="tooltip-profile"
+          data-tooltip-content="Profile"
+          onClick={() => (window.location.href = "/profile")}
+        >
+          person
+        </span>
+        <span
+          className="material-icons icon"
+          data-tooltip-id="tooltip-settings"
+          data-tooltip-content="Settings"
+          onClick={() => (window.location.href = "/settings")}
+        >
+          settings
+          {unreadCount > 0 && (
+            <span className="settings">{unreadCount}</span> // Show the badge only if unreadCount > 0
           )}
         </span>
 
@@ -350,15 +429,6 @@ function SideNavBar() {
                     className={({ isActive }) => (isActive ? "active" : "")}
                   >
                     Users
-                  </NavLink>
-                </li>
-                {/* Add the Audit Logs link for admin users */}
-                <li>
-                  <NavLink
-                    to="/auditLogs"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                  >
-                    Audit Logs
                   </NavLink>
                 </li>
               </>
@@ -457,6 +527,7 @@ function SideNavBar() {
         style={{ backgroundColor: "black", color: "white" }}
       />
       <Tooltip id="tooltip-profile" />
+      <Tooltip id="tooltip-settings" />
       <Tooltip id="tooltip-notifications" />
       <Tooltip id="tooltip-logout" />
     </>

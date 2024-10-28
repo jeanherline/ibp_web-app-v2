@@ -13,6 +13,8 @@ import { fs, auth } from "../../Config/Firebase";
 import ibpLogo from "../../Assets/img/ibp_logo.png";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faVideo, faCheck } from "@fortawesome/free-solid-svg-icons"; // Import the video icon
+import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
+import { useNavigate } from "react-router-dom";
 
 const localizer = momentLocalizer(moment);
 
@@ -25,7 +27,20 @@ function CalendarLawyer() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentImageUrl, setCurrentImageUrl] = useState("");
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
+  const navigate = useNavigate();
+  const auth = getAuth();
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        // If user is not authenticated, redirect to the login page
+        navigate("/");
+      }
+    });
+
+    return () => unsubscribe(); // Clean up the listener on component unmount
+  }, [auth, navigate]);
+  
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
   };
@@ -271,7 +286,7 @@ function CalendarLawyer() {
 
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
-      <div class="header">
+      <div className="header">
         <img src="${ibpLogo}" alt="IBP Logo" />
         <h2>Integrated Bar of the Philippines - Malolos</h2>
         ${
@@ -289,9 +304,9 @@ function CalendarLawyer() {
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
       if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div class='page-break'></div>");
+        printWindow.document.write("<div className='page-break'></div>");
         printWindow.document.write(
-          `<img src='${image.src}' class='print-image' />`
+          `<img src='${image.src}' className='print-image' />`
         );
       }
     });

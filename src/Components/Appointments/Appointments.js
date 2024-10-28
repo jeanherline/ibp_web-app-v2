@@ -6,35 +6,33 @@ import ReactDatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Pagination from "react-bootstrap/Pagination";
 import {
+  getAdminAppointments,
   updateAppointment,
   getBookedSlots,
   getUserById,
   getUsers,
   sendNotification,
   getHeadLawyerUid,
-  getAppointments,
 } from "../../Config/FirebaseServices";
-import { useAuth } from "../../AuthContext";
-import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
+import { useAuth } from "../../contexts/AuthContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { fs, auth, signInWithGoogle } from "../../Config/Firebase";
 import {
+  addDoc,
+  collection,
+  query,
+  where,
   doc,
   getDoc,
+  getDocs,
   updateDoc,
   Timestamp,
-  collection,
-  where,
-  query,
   orderBy,
-  startAfter,
-  endBefore,
   limit,
-  limitToLast,
-  getDocs,
-  getCountFromServer,
 } from "firebase/firestore"; // Add these imports for Firestore
-
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
 import {
   faEye,
   faCheck,
@@ -50,7 +48,7 @@ function Appointments() {
   const [filter, setFilter] = useState("all");
   const [searchText, setSearchText] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
   const [lastVisible, setLastVisible] = useState(null);
   const pageSize = 7;
   const [clientAttend, setClientAttend] = useState(null);
@@ -87,7 +85,18 @@ function Appointments() {
   const [holidays, setHolidays] = useState([]);
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
-  const [pageMarkers, setPageMarkers] = useState([]);
+  const navigate = useNavigate();
+  const auth = getAuth();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        navigate("/");
+      }
+    });
+
+    return () => unsubscribe(); // Clean up the listener on component unmount
+  }, [auth, navigate]);
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
@@ -107,8 +116,6 @@ function Appointments() {
 
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
-
-    console.log("Selected Appointment Date: ", appointmentDate);
 
     if (!appointmentDate || !appointmentType) {
       setSnackbarMessage("Appointment date and type are required.");
@@ -133,7 +140,7 @@ function Appointments() {
       "appointmentDetails.apptType": appointmentType,
       ...(meetingLink && {
         "appointmentDetails.meetingLink": meetingLink,
-        "appointmentDetails.meetingPass": meetingPass,
+        "appointmentDetails.meetingPass": meetingPass, // Save the password
       }),
     };
 
@@ -149,19 +156,20 @@ function Appointments() {
         : "Assigned Lawyer Not Available";
 
       // Send notifications to the client, assigned lawyer, and head lawyer
-      await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been scheduled a date and as an ${appointmentType} appointment.`,
-        selectedAppointment.uid,
-        "appointment",
-        selectedAppointment.controlNumber
-      );
+      if (selectedAppointment.uid && selectedAppointment.controlNumber) {
+        await sendNotification(
+          `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
+          selectedAppointment.uid,
+          "appointment",
+          selectedAppointment.controlNumber
+        );
+      }
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
           `You have scheduled the appointment (ID: ${appointmentId}) for ${clientFullName} in the date provided as an ${appointmentType} appointment.`,
           assignedLawyerDetails.uid,
-          "appointment",
-          selectedAppointment.controlNumber
+          "appointment"
         );
       }
 
@@ -171,10 +179,88 @@ function Appointments() {
         await sendNotification(
           `The appointment (ID: ${appointmentId}) for ${clientFullName} has been scheduled a date and as an ${appointmentType} appointment.`,
           headLawyerUid,
-          "appointment",
-          selectedAppointment.controlNumber
+          "appointment"
         );
       }
+
+      // Fetch latest login activity for metadata
+      const loginActivitySnapshot = await getDocs(
+        query(
+          collection(fs, "users", currentUser.uid, "loginActivity"),
+          orderBy("loginTime", "desc"),
+          limit(1)
+        )
+      );
+
+      let ipAddress = "Unknown";
+      let deviceName = "Unknown";
+
+      if (!loginActivitySnapshot.empty) {
+        const loginData = loginActivitySnapshot.docs[0].data();
+        ipAddress = loginData.ipAddress || "Unknown";
+        deviceName = loginData.deviceName || "Unknown";
+      }
+
+      // Prepare audit log entry
+      const auditLogEntry = {
+        actionType: "UPDATE",
+        timestamp: new Date(),
+        uid: currentUser.uid,
+        changes: {
+          appointmentDate: selectedAppointment.appointmentDetails
+            ?.appointmentDate
+            ? {
+                oldValue:
+                  selectedAppointment.appointmentDetails?.appointmentDate,
+                newValue: appointmentDate,
+              }
+            : null,
+          appointmentType: selectedAppointment.appointmentDetails?.apptType
+            ? {
+                oldValue: selectedAppointment.appointmentDetails?.apptType,
+                newValue: appointmentType,
+              }
+            : null,
+          appointmentStatus: selectedAppointment.appointmentDetails
+            ?.appointmentStatus
+            ? {
+                oldValue:
+                  selectedAppointment.appointmentDetails?.appointmentStatus,
+                newValue: "scheduled",
+              }
+            : null,
+          ...(meetingLink && {
+            meetingLink: {
+              oldValue:
+                selectedAppointment.appointmentDetails?.meetingLink || null,
+              newValue: meetingLink,
+            },
+            meetingPass: {
+              oldValue:
+                selectedAppointment.appointmentDetails?.meetingPass || null,
+              newValue: meetingPass,
+            },
+          }),
+        },
+        affectedData: {
+          appointmentId: appointmentId,
+          clientFullName: clientFullName,
+        },
+        metadata: {
+          ipAddress: ipAddress,
+          userAgent: deviceName,
+        },
+      };
+
+      // Remove any null entries in the `changes` map
+      Object.keys(auditLogEntry.changes).forEach(
+        (key) =>
+          auditLogEntry.changes[key] === null &&
+          delete auditLogEntry.changes[key]
+      );
+
+      // Add audit log entry
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
 
       // Update the appointments state directly for immediate UI update
       setAppointments((prevAppointments) =>
@@ -335,7 +421,7 @@ function Appointments() {
 
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
-      <div class="header">
+      <div className="header">
         <img src="${ibpLogo}" alt="IBP Logo" />
         <h2>Integrated Bar of the Philippines - Malolos</h2>
         ${
@@ -353,9 +439,9 @@ function Appointments() {
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
       if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div class='page-break'></div>");
+        printWindow.document.write("<div className='page-break'></div>");
         printWindow.document.write(
-          `<img src='${image.src}' class='print-image' />`
+          `<img src='${image.src}' className='print-image' />`
         );
       }
     });
@@ -381,30 +467,34 @@ function Appointments() {
   }, []);
 
   useEffect(() => {
-    if (searchText) {
-      fetchAppointments(true); // Fetch all appointments if search text is entered
-    } else {
-      resetPagination();
-    }
-  }, [searchText]);
+    const unsubscribe = getAdminAppointments(
+      filter,
+      lastVisible,
+      pageSize,
+      searchText,
+      natureOfLegalAssistanceFilter,
+      (result) => {
+        const { data, total } = result;
+        setAppointments(data);
+        setTotalFilteredItems(total);
 
+        const calculatedTotalPages = Math.ceil(total / pageSize);
+        setTotalPages(calculatedTotalPages); // Ensure total pages are calculated properly
+      }
+    );
 
-
-  const currentData = appointments.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
-
-  const resetPagination = async () => {
-    setCurrentPage(1); // Reset current page to 1
-    setLastVisible(null); // Reset lastVisible to null to fetch from the first page
-    await fetchAppointments(); // Fetch appointments for the first page
-  };
-
-  useEffect(() => {
-    resetPagination();
-  }, [searchText, filter, natureOfLegalAssistanceFilter]);
-  
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, [
+    filter,
+    lastVisible,
+    searchText,
+    natureOfLegalAssistanceFilter,
+    pageSize,
+  ]);
 
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
@@ -422,15 +512,15 @@ function Appointments() {
   }, [filter]);
 
   useEffect(() => {
-    const fetchReviewerDetails = async (reviewedBy) => {
-      if (reviewedBy) {
-        const userData = await getUserById(reviewedBy);
+    const fetchReviewerDetails = async (reviewefsy) => {
+      if (reviewefsy) {
+        const userData = await getUserById(reviewefsy);
         setReviewerDetails(userData);
       }
     };
 
-    if (selectedAppointment?.appointmentDetails?.reviewedBy) {
-      fetchReviewerDetails(selectedAppointment.appointmentDetails.reviewedBy);
+    if (selectedAppointment?.appointmentDetails?.reviewefsy) {
+      fetchReviewerDetails(selectedAppointment.appointmentDetails.reviewefsy);
     }
   }, [selectedAppointment]);
 
@@ -510,109 +600,69 @@ function Appointments() {
     const dateTime = new Date(appointmentDate);
     dateTime.setHours(hours, minutes, 0, 0);
 
-    return !isSlotBookedByAssignedLawyer(dateTime);
+    return !isSlotBookefsyAssignedLawyer(dateTime);
   };
 
-  // Pagination handlers
-  const handleNext = async () => {
-    if (currentPage < totalPages) {
-      const { data, lastDoc } = await getAppointments(
-        filter,
-        lastVisible,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setLastVisible(lastDoc);
-      setCurrentPage(currentPage + 1);
-    }
-  };
-  
-  const handlePrevious = async () => {
-    if (currentPage > 1) {
-      const { data, firstDoc } = await getAppointments(
-        filter,
-        lastVisible,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter,
-        true // isPrevious flag for going back
-      );
-      setAppointments(data);
-      setLastVisible(firstDoc);
-      setCurrentPage(currentPage - 1);
-    }
-  };
-  
-  const handleFirst = async () => {
-    setLastVisible(null); // Reset to fetch from the start
-    setPageMarkers([]); // Clear page markers
-    await fetchAppointments(null, "next");
-    setCurrentPage(1);
-  };
-
-  const handleLast = async () => {
-    // Implement logic to fetch the last page if needed
-    setCurrentPage(totalPages);
-  };
-
-  const fetchAppointments = async (resetPagination = false) => {
+  const handlePageChange = async (pageIndex) => {
     try {
-      let q = query(
-        collection(fs, "appointments"),
-        where("appointmentDetails.appointmentStatus", "in", [filter]), // Use filter for status
-        orderBy("appointmentDetails.appointmentDate", "desc"), // Order by date
-        limit(pageSize) // Limit to page size
-      );
-  
-      if (searchText) {
-        q = query(
-          collection(fs, "appointments"),
-          where("applicantProfile.fullName", ">=", searchText),
-          where("applicantProfile.fullName", "<=", searchText + "\uf8ff"),
-          limit(pageSize)
+      let queryRef = collection(fs, "appointments");
+
+      // Apply filters (status, search text, legal assistance type)
+      if (filter && filter !== "all") {
+        queryRef = query(
+          queryRef,
+          where("appointmentDetails.appointmentStatus", "==", filter)
         );
       }
-  
-      if (!resetPagination && lastVisible) {
-        q = query(q, startAfter(lastVisible));
+
+      if (searchText) {
+        const searchLower = searchText.toLowerCase(); // Case-insensitive search
+        queryRef = query(
+          queryRef,
+          where("applicantProfile.fullNameLower", ">=", searchLower),
+          where("applicantProfile.fullNameLower", "<=", searchLower + "\uf8ff")
+        );
       }
-  
-      const querySnapshot = await getDocs(q);
-  
-      const appointmentsData = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-  
-      setAppointments(appointmentsData);
-  
-      if (!resetPagination && querySnapshot.docs.length > 0) {
-        setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
-      }
+
+      // Fetch the documents
+      const snapshot = await getDocs(queryRef);
+
+      const appointments = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+        };
+      });
+
+      setAppointments(appointments);
+      setCurrentPage(pageIndex);
+      setLastVisible(snapshot.docs[snapshot.docs.length - 1]); // Update the last visible doc for pagination
     } catch (error) {
       console.error("Error fetching appointments:", error);
     }
   };
 
-  // Reset pagination when filters or searchText change
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      const { data, total } = await getAppointments(
-        filter,
-        null,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter
-      );
-      setAppointments(data);
-      setTotalPages(Math.ceil(total / pageSize));
-      setTotalFilteredItems(total);
-    };
+  const handleFirst = async () => {
+    handlePageChange(1); // Navigate to the first page
+  };
 
-    fetchAppointments();
-  }, [filter, searchText, natureOfLegalAssistanceFilter]);
+  const handleLast = async () => {
+    const totalPages = Math.ceil(totalFilteredItems / pageSize);
+    handlePageChange(totalPages); // Navigate to the last page
+  };
+
+  const handleNext = async () => {
+    if (currentPage < totalPages) {
+      handlePageChange(currentPage + 1); // Navigate to the next page
+    }
+  };
+
+  const handlePrevious = async () => {
+    if (currentPage > 1) {
+      handlePageChange(currentPage - 1); // Navigate to the previous page
+    }
+  };
 
   const toggleDetails = (appointment) => {
     console.log("Selected Appointment: ", appointment);
@@ -688,6 +738,25 @@ function Appointments() {
     setRescheduleReason(e.target.value);
   };
 
+  const fetchLatestLoginActivity = async (uid) => {
+    const loginActivityRef = collection(fs, "users", uid, "loginActivity");
+    const loginActivityQuery = query(
+      loginActivityRef,
+      orderBy("loginTime", "desc"),
+      limit(1)
+    );
+    const loginActivitySnapshot = await getDocs(loginActivityQuery);
+
+    if (!loginActivitySnapshot.empty) {
+      const activityData = loginActivitySnapshot.docs[0].data();
+      return {
+        ipAddress: activityData.ipAddress || "Unknown",
+        deviceName: activityData.deviceName || "Unknown",
+      };
+    }
+    return { ipAddress: "Unknown", deviceName: "Unknown" };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -695,23 +764,104 @@ function Appointments() {
     setIsSubmitting(true);
 
     try {
+      // Get selected lawyer's full name
+      const selectedLawyer = lawyers.find(
+        (lawyer) => lawyer.uid === clientEligibility.assistingCounsel
+      );
+      const lawyerFullName = selectedLawyer
+        ? `${selectedLawyer.display_name} ${selectedLawyer.middle_name} ${selectedLawyer.last_name}`
+        : "Not Available";
+
       const updatedData = {
         "clientEligibility.eligibility": clientEligibility.eligibility,
         "appointmentDetails.appointmentStatus":
           clientEligibility.eligibility === "yes" ? "approved" : "denied",
         "clientEligibility.denialReason": clientEligibility.denialReason,
+        "clientEligibility.notes": clientEligibility.notes,
+        "appointmentDetails.assignedLawyer": clientEligibility.assistingCounsel,
+        "appointmentDetails.assignedLawyerFullName": lawyerFullName,
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
       };
 
       await updateAppointment(selectedAppointment.id, updatedData);
+
+      // Fetch latest login activity
+      const { ipAddress, deviceName } = await fetchLatestLoginActivity(
+        currentUser.uid
+      );
+
+      // Prepare audit log with checks for undefined fields
+      const auditLogEntry = {
+        actionType: "UPDATE",
+        timestamp: new Date(),
+        uid: currentUser.uid,
+        changes: {
+          eligibility:
+            selectedAppointment.clientEligibility?.eligibility !== undefined
+              ? {
+                  oldValue: selectedAppointment.clientEligibility.eligibility,
+                  newValue: clientEligibility.eligibility,
+                }
+              : null,
+          appointmentStatus:
+            selectedAppointment.appointmentDetails?.appointmentStatus !==
+            undefined
+              ? {
+                  oldValue:
+                    selectedAppointment.appointmentDetails.appointmentStatus,
+                  newValue:
+                    clientEligibility.eligibility === "yes"
+                      ? "approved"
+                      : "denied",
+                }
+              : null,
+          denialReason:
+            selectedAppointment.clientEligibility?.denialReason !== undefined
+              ? {
+                  oldValue: selectedAppointment.clientEligibility.denialReason,
+                  newValue: clientEligibility.denialReason,
+                }
+              : null,
+          updatedTime:
+            selectedAppointment.appointmentDetails?.updatedTime !== undefined
+              ? {
+                  oldValue: selectedAppointment.appointmentDetails.updatedTime,
+                  newValue: Timestamp.fromDate(new Date()),
+                }
+              : null,
+        },
+        affectedData: { appointmentId: selectedAppointment.id },
+        metadata: { ipAddress, userAgent: deviceName },
+      };
+
+      // Remove any null entries in the `changes` map
+      Object.keys(auditLogEntry.changes).forEach(
+        (key) =>
+          auditLogEntry.changes[key] === undefined &&
+          delete auditLogEntry.changes[key]
+      );
+
+      // Add audit log entry
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
+
       setSnackbarMessage("Form has been successfully submitted.");
       setSelectedAppointment(null);
     } catch (error) {
+      console.error("Error submitting form:", error);
       setSnackbarMessage("Error submitting form, please try again.");
     } finally {
       setIsSubmitting(false);
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
+      // Reset form fields
+      setClientEligibility({
+        eligibility: "",
+        denialReason: "",
+        notes: "",
+        ibpParalegalStaff: "",
+        assistingCounsel: "",
+      });
+      setSelectedAppointment(null);
     }
   };
 
@@ -726,12 +876,12 @@ function Appointments() {
 
       // Check if a file is selected and upload it to Firebase Storage
       if (proceedingFile) {
-        const currentUid = currentUser.uid; // Current user's UID
-        const controlNumber = selectedAppointment.controlNumber; // Get control number from selected appointment
-        const fullName = selectedAppointment.fullName.replace(/ /g, "_"); // Replace spaces with underscores in full name
+        const currentUid = currentUser.uid;
+        const controlNumber = selectedAppointment.controlNumber;
+        const fullName = selectedAppointment.fullName.replace(/ /g, "_");
 
         // Get Firebase storage reference
-        const storage = getStorage(); // Initialize Firebase Storage
+        const storage = getStorage();
         const fileRef = ref(
           storage,
           `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
@@ -739,8 +889,11 @@ function Appointments() {
 
         // Upload the file
         await uploadBytes(fileRef, proceedingFile);
-        fileUrl = await getDownloadURL(fileRef); // Get the download URL after upload
+        fileUrl = await getDownloadURL(fileRef);
       }
+
+      // Determine appointment status based on client attendance
+      const appointmentStatus = clientAttend === "yes" ? "done" : "missed";
 
       // Update appointment data in Firestore
       const updatedData = {
@@ -749,19 +902,103 @@ function Appointments() {
           clientEligibility.ibpParalegalStaff,
         "appointmentDetails.assistingCounsel":
           clientEligibility.assistingCounsel,
-        "appointmentDetails.appointmentStatus": "done",
+        "appointmentDetails.appointmentStatus": appointmentStatus,
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
-        "uploadedImages.proceedingFileUrl": fileUrl,
+        "appointmentDetails.proceedingFileUrl": fileUrl,
       };
 
-      // Update the appointment document in Firestore with the proceeding notes and file URL
       await updateAppointment(selectedAppointment.id, updatedData);
 
+      // Fetch latest login activity for metadata
+      const loginActivitySnapshot = await getDocs(
+        query(
+          collection(fs, "users", currentUser.uid, "loginActivity"),
+          orderBy("loginTime", "desc"),
+          limit(1)
+        )
+      );
+
+      let ipAddress = "Unknown";
+      let deviceName = "Unknown";
+
+      if (!loginActivitySnapshot.empty) {
+        const loginData = loginActivitySnapshot.docs[0].data();
+        ipAddress = loginData.ipAddress || "Unknown";
+        deviceName = loginData.deviceName || "Unknown";
+      }
+
+      // Add audit log entry
+      const auditLogEntry = {
+        actionType: "UPDATE",
+        timestamp: new Date(),
+        uid: currentUser.uid,
+        changes: {
+          proceedingNotes: selectedAppointment.appointmentDetails?.proceedingNotes
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.proceedingNotes,
+                newValue: proceedingNotes,
+              }
+            : null,
+          ibpParalegalStaff: selectedAppointment.appointmentDetails?.ibpParalegalStaff
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.ibpParalegalStaff,
+                newValue: clientEligibility.ibpParalegalStaff,
+              }
+            : null,
+          assistingCounsel: selectedAppointment.appointmentDetails?.assistingCounsel
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.assistingCounsel,
+                newValue: clientEligibility.assistingCounsel,
+              }
+            : null,
+          appointmentStatus: selectedAppointment.appointmentDetails?.appointmentStatus
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.appointmentStatus,
+                newValue: appointmentStatus,
+              }
+            : null,
+          clientAttend: selectedAppointment.appointmentDetails?.clientAttend
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.clientAttend,
+                newValue: clientAttend,
+              }
+            : null,
+          proceedingFileUrl: selectedAppointment.appointmentDetails?.proceedingFileUrl
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.proceedingFileUrl,
+                newValue: fileUrl,
+              }
+            : null,
+          updatedTime: selectedAppointment.appointmentDetails?.updatedTime
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.updatedTime,
+                newValue: Timestamp.fromDate(new Date()),
+              }
+            : null,
+        },
+        affectedData: {
+          appointmentId: selectedAppointment.id,
+          clientFullName: selectedAppointment.fullName,
+        },
+        metadata: {
+          ipAddress: ipAddress,
+          userAgent: deviceName,
+        },
+      };
+      
+      // Remove any null entries in the `changes` map
+      Object.keys(auditLogEntry.changes).forEach(
+        (key) => auditLogEntry.changes[key] === null && delete auditLogEntry.changes[key]
+      );
+      
+      // Add audit log entry to Firestore
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
+      
       // Notify success and reset form values
       setSnackbarMessage("Remarks have been successfully submitted.");
-      setProceedingNotes(""); // Reset proceeding notes
-      setProceedingFile(null); // Reset file input
+      setProceedingNotes("");
+      setProceedingFile(null);
       setClientAttend(null);
       setClientEligibility({
         ...clientEligibility,
@@ -769,34 +1006,66 @@ function Appointments() {
         assistingCounsel: "",
       });
 
-      // Send notifications as needed
+      // Send notifications based on appointment status
       const clientFullName = selectedAppointment.fullName;
       const appointmentId = selectedAppointment.id;
+      const appointmentDateFormatted = getFormattedDate(appointmentDate, true);
+      if (appointmentStatus === "done") {
+        if (selectedAppointment.uid && selectedAppointment.controlNumber) {
+          await sendNotification(
+            `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
+            selectedAppointment.uid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
 
-      await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been marked as done.`,
-        selectedAppointment.uid,
-        "appointment",
-        selectedAppointment.controlNumber
-      );
+        if (assignedLawyerDetails?.uid) {
+          await sendNotification(
+            `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
+            assignedLawyerDetails.uid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
 
-      if (assignedLawyerDetails?.uid) {
-        await sendNotification(
-          `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
-          assignedLawyerDetails.uid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
+        const headLawyerUid = await getHeadLawyerUid();
+        if (headLawyerUid) {
+          await sendNotification(
+            `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as done.`,
+            headLawyerUid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
+      } else {
+        if (selectedAppointment.uid && selectedAppointment.controlNumber) {
+          await sendNotification(
+            `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
+            selectedAppointment.uid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
 
-      const headLawyerUid = await getHeadLawyerUid();
-      if (headLawyerUid) {
-        await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as done.`,
-          headLawyerUid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
+        if (assignedLawyerDetails?.uid) {
+          await sendNotification(
+            `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as missed.`,
+            assignedLawyerDetails.uid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
+
+        const headLawyerUid = await getHeadLawyerUid();
+        if (headLawyerUid) {
+          await sendNotification(
+            `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as missed.`,
+            headLawyerUid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
       }
 
       // Optionally close the form/modal after successful submission
@@ -863,23 +1132,25 @@ function Appointments() {
     };
 
     try {
-      // Save the updated appointment information first
+      // Save the updated appointment information
       await updateDoc(appointmentRef, updatedData);
 
       const clientFullName = selectedAppointment.fullName;
       const appointmentId = selectedAppointment.id;
-
+      const appointmentDateFormatted = getFormattedDate(appointmentDate, true);
       const lawyerFullName = assignedLawyerDetails
         ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
         : "Assigned Lawyer Not Available";
 
       // Send notifications after successfully updating Firestore
-      await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
-        selectedAppointment.uid,
-        "appointment",
-        selectedAppointment.controlNumber
-      );
+      if (selectedAppointment.uid && selectedAppointment.controlNumber) {
+        await sendNotification(
+          `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
+          selectedAppointment.uid,
+          "appointment",
+          selectedAppointment.controlNumber
+        );
+      }
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
@@ -900,6 +1171,81 @@ function Appointments() {
         );
       }
 
+      // Fetch latest login activity for metadata
+      const loginActivitySnapshot = await getDocs(
+        query(
+          collection(fs, "users", currentUser.uid, "loginActivity"),
+          orderBy("loginTime", "desc"),
+          limit(1)
+        )
+      );
+
+      let ipAddress = "Unknown";
+      let deviceName = "Unknown";
+
+      if (!loginActivitySnapshot.empty) {
+        const loginData = loginActivitySnapshot.docs[0].data();
+        ipAddress = loginData.ipAddress || "Unknown";
+        deviceName = loginData.deviceName || "Unknown";
+      }
+      const auditLogEntry = {
+        actionType: "UPDATE",
+        timestamp: new Date(),
+        uid: currentUser.uid,
+        changes: {
+          appointmentDate: selectedAppointment.appointmentDetails?.appointmentDate
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.appointmentDate,
+                newValue: rescheduleDate,
+              }
+            : null,
+          apptType: selectedAppointment.appointmentDetails?.apptType
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.apptType,
+                newValue: rescheduleAppointmentType,
+              }
+            : null,
+          rescheduleReason: {
+            oldValue: null,
+            newValue: rescheduleReason,
+          },
+          meetingLink: selectedAppointment.appointmentDetails?.meetingLink
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.meetingLink,
+                newValue: meetingLink,
+              }
+            : null,
+          meetingPass: selectedAppointment.appointmentDetails?.meetingPass
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.meetingPass,
+                newValue: meetingPass,
+              }
+            : null,
+          updatedTime: selectedAppointment.appointmentDetails?.updatedTime
+            ? {
+                oldValue: selectedAppointment.appointmentDetails.updatedTime,
+                newValue: Timestamp.fromDate(new Date()),
+              }
+            : null,
+        },
+        affectedData: {
+          appointmentId: appointmentId,
+          clientFullName: clientFullName,
+        },
+        metadata: {
+          ipAddress: ipAddress,
+          userAgent: deviceName,
+        },
+      };
+      
+      // Remove any null entries in the `changes` map
+      Object.keys(auditLogEntry.changes).forEach(
+        (key) => auditLogEntry.changes[key] === null && delete auditLogEntry.changes[key]
+      );
+      
+      // Add audit log entry to Firestore
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
+      
       setAppointments((prevAppointments) =>
         prevAppointments.map((appt) =>
           appt.id === selectedAppointment.id
@@ -926,22 +1272,17 @@ function Appointments() {
   };
 
   const getFormattedDate = (timestamp, includeTime = false) => {
-    if (!timestamp) {
-      console.error("Invalid timestamp:", timestamp);
-      return "N/A";
+    if (!timestamp || !(timestamp instanceof Timestamp)) {
+      console.warn("Invalid or undefined timestamp:", timestamp);
+      return "N/A"; // Return a default value if timestamp is undefined or invalid
     }
-
-    // Check if timestamp is a valid Firebase Timestamp or Date object
-    const date =
-      timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
-
+    const date = timestamp.toDate();
     const options = { year: "numeric", month: "long", day: "numeric" };
     if (includeTime) {
       options.hour = "numeric";
       options.minute = "numeric";
       options.hour12 = true;
     }
-
     return date.toLocaleString("en-US", options);
   };
 
@@ -980,7 +1321,7 @@ function Appointments() {
     dateTime.setHours(hours, time.getMinutes(), 0, 0);
 
     // Check if the slot is already booked
-    if (isSlotBookedByAssignedLawyer(dateTime)) {
+    if (isSlotBookefsyAssignedLawyer(dateTime)) {
       return "booked-time disabled-time"; // Mark the slot as booked and disable it
     }
 
@@ -998,10 +1339,10 @@ function Appointments() {
     const dateTime = new Date(rescheduleDate);
     dateTime.setHours(hours, minutes, 0, 0);
 
-    return !isSlotBookedByAssignedLawyer(dateTime);
+    return !isSlotBookefsyAssignedLawyer(dateTime);
   };
 
-  const isSlotBookedByAssignedLawyer = (dateTime) => {
+  const isSlotBookefsyAssignedLawyer = (dateTime) => {
     return appointments.some((appointment) => {
       const appointmentDate = appointment.appointmentDetails?.appointmentDate;
       const assignedLawyer = appointment.appointmentDetails?.assignedLawyer;
@@ -1014,7 +1355,7 @@ function Appointments() {
     });
   };
 
-  const isSlotBookedByCurrentUser = (dateTime) => {
+  const isSlotBookefsyCurrentUser = (dateTime) => {
     return bookedSlots.some(
       (slot) =>
         slot.getDate() === dateTime.getDate() &&
@@ -1038,7 +1379,7 @@ function Appointments() {
     dateTime.setHours(hours, time.getMinutes(), 0, 0);
 
     // Check if the slot is booked by the assigned lawyer
-    if (isSlotBookedByAssignedLawyer(dateTime)) {
+    if (isSlotBookefsyAssignedLawyer(dateTime)) {
       return "booked-time disabled-time"; // Apply class for booked slots
     }
 
@@ -1050,7 +1391,7 @@ function Appointments() {
     setSearchText("");
     setNatureOfLegalAssistanceFilter("all");
     setLastVisible(null);
-    setCurrentPage(1);
+    setCurrentPage(1); // Reset to first page
   };
 
   if (!currentUser) {
@@ -1079,7 +1420,6 @@ function Appointments() {
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
           <option value="all">Status</option>
-          <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="scheduled">Scheduled</option>
           <option value="denied">Denied</option>
@@ -1105,7 +1445,7 @@ function Appointments() {
         <button onClick={resetFilters}>Reset Filters</button>
         <br />
         <p>Total Filtered Items: {totalFilteredItems}</p>
-        <table class="flexible-table">
+        <table className="table table-striped table-bordered">
           <thead>
             <tr>
               <th>#</th>
@@ -1120,16 +1460,17 @@ function Appointments() {
             </tr>
           </thead>
           <tbody>
-            {currentData.length > 0 ? (
-              currentData.map((appointment, index) => (
+            {appointments && appointments.length > 0 ? (
+              appointments.map((appointment, index) => (
                 <tr key={appointment.id}>
                   <td>{(currentPage - 1) * pageSize + index + 1}.</td>
-                  <td>{appointment.controlNumber || "N/A"}</td>
-                  <td>{appointment.fullName || "N/A"}</td>
-                  <td>{appointment.selectedAssistanceType || "N/A"}</td>
+                  <td>{appointment.controlNumber}</td>
+                  <td>{appointment.fullName}</td>
+                  <td>{appointment.selectedAssistanceType}</td>
                   <td>
-                    {getFormattedDate(appointment.appointmentDate, true) ||
-                      "N/A"}
+                    {appointment.appointmentDate
+                      ? getFormattedDate(appointment.appointmentDate, true)
+                      : "N/A"}
                   </td>
                   <td>
                     {capitalizeFirstLetter(
@@ -1138,47 +1479,13 @@ function Appointments() {
                   </td>
                   <td>
                     {capitalizeFirstLetter(
-                      appointment.appointmentDetails?.appointmentStatus || "N/A"
+                      appointment.appointmentDetails?.appointmentStatus
                     )}
                   </td>
                   <td>
-                    {appointment.appointmentDetails?.apptType === "Online" ? (
-                      appointment.appointmentDetails?.appointmentStatus ===
-                      "done" ? (
-                        // Appointment is done, show "Done" with a check icon
-                        <button
-                          style={{
-                            backgroundColor: "#1DB954", // Green background for "Done"
-                            color: "white",
-                            border: "none",
-                            padding: "5px 8px",
-                            cursor: "not-allowed",
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                          disabled // Make the button unclickable
-                        >
-                          <FontAwesomeIcon
-                            icon={faCheck}
-                            style={{ marginRight: "8px" }}
-                          />
-                          Done
-                        </button>
-                      ) : appointment.clientAttend === "no" ? (
-                        // If client didn't attend, show "Unavailable" with a red background
-                        <button
-                          style={{
-                            backgroundColor: "#dc3545", // Red background for "Unavailable"
-                            color: "white",
-                            border: "none",
-                            padding: "5px 8px",
-                            cursor: "not-allowed",
-                          }}
-                          disabled // Make the button unclickable
-                        >
-                          Unavailable
-                        </button>
-                      ) : (
+                    {appointment.appointmentDetails?.apptType === "Online" &&
+                    appointment.appointmentDetails?.meetingLink ? (
+                      <>
                         <button
                           onClick={() =>
                             window.open(
@@ -1187,7 +1494,7 @@ function Appointments() {
                             )
                           }
                           style={{
-                            backgroundColor: "#28a745",
+                            backgroundColor: "#28a745", // Change button color to green
                             color: "white",
                             border: "none",
                             padding: "5px 8px",
@@ -1202,12 +1509,11 @@ function Appointments() {
                           />
                           Join Meeting
                         </button>
-                      )
+                      </>
                     ) : (
                       "N/A"
                     )}
                   </td>
-
                   <td>
                     <OverlayTrigger
                       placement="top"
@@ -1241,7 +1547,7 @@ function Appointments() {
                               setShowScheduleForm(true);
                             }}
                             style={{
-                              backgroundColor: "#1DB954",
+                              backgroundColor: "#1fs954",
                               color: "white",
                               border: "none",
                               padding: "5px 10px",
@@ -1267,7 +1573,7 @@ function Appointments() {
                               backgroundColor:
                                 appointment.appointmentStatus === "approved"
                                   ? "gray"
-                                  : "#1DB954",
+                                  : "#1fs954",
                               color: "white",
                               border: "none",
                               padding: "5px 10px",
@@ -1322,7 +1628,7 @@ function Appointments() {
                               setShowScheduleForm(false);
                             }}
                             style={{
-                              backgroundColor: "#1DB954",
+                              backgroundColor: "#1fs954",
                               color: "white",
                               border: "none",
                               padding: "5px 10px",
@@ -1542,6 +1848,25 @@ function Appointments() {
                                 ?.requestReason || "N/A"}
                             </td>
                           </tr>
+                          {/* Only show Attached File if it exists */}
+                          {selectedAppointment.appointmentDetails
+                            ?.newRequestUrl && (
+                            <tr>
+                              <th>Attached File:</th>
+                              <td>
+                                <a
+                                  href={
+                                    selectedAppointment.appointmentDetails
+                                      ?.newRequestUrl
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  View File
+                                </a>
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </section>
@@ -1593,7 +1918,7 @@ function Appointments() {
                                 // Appointment is done, show "Done" with a check icon
                                 <button
                                   style={{
-                                    backgroundColor: "#1DB954", // Green background for "Done"
+                                    backgroundColor: "#1fs954", // Green background for "Done"
                                     color: "white",
                                     border: "none",
                                     padding: "5px 8px",
@@ -1661,7 +1986,9 @@ function Appointments() {
                       <tr>
                         <th>Date Request Created:</th>
                         <td>
-                          {getFormattedDate(selectedAppointment.createdDate)}
+                          {selectedAppointment.createdDate
+                            ? getFormattedDate(selectedAppointment.createdDate)
+                            : "N/A"}
                         </td>
                       </tr>
                       <tr>
@@ -1867,8 +2194,13 @@ function Appointments() {
                           {selectedAppointment.rescheduleHistory.map(
                             (entry, index) => (
                               <tr key={index}>
-                                <td style={{ padding: "10px" }}>
-                                  {getFormattedDate(entry.rescheduleDate, true)}
+                                <td>
+                                  {entry.rescheduleDate
+                                    ? getFormattedDate(
+                                        entry.rescheduleDate,
+                                        true
+                                      )
+                                    : "N/A"}
                                 </td>
                                 <td style={{ padding: "10px" }}>
                                   {entry.rescheduleAppointmentType || "N/A"}
@@ -1876,11 +2208,13 @@ function Appointments() {
                                 <td style={{ padding: "10px" }}>
                                   {entry.rescheduleReason || "N/A"}
                                 </td>
-                                <td style={{ padding: "10px" }}>
-                                  {getFormattedDate(
-                                    entry.rescheduleTimestamp,
-                                    true
-                                  )}
+                                <td>
+                                  {entry.rescheduleTimestamp
+                                    ? getFormattedDate(
+                                        entry.rescheduleTimestamp,
+                                        true
+                                      )
+                                    : "N/A"}
                                 </td>
                               </tr>
                             )
@@ -2383,11 +2717,14 @@ function Appointments() {
             <br />
             <p>
               <strong>Current Appointment Date:</strong> <br></br>
-              {getFormattedDate(
-                selectedAppointment.appointmentDetails.appointmentDate,
-                true
-              )}
+              {selectedAppointment.appointmentDetails?.appointmentDate
+                ? getFormattedDate(
+                    selectedAppointment.appointmentDetails.appointmentDate,
+                    true
+                  )
+                : "N/A"}
             </p>
+
             <form onSubmit={handleRescheduleSubmit}>
               <div>
                 <b>
@@ -2469,7 +2806,6 @@ function Appointments() {
                 </tr>
               </tbody>
             </table>
-            <br />
             <form onSubmit={handleScheduleSubmit}>
               <div>
                 <b>

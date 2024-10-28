@@ -15,7 +15,8 @@ import {
   getDoc,
   setDoc,
   addDoc,
-  serverTimestamp 
+  serverTimestamp,
+  deleteDoc
 } from 'firebase/firestore';
 import { getAuth, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -40,7 +41,7 @@ const storage = getStorage(app);
 
 export { 
   app, auth, fs, storage, 
-  doc, collection, query, where, getDocs, addDoc,
+  doc, deleteDoc, collection, query, where, getDocs, addDoc,
   limit, startAfter, orderBy, updateDoc, getDoc, setDoc, serverTimestamp,
   signOut, createUserWithEmailAndPassword, ref, uploadBytes, getDownloadURL 
 };

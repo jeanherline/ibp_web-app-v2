@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getAuth } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { fs } from "../../Config/Firebase";
 import SideNavBar from "../SideNavBar/SideNavBar";
 import "./Appointments.css";
+import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 
 const MeetingPage = () => {
   const { id } = useParams(); // Get the meeting ID from the route params
@@ -15,7 +15,19 @@ const MeetingPage = () => {
   const jitsiApiRef = useRef(null); // Ref to store the Jitsi API instance
   const [jwtToken, setJwtToken] = useState(null); // State to store the JWT
   const navigate = useNavigate();
-  
+  const auth = getAuth();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        // If user is not authenticated, redirect to the login page
+        navigate("/");
+      }
+    });
+
+    return () => unsubscribe(); // Clean up the listener on component unmount
+  }, [auth, navigate]);
+
   // Fetch meeting details from Firestore
   useEffect(() => {
     const fetchMeetingDetails = async () => {
@@ -91,19 +103,19 @@ const MeetingPage = () => {
       console.error("JitsiMeetExternalAPI not loaded.");
       return;
     }
-  
+
     if (jitsiApiRef.current) {
       jitsiApiRef.current.dispose();
     }
-  
+
     const roomName = meetingData?.appointmentDetails?.controlNumber;
     const meetingPassword = meetingData?.appointmentDetails?.meetingPass;
-  
+
     if (!roomName || !jwtToken) {
       console.error("Room name or JWT token is missing");
       return;
     }
-  
+
     const domain = "8x8.vc";
     const options = {
       roomName: `vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
@@ -122,10 +134,10 @@ const MeetingPage = () => {
         DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
       },
     };
-  
+
     const api = new window.JitsiMeetExternalAPI(domain, options);
     jitsiApiRef.current = api;
-  
+
     // Set the room password and enable lobby when the moderator joins
     api.addEventListener("participantRoleChanged", (event) => {
       if (event.role === "moderator") {
@@ -139,18 +151,17 @@ const MeetingPage = () => {
         console.log("Lobby has been enabled.");
       }
     });
-  
+
     // Handle password-protected meeting
     api.on("passwordRequired", () => {
       api.executeCommand("password", meetingPassword); // Join the meeting with the password
     });
-  
+
     // Add this event listener to handle redirection when the meeting is closed
     api.addEventListener("readyToClose", () => {
       navigate("/lawyer");
     });
   }, [meetingData, jwtToken]);
-  
 
   // Load Jitsi API script and start the meeting
   useEffect(() => {
@@ -175,7 +186,6 @@ const MeetingPage = () => {
             jitsiApiRef.current = null;
           }
         };
-        
       } else if (meetingData && jwtToken) {
         startJitsiMeeting();
       }

@@ -1,28 +1,32 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import './index.css';
-import App from './App';
-// Import Firebase initialization
-import './Config/Firebase';
-import reportWebVitals from './reportWebVitals';
-import { AuthProvider } from "./AuthContext"; // Import the AuthProvider
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'buffer';
-import 'stream-browserify';
-import 'crypto-browserify';
+import React from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
+import App from "./App";
+import "./Config/Firebase"; // Firebase initialization
+import reportWebVitals from "./reportWebVitals";
+import { AuthProvider } from "./contexts/AuthContext"; // Import AuthProvider from the new path
+import "bootstrap/dist/css/bootstrap.min.css";
+import "buffer";
+import "stream-browserify";
+import "crypto-browserify";
 
-import { Buffer } from 'buffer';
-window.Buffer = Buffer;
+// To handle Buffer
+import { Buffer } from "buffer";
+window.Buffer = Buffer; // Make Buffer available globally
 
+// Get the root element in the HTML
+const container = document.getElementById("root");
 
-  <link rel="icon" href="%PUBLIC_URL%/ibp_logo.png" />
-ReactDOM.render(
+// Use createRoot instead of ReactDOM.render
+const root = createRoot(container);
+
+root.render(
   <React.StrictMode>
     <AuthProvider>
-      <App />
+      {/* Wrap your entire app with AuthProvider */}
+      <App /> {/* App component where all routes are managed */}
     </AuthProvider>
-  </React.StrictMode>,
-  document.getElementById("root")
+  </React.StrictMode>
 );
 
 // If you want to start measuring performance in your app, pass a function

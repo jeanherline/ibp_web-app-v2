@@ -5,6 +5,7 @@ import "./Users.css";
 import Pagination from "react-bootstrap/Pagination";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
+import zxcvbn from "zxcvbn"; // For password strength detection
 import {
   getUsers,
   getUsersCount,
@@ -20,9 +21,12 @@ import {
   faCheck,
   faSync,
   faUserPlus,
+  faEyeSlash,
+  faKey,
 } from "@fortawesome/free-solid-svg-icons";
-import { auth, doc, fs } from "../../Config/Firebase";
-import { getDoc, onSnapshot } from "firebase/firestore";
+import { auth, doc, fs, collection } from "../../Config/Firebase";
+import { addDoc, getDoc, onSnapshot } from "firebase/firestore";
+import { createUserWithEmailAndPassword } from "firebase/auth"; // Import Firebase Auth
 
 function Users() {
   const [users, setUsers] = useState([]);
@@ -34,7 +38,7 @@ function Users() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [lastVisible, setLastVisible] = useState(null);
-  const pageSize = 7;
+  const pageSize = 10;
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [cityFilter, setCityFilter] = useState("all");
@@ -57,8 +61,27 @@ function Users() {
     member_type: "",
     user_status: "active",
     photo_url: "",
-    appRating: 0,
   });
+  const [passwordStrength, setPasswordStrength] = useState(0);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false); // State to toggle password visibility
+  const currentUser = auth.currentUser;
+
+  // Function to toggle password visibility
+  const togglePasswordVisibility = () => {
+    setPasswordVisible(!passwordVisible);
+  };
+
+  // Function to generate a strong password
+  const generatePassword = () => {
+    const chars =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
+    let password = "";
+    for (let i = 0; i < 12; i++) {
+      password += chars[Math.floor(Math.random() * chars.length)];
+    }
+    setNewUser({ ...newUser, password });
+  };
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -107,7 +130,7 @@ function Users() {
     };
   }, []);
 
-  const fetchUsers = async (page) => {
+  const fetchUsers = async (page, lastVisibleDoc = null) => {
     try {
       const totalUsers = await getUsersCount(
         filterStatus,
@@ -116,17 +139,19 @@ function Users() {
         searchText
       );
       const newTotalPages = Math.ceil(totalUsers / pageSize);
-      const { users, lastVisibleDoc } = await getUsers(
+
+      const { users, lastVisibleDoc: newLastVisibleDoc } = await getUsers(
         filterStatus,
         filterType,
         cityFilter,
         searchText,
-        page === 1 ? null : lastVisible,
+        lastVisibleDoc,
         pageSize
       );
+
       setUsers(users);
       setTotalPages(newTotalPages);
-      setLastVisible(lastVisibleDoc);
+      setLastVisible(newLastVisibleDoc);
       setCurrentPage(page);
       setTotalFilteredItems(totalUsers);
     } catch (error) {
@@ -134,32 +159,108 @@ function Users() {
     }
   };
 
-  const capitalizeFirstLetter = (string) => {
-    return string.charAt(0).toUpperCase() + string.slice(1);
-  };
-
   const handleNext = () => {
     if (currentPage < totalPages) {
-      fetchUsers(currentPage + 1);
+      fetchUsers(currentPage + 1, lastVisible);
     }
   };
 
-  const handlePrevious = () => {
+  const handlePrevious = async () => {
     if (currentPage > 1) {
-      fetchUsers(currentPage - 1);
+      const previousPageLastVisible = await getPreviousPageLastVisible(
+        filterStatus,
+        filterType,
+        cityFilter,
+        searchText,
+        pageSize,
+        currentPage - 1
+      );
+      fetchUsers(currentPage - 1, previousPageLastVisible);
     }
   };
 
   const handleFirst = () => {
-    fetchUsers(1);
+    fetchUsers(1, null); // Fetch first page data
   };
 
-  const handleLast = () => {
-    fetchUsers(totalPages);
+  const handleLast = async () => {
+    const lastPageLastVisible = await getLastPageLastVisible(
+      filterStatus,
+      filterType,
+      cityFilter,
+      searchText,
+      pageSize
+    );
+    fetchUsers(totalPages, lastPageLastVisible); // Fetch last page data
+  };
+
+  const capitalizeFirstLetter = (string) => {
+    if (typeof string !== "string") return ""; // Return empty string if not a string
+    return string.charAt(0).toUpperCase() + string.slice(1);
   };
 
   const handlePageClick = (page) => {
-    fetchUsers(page);
+    if (page >= 1 && page <= totalPages && page !== currentPage) {
+      fetchUsers(page); // Fetch the selected page data
+    }
+  };
+
+  // Helper function to get the last visible document for the previous page
+  const getPreviousPageLastVisible = async (
+    filterStatus,
+    filterType,
+    cityFilter,
+    searchText,
+    pageSize,
+    targetPage
+  ) => {
+    try {
+      const { users, lastVisibleDoc } = await getUsers(
+        filterStatus,
+        filterType,
+        cityFilter,
+        searchText,
+        null,
+        (targetPage - 1) * pageSize
+      );
+      return lastVisibleDoc;
+    } catch (error) {
+      console.error(
+        "Failed to fetch previous page last visible document:",
+        error
+      );
+    }
+  };
+
+  // Helper function to get the last visible document for the last page
+  const getLastPageLastVisible = async (
+    filterStatus,
+    filterType,
+    cityFilter,
+    searchText,
+    pageSize
+  ) => {
+    try {
+      const totalUsers = await getUsersCount(
+        filterStatus,
+        filterType,
+        cityFilter,
+        searchText
+      );
+      const lastPageIndex = Math.floor(totalUsers / pageSize) * pageSize;
+
+      const { lastVisibleDoc } = await getUsers(
+        filterStatus,
+        filterType,
+        cityFilter,
+        searchText,
+        null,
+        lastPageIndex
+      );
+      return lastVisibleDoc;
+    } catch (error) {
+      console.error("Failed to fetch last page last visible document:", error);
+    }
   };
 
   const toggleDetails = async (user) => {
@@ -173,7 +274,7 @@ function Users() {
     }
   };
 
-  const handleEdit = (user) => {
+  const handleEdit = async (user) => {
     if (
       userData.member_type === "admin" &&
       ["frontdesk", "head", "lawyer", "client", "admin"].includes(
@@ -184,39 +285,219 @@ function Users() {
       setSelectedUser(user); // Set user to selectedUser for editing
       setIsEditing(true);
       setShowUserDetails(false); // Hide user details when editing
+
+      try {
+        // Fetch latest login activity for metadata
+        const loginActivitySnapshot = await fs
+          .collection("users")
+          .doc(auth.currentUser.uid)
+          .collection("loginActivity")
+          .orderBy("loginTime", "desc")
+          .limit(1)
+          .get();
+
+        let ipAddress = "Unknown";
+        let deviceName = "Unknown";
+
+        if (!loginActivitySnapshot.empty) {
+          const loginData = loginActivitySnapshot.docs[0].data();
+          ipAddress = loginData.ipAddress || "Unknown";
+          deviceName = loginData.deviceName || "Unknown";
+        }
+
+        // Add audit log entry with "UPDATE" as the action type
+        const auditLogEntry = {
+          actionType: "UPDATE",
+          timestamp: new Date(),
+          uid: auth.currentUser.uid,
+          changes: {
+            action: "Edit User Profile",
+            targetUserId: user.uid,
+            targetMemberType: user.member_type,
+          },
+          affectedData: {
+            adminUserId: currentUser.uid,
+            adminUserName: auth.currentUser.displayName || "Unknown",
+            targetUserId: user.uid,
+          },
+          metadata: {
+            ipAddress: ipAddress,
+            userAgent: deviceName,
+          },
+        };
+
+        await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
+      } catch (error) {
+        console.error("Error logging edit access:", error);
+      }
     }
   };
 
   const handleSave = async (user) => {
     try {
+      const previousMemberType = user.member_type; // Capture the previous member type before updating
+
+      // Update user member type in Firestore
       await updateUser(user.uid, {
         ...user,
         member_type: selectedUser.member_type,
       });
+
       setEditingUserId(null);
       setIsEditing(false);
       fetchUsers(currentPage);
       setSnackbarMessage("User member type has been successfully updated.");
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
+
+      // Fetch latest login activity for metadata
+      const loginActivitySnapshot = await fs
+        .collection("users")
+        .doc(currentUser.uid)
+        .collection("loginActivity")
+        .orderBy("loginTime", "desc")
+        .limit(1)
+        .get();
+
+      let ipAddress = "Unknown";
+      let deviceName = "Unknown";
+
+      if (!loginActivitySnapshot.empty) {
+        const loginData = loginActivitySnapshot.docs[0].data();
+        ipAddress = loginData.ipAddress || "Unknown";
+        deviceName = loginData.deviceName || "Unknown";
+      }
+
+      // Add audit log entry with "UPDATE" as the action type
+      const auditLogEntry = {
+        actionType: "UPDATE",
+        timestamp: new Date(),
+        uid: auth.currentUser.uid,
+        changes: {
+          member_type: {
+            oldValue: previousMemberType,
+            newValue: selectedUser.member_type,
+          },
+        },
+        affectedData: {
+          targetUserId: user.uid,
+          targetUserName: user.display_name || "Unknown",
+        },
+        metadata: {
+          ipAddress: ipAddress,
+          userAgent: deviceName,
+        },
+      };
+
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
     } catch (error) {
       console.error("Failed to update user member type:", error);
     }
   };
 
-  const handleArchive = (user) => {
+  const handleArchive = async (user) => {
     if (userData.member_type === "admin") {
       setShowArchiveModal(true);
       setSelectedUser(user); // Set user to selectedUser for archiving
       setShowUserDetails(false); // Hide user details when archiving
+
+      try {
+        // Fetch latest login activity for metadata
+        const loginActivitySnapshot = await fs
+          .collection("users")
+          .doc(currentUser.uid)
+          .collection("loginActivity")
+          .orderBy("loginTime", "desc")
+          .limit(1)
+          .get();
+
+        let ipAddress = "Unknown";
+        let deviceName = "Unknown";
+
+        if (!loginActivitySnapshot.empty) {
+          const loginData = loginActivitySnapshot.docs[0].data();
+          ipAddress = loginData.ipAddress || "Unknown";
+          deviceName = loginData.deviceName || "Unknown";
+        }
+
+        // Add audit log entry with "UPDATE" as the action type
+        const auditLogEntry = {
+          actionType: "UPDATE",
+          timestamp: new Date(),
+          uid: auth.currentUser.uid,
+          changes: {
+            action: "Initiate Archive",
+            targetUserId: user.uid,
+            targetMemberType: user.member_type,
+          },
+          affectedData: {
+            adminUserId: currentUser.uid,
+            adminUserName: auth.currentUser.displayName || "Unknown",
+            targetUserId: user.uid,
+          },
+          metadata: {
+            ipAddress: ipAddress,
+            userAgent: deviceName,
+          },
+        };
+
+        await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
+      } catch (error) {
+        console.error("Error logging archive initiation:", error);
+      }
     }
   };
 
-  const handleActivate = (user) => {
+  const handleActivate = async (user) => {
     if (userData.member_type === "admin") {
       setShowActivateModal(true);
       setSelectedUser(user); // Set user to selectedUser for activating
       setShowUserDetails(false); // Hide user details when activating
+
+      try {
+        // Fetch latest login activity for metadata
+        const loginActivitySnapshot = await fs
+          .collection("users")
+          .doc(currentUser.uid)
+          .collection("loginActivity")
+          .orderBy("loginTime", "desc")
+          .limit(1)
+          .get();
+
+        let ipAddress = "Unknown";
+        let deviceName = "Unknown";
+
+        if (!loginActivitySnapshot.empty) {
+          const loginData = loginActivitySnapshot.docs[0].data();
+          ipAddress = loginData.ipAddress || "Unknown";
+          deviceName = loginData.deviceName || "Unknown";
+        }
+
+        // Add audit log entry with "UPDATE" as the action type
+        const auditLogEntry = {
+          actionType: "UPDATE",
+          timestamp: new Date(),
+          uid: auth.currentUser.uid,
+          changes: {
+            action: "Initiate Activate",
+            targetUserId: user.uid,
+            targetMemberType: user.member_type,
+          },
+          affectedData: {
+            adminUserId: currentUser.uid,
+            adminUserName: auth.currentUser.displayName || "Unknown",
+            targetUserId: user.uid,
+          },
+          metadata: {
+            ipAddress: ipAddress,
+            userAgent: deviceName,
+          },
+        };
+
+        await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
+      } catch (error) {
+        console.error("Error logging activation initiation:", error);
+      }
     }
   };
 
@@ -254,6 +535,60 @@ function Users() {
     }
   };
 
+  useEffect(() => {
+    const handleResizeObserverError = (e) => {
+      if (
+        e.message ===
+        "ResizeObserver loop completed with undelivered notifications."
+      ) {
+        e.preventDefault(); // Suppress the warning
+      }
+    };
+
+    window.addEventListener("error", handleResizeObserverError);
+
+    return () => {
+      window.removeEventListener("error", handleResizeObserverError);
+    };
+  }, []);
+
+  const clearForm = () => {
+    setNewUser({
+      display_name: "",
+      middle_name: "",
+      last_name: "",
+      dob: "",
+      email: "",
+      password: "",
+      city: "",
+      member_type: "",
+      user_status: "active",
+      photo_url: "",
+    });
+    setPasswordStrength(0);
+    setPasswordError("");
+  };
+
+  const handleOpenModal = () => {
+    clearForm();
+    setShowSignUpModal(true);
+  };
+
+  const handleCancel = () => {
+    clearForm(); // Clear the form when canceling
+    setShowSignUpModal(false);
+  };
+
+  const handleOpenSignUpModal = () => {
+    clearForm(); // Clear form each time before opening the modal
+    setShowSignUpModal(true);
+  };
+
+  const handleCloseSignUpModal = () => {
+    setShowSignUpModal(false); // Close the modal first
+    setTimeout(clearForm, 300); // Clear form data after modal is closed
+  };
+
   const handleCloseModal = () => {
     setSelectedUser(null);
     setShowUserDetails(false); // Hide user details when closing modal
@@ -263,12 +598,64 @@ function Users() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Track changes before updating
+      const previousData = await getUserById(selectedUser.uid); // Fetch current user data
+      const changes = {};
+
+      // Determine which fields were changed
+      Object.keys(selectedUser).forEach((key) => {
+        if (selectedUser[key] !== previousData[key]) {
+          changes[key] = {
+            oldValue: previousData[key] || "Not Set",
+            newValue: selectedUser[key],
+          };
+        }
+      });
+
+      // Update user in Firestore
       await updateUser(selectedUser.uid, selectedUser);
       setSelectedUser(null);
       fetchUsers(currentPage);
+
       setSnackbarMessage("User details have been successfully updated.");
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
+
+      // Fetch latest login activity for metadata
+      const loginActivitySnapshot = await fs
+        .collection("users")
+        .doc(currentUser.uid)
+        .collection("loginActivity")
+        .orderBy("loginTime", "desc")
+        .limit(1)
+        .get();
+
+      let ipAddress = "Unknown";
+      let deviceName = "Unknown";
+
+      if (!loginActivitySnapshot.empty) {
+        const loginData = loginActivitySnapshot.docs[0].data();
+        ipAddress = loginData.ipAddress || "Unknown";
+        deviceName = loginData.deviceName || "Unknown";
+      }
+
+      // Add audit log entry with "UPDATE" as the action type
+      const auditLogEntry = {
+        actionType: "UPDATE",
+        timestamp: new Date(),
+        uid: auth.currentUser.uid,
+        changes: changes,
+        affectedData: {
+          targetUserId: selectedUser.uid,
+          targetUserName: selectedUser.display_name || "Unknown",
+        },
+        metadata: {
+          ipAddress: ipAddress,
+          userAgent: deviceName,
+        },
+      };
+
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
     } catch (error) {
       console.error("Failed to update user:", error);
     }
@@ -301,19 +688,109 @@ function Users() {
   const handleNewUserChange = (e) => {
     const { name, value } = e.target;
     setNewUser({ ...newUser, [name]: value });
+
+    if (name === "password") {
+      const passwordScore = zxcvbn(value).score;
+      setPasswordStrength(passwordScore);
+
+      const strongPasswordRegex =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
+      if (!strongPasswordRegex.test(value)) {
+        setPasswordError(
+          "Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters."
+        );
+      } else {
+        setPasswordError("");
+      }
+    }
   };
+  const formatDate = (timestamp) =>
+    timestamp?.seconds
+      ? new Date(timestamp.seconds * 1000).toLocaleDateString()
+      : "-";
+
+  const formatTimestamp = (timestamp) =>
+    timestamp?.seconds
+      ? new Date(timestamp.seconds * 1000).toLocaleString()
+      : "-";
 
   const handleNewUserSubmit = async (e) => {
     e.preventDefault();
+
+    if (passwordError || passwordStrength < 3) {
+      alert("Please use a stronger password.");
+      return;
+    }
+
     try {
-      await addUser(newUser); // Function to add new user to Firestore
+      // Step 1: Create user in Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        newUser.email,
+        newUser.password
+      );
+
+      // Step 2: Retrieve the created user UID from Firebase Auth
+      const { uid } = userCredential.user;
+
+      // Step 3: Add user to Firestore, using the UID from Firebase Auth
+      await addUser({
+        ...newUser,
+        uid,
+        user_status: "active", // Assuming new user is active by default
+      });
+
+      // Fetch latest login activity for metadata
+      const loginActivitySnapshot = await fs
+        .collection("users")
+        .doc(currentUser.uid)
+        .collection("loginActivity")
+        .orderBy("loginTime", "desc")
+        .limit(1)
+        .get();
+
+      let ipAddress = "Unknown";
+      let deviceName = "Unknown";
+
+      if (!loginActivitySnapshot.empty) {
+        const loginData = loginActivitySnapshot.docs[0].data();
+        ipAddress = loginData.ipAddress || "Unknown";
+        deviceName = loginData.deviceName || "Unknown";
+      }
+
+      // Add audit log entry with "CREATE" as the action type
+      const auditLogEntry = {
+        actionType: "CREATE",
+        timestamp: new Date(),
+        uid: auth.currentUser.uid,
+        changes: {
+          action: "New User Created",
+          targetUserId: uid,
+          targetEmail: newUser.email,
+        },
+        affectedData: {
+          adminUserId: currentUser.uid,
+          adminUserName: auth.currentUser.displayName || "Unknown",
+          newUserId: uid,
+        },
+        metadata: {
+          ipAddress: ipAddress,
+          userAgent: deviceName,
+        },
+      };
+
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
+
+      // Close the modal and show success message
       setShowSignUpModal(false);
+      clearForm();
       fetchUsers(currentPage);
       setSnackbarMessage("New user has been successfully added.");
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
     } catch (error) {
       console.error("Failed to add new user:", error);
+      alert("Failed to add new user: " + error.message); // Show a user-friendly error
     }
   };
 
@@ -382,13 +859,13 @@ function Users() {
         <button onClick={resetFilters}>Reset Filters</button>
         &nbsp;&nbsp;
         <button
-          onClick={() => setShowSignUpModal(true)}
+          onClick={handleOpenSignUpModal}
           style={{
-            backgroundColor: "#1DB954",
+            backgroundColor: "#1fs954",
             color: "white",
-            border: "none",
             padding: "10px 20px",
             cursor: "pointer",
+            border: "none",
           }}
         >
           <FontAwesomeIcon icon={faUserPlus} /> Sign Up
@@ -462,7 +939,7 @@ function Users() {
                         }
                         style={{
                           backgroundColor:
-                            editingUserId === user.uid ? "#4CAF50" : "#1DB954",
+                            editingUserId === user.uid ? "#4CAF50" : "#1fs954",
                           color: "white",
                           border: "none",
                           padding: "5px 10px",
@@ -596,7 +1073,7 @@ function Users() {
                   </tr>
                   <tr>
                     <th>Date of Birth:</th>
-                    <td>{selectedUser.dob || "-"}</td>
+                    <td>{formatDate(selectedUser.dob || "-")}</td>
                   </tr>
                   <tr>
                     <th>Email:</th>
@@ -617,11 +1094,7 @@ function Users() {
                   <tr>
                     <th>Created Time:</th>
                     <td>
-                      {selectedUser.created_time
-                        ? new Date(
-                            selectedUser.created_time.seconds * 1000
-                          ).toLocaleString()
-                        : "-"}
+                      <td>{formatTimestamp(selectedUser.created_time)}</td>
                     </td>
                   </tr>
                 </thead>
@@ -631,197 +1104,275 @@ function Users() {
         )}
       </div>
 
-      <Modal show={showArchiveModal} onHide={() => setShowArchiveModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>Archive User</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          Are you sure you want to archive this account and set it as inactive?
-        </Modal.Body>
-        <Modal.Footer>
-          <Button
-            variant="secondary"
-            onClick={() => setShowArchiveModal(false)}
-          >
-            Cancel
-          </Button>
-          <Button variant="danger" onClick={confirmArchive}>
-            Archive
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      <Modal
-        show={showActivateModal}
-        onHide={() => setShowActivateModal(false)}
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>Activate User</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>Are you sure you want to activate this account?</Modal.Body>
-        <Modal.Footer>
-          <Button
-            variant="secondary"
-            onClick={() => setShowActivateModal(false)}
-          >
-            Cancel
-          </Button>
-          <Button variant="success" onClick={confirmActivate}>
-            Activate
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      <Modal show={showSignUpModal} onHide={() => setShowSignUpModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>Sign Up</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <form onSubmit={handleNewUserSubmit}>
-            <div className="form-group">
-              <label htmlFor="display_name">First Name</label>
-              <input
-                type="text"
-                className="form-control"
-                id="display_name"
-                name="display_name"
-                value={newUser.display_name}
-                onChange={handleNewUserChange}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="middle_name">Middle Name</label>
-              <input
-                type="text"
-                className="form-control"
-                id="middle_name"
-                name="middle_name"
-                value={newUser.middle_name}
-                onChange={handleNewUserChange}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="last_name">Last Name</label>
-              <input
-                type="text"
-                className="form-control"
-                id="last_name"
-                name="last_name"
-                value={newUser.last_name}
-                onChange={handleNewUserChange}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="dob">Date of Birth</label>
-              <input
-                type="date"
-                className="form-control"
-                id="dob"
-                name="dob"
-                value={newUser.dob}
-                onChange={handleNewUserChange}
-                required
-              />
-            </div>
-            <br />
-            <div className="form-group">
-              <label htmlFor="email">Email</label>
-              <input
-                type="email"
-                className="form-control"
-                id="email"
-                name="email"
-                value={newUser.email}
-                onChange={handleNewUserChange}
-                required
-              />
-            </div>
-            <br />
-            <div className="form-group">
-              <label htmlFor="password">Password</label>
-              <input
-                type="password"
-                className="form-control"
-                id="password"
-                name="password"
-                value={newUser.password}
-                onChange={handleNewUserChange}
-                required
-              />
-            </div>
-            <br />
-            <div className="form-group">
-              <label htmlFor="city">City</label>
-              <select
-                className="form-control"
-                id="city"
-                name="city"
-                value={newUser.city}
-                onChange={handleNewUserChange}
+      {showArchiveModal && (
+        <div className="custom-modal-overlay">
+          <div className="custom-modal active">
+            <div className="custom-modal-header">
+              <h5>Archive User</h5>
+              <span
+                className="custom-modal-close"
+                onClick={() => setShowArchiveModal(false)}
               >
-                <option value="">Select a city</option>
-                <option value="Angat">Angat</option>
-                <option value="Balagtas">Balagtas</option>
-                <option value="Baliuag">Baliuag</option>
-                <option value="Bocaue">Bocaue</option>
-                <option value="Bulakan">Bulakan</option>
-                <option value="Bustos">Bustos</option>
-                <option value="Calumpit">Calumpit</option>
-                <option value="Doña Remedios Trinidad">
-                  Doña Remedios Trinidad
-                </option>
-                <option value="Guiguinto">Guiguinto</option>
-                <option value="Hagonoy">Hagonoy</option>
-                <option value="Marilao">Marilao</option>
-                <option value="Norzagaray">Norzagaray</option>
-                <option value="Obando">Obando</option>
-                <option value="Pandi">Pandi</option>
-                <option value="Paombong">Paombong</option>
-                <option value="Plaridel">Plaridel</option>
-                <option value="Pulilan">Pulilan</option>
-                <option value="San Ildefonso">San Ildefonso</option>
-                <option value="San Miguel">San Miguel</option>
-                <option value="San Rafael">San Rafael</option>
-                <option value="Santa Maria">Santa Maria</option>
-              </select>
+                ×
+              </span>
             </div>
-            <br />
-            <div className="form-group">
-              <label htmlFor="member_type">Role</label>
-              <select
-                className="form-control"
-                id="member_type"
-                name="member_type"
-                value={newUser.member_type}
-                onChange={handleNewUserChange}
-                required
+            <div className="custom-modal-body">
+              Are you sure you want to archive this account and set it as
+              inactive?
+            </div>
+            <div className="custom-modal-footer">
+              <button
+                className="custom-cancel-button"
+                onClick={() => setShowArchiveModal(false)}
               >
-                <option value="" disabled>
-                  Select role
-                </option>
-                <option value="admin">Admin</option>
-                <option value="head">Head Lawyer</option>
-                <option value="lawyer">Legal Aid Volunteer</option>
-                <option value="frontdesk">Front Desk</option>
-                <option value="client">Client</option>
-              </select>
+                Cancel
+              </button>
+              <button
+                className="custom-confirm-button"
+                onClick={confirmArchive}
+              >
+                Archive
+              </button>
             </div>
-            <br />
-            <center>
-              <Button variant="primary" type="submit">
-                Add User
-              </Button>
-            </center>
-          </form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowSignUpModal(false)}>
-            Cancel
-          </Button>
-        </Modal.Footer>
-      </Modal>
+          </div>
+        </div>
+      )}
+
+      {/* Activate User Modal */}
+      {showActivateModal && (
+        <div className="custom-modal-overlay">
+          <div className="custom-modal active">
+            <div className="custom-modal-header">
+              <h5>Activate User</h5>
+              <span
+                className="custom-modal-close"
+                onClick={() => setShowActivateModal(false)}
+              >
+                ×
+              </span>
+            </div>
+            <div className="custom-modal-body">
+              Are you sure you want to activate this account?
+            </div>
+            <div className="custom-modal-footer">
+              <button
+                className="custom-cancel-button"
+                onClick={() => setShowActivateModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="custom-activate-button"
+                onClick={confirmActivate}
+              >
+                Activate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSignUpModal && (
+        <div className="custom-modal-overlay">
+          <div className="custom-modal">
+            <div className="custom-modal-header">
+              <h4>Sign Up</h4>
+              <button
+                onClick={handleCloseSignUpModal}
+                className="custom-close-button"
+              >
+                ×
+              </button>
+            </div>
+            <div className="custom-modal-body">
+              <form onSubmit={handleNewUserSubmit} autoComplete="off">
+                <div className="form-group">
+                  <label htmlFor="display_name">First Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="display_name"
+                    name="display_name"
+                    value={newUser.display_name}
+                    onChange={handleNewUserChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="middle_name">Middle Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="middle_name"
+                    name="middle_name"
+                    value={newUser.middle_name}
+                    onChange={handleNewUserChange}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="last_name">Last Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="last_name"
+                    name="last_name"
+                    value={newUser.last_name}
+                    onChange={handleNewUserChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="email">Email</label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    id="email"
+                    name="email"
+                    value={newUser.email}
+                    onChange={handleNewUserChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="dob">Date of Birth</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    id="dob"
+                    name="dob"
+                    value={newUser.dob}
+                    onChange={handleNewUserChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="password">Password</label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={passwordVisible ? "text" : "password"}
+                      className="form-control"
+                      id="password"
+                      name="password"
+                      value={newUser.password}
+                      onChange={handleNewUserChange}
+                      required
+                    />
+                    <FontAwesomeIcon
+                      icon={passwordVisible ? faEyeSlash : faEye}
+                      onClick={togglePasswordVisibility}
+                      style={{
+                        position: "absolute",
+                        right: "10px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        cursor: "pointer",
+                      }}
+                    />
+                  </div>
+                  {passwordError && (
+                    <small className="text-danger">{passwordError}</small>
+                  )}
+                  <div className="password-strength-meter">
+                    <progress
+                      className={`strength-meter strength-${passwordStrength}`}
+                      value={passwordStrength}
+                      max="4"
+                    />
+                    <p>
+                      Password Strength:{" "}
+                      {["Weak", "Fair", "Good", "Strong"][passwordStrength]}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Generate Strong Password Button */}
+                <button
+                  type="button"
+                  className="custom-generate-button"
+                  onClick={generatePassword}
+                >
+                  <FontAwesomeIcon icon={faKey} /> Generate Strong Password
+                </button>
+
+                <div className="form-group">
+                  <br />
+                  <label htmlFor="city">City</label>
+                  <select
+                    className="form-control"
+                    id="city"
+                    name="city"
+                    value={newUser.city}
+                    onChange={handleNewUserChange}
+                  >
+                    <option value="" disabled>
+                      Select a city
+                    </option>
+                    <option value="Angat">Angat</option>
+                    <option value="Balagtas">Balagtas</option>
+                    <option value="Baliuag">Baliuag</option>
+                    <option value="Bocaue">Bocaue</option>
+                    <option value="Bulakan">Bulakan</option>
+                    <option value="Bustos">Bustos</option>
+                    <option value="Calumpit">Calumpit</option>
+                    <option value="Doña Remedios Trinidad">
+                      Doña Remedios Trinidad
+                    </option>
+                    <option value="Guiguinto">Guiguinto</option>
+                    <option value="Hagonoy">Hagonoy</option>
+                    <option value="Marilao">Marilao</option>
+                    <option value="Norzagaray">Norzagaray</option>
+                    <option value="Obando">Obando</option>
+                    <option value="Pandi">Pandi</option>
+                    <option value="Paombong">Paombong</option>
+                    <option value="Plaridel">Plaridel</option>
+                    <option value="Pulilan">Pulilan</option>
+                    <option value="San Ildefonso">San Ildefonso</option>
+                    <option value="San Miguel">San Miguel</option>
+                    <option value="San Rafael">San Rafael</option>
+                    <option value="Santa Maria">Santa Maria</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="member_type">Role</label>
+                  <select
+                    className="form-control"
+                    id="member_type"
+                    name="member_type"
+                    value={newUser.member_type}
+                    onChange={handleNewUserChange}
+                    required
+                  >
+                    <option value="" disabled>
+                      Select role
+                    </option>
+                    <option value="admin">Admin</option>
+                    <option value="head">Head Lawyer</option>
+                    <option value="lawyer">Legal Aid Volunteer</option>
+                    <option value="frontdesk">Front Desk</option>
+                    <option value="client">Client</option>
+                  </select>
+                </div>
+                <div
+                  className="form-group-full"
+                  style={{ textAlign: "center" }}
+                >
+                  <button
+                    type="button"
+                    className="custom-cancel-button"
+                    onClick={handleCloseSignUpModal}
+                  >
+                    Cancel
+                  </button>
+                  &nbsp;&nbsp;
+                  <button type="submit" className="custom-confirm-button">
+                    Add User
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

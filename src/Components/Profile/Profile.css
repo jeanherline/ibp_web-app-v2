@@ -91,10 +91,12 @@
 }
 
 .submit-group {
-  grid-column: span 2 ;
+  grid-column: 1 / -1; /* Ensures the button spans across all columns */
   display: flex;
   justify-content: center;
+  margin-top: 20px; /* Optional: Adds a bit of spacing above the button */
 }
+
 
 .submit-button {
   background-color: #580049 !important;

@@ -16,11 +16,25 @@ import {
   getHeadLawyerUid,
   getAppointments,
 } from "../../Config/FirebaseServices";
-import { useAuth } from "../../AuthContext";
+import { useAuth } from "../../contexts/AuthContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { fs, auth, signInWithGoogle } from "../../Config/Firebase";
-import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore"; // Add these imports for Firestore
+import {
+  addDoc,
+  collection,
+  query,
+  where,
+  doc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  Timestamp,
+  orderBy,
+  limit,
+} from "firebase/firestore"; // Add these imports for Firestore
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
 
 import {
   faEye,
@@ -74,6 +88,19 @@ function ApptsFrontDesk() {
   const [isRescheduleHistoryOpen, setIsRescheduleHistoryOpen] = useState(false);
   const [proceedingFile, setProceedingFile] = useState(null);
   const [clientAttend, setClientAttend] = useState(null);
+  const navigate = useNavigate();
+  const auth = getAuth();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        // If user is not authenticated, redirect to the login page
+        navigate("/");
+      }
+    });
+
+    return () => unsubscribe(); // Clean up the listener on component unmount
+  }, [auth, navigate]);
 
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
@@ -89,101 +116,6 @@ function ApptsFrontDesk() {
       link: `https://8x8/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${roomName}`,
       password: password,
     };
-  };
-
-  const handleScheduleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!appointmentDate || !appointmentType) {
-      setSnackbarMessage("Appointment date and type are required.");
-      setShowSnackbar(true);
-      return;
-    }
-
-    let meetingLink = null;
-    let meetingPass = null;
-
-    if (appointmentType === "Online") {
-      const { link, password } = generateJitsiLink(
-        selectedAppointment.controlNumber
-      );
-      meetingLink = link;
-      meetingPass = password;
-    }
-
-    const updatedData = {
-      "appointmentDetails.appointmentDate": Timestamp.fromDate(appointmentDate),
-      "appointmentDetails.appointmentStatus": "scheduled",
-      "appointmentDetails.apptType": appointmentType,
-      ...(meetingLink && {
-        "appointmentDetails.meetingLink": meetingLink,
-        "appointmentDetails.meetingPass": meetingPass,
-      }),
-    };
-
-    try {
-      await updateAppointment(selectedAppointment.id, updatedData);
-
-      const clientFullName = selectedAppointment.fullName;
-      const appointmentId = selectedAppointment.id;
-      const appointmentDateFormatted = getFormattedDate(appointmentDate, true);
-
-      const lawyerFullName = assignedLawyerDetails
-        ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
-        : "Assigned Lawyer Not Available";
-
-      // Send notifications to the client, assigned lawyer, and head lawyer
-      await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been scheduled a date and as an ${appointmentType} appointment.`,
-        selectedAppointment.uid,
-        "appointment",
-        selectedAppointment.controlNumber
-      );
-
-      if (assignedLawyerDetails?.uid) {
-        await sendNotification(
-          `You have scheduled the appointment (ID: ${appointmentId}) for ${clientFullName} in the date provided as an ${appointmentType} appointment.`,
-          assignedLawyerDetails.uid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
-
-      // Notify the head lawyer
-      const headLawyerUid = await getHeadLawyerUid();
-      if (headLawyerUid) {
-        await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been scheduled a date and as an ${appointmentType} appointment.`,
-          headLawyerUid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
-
-      // Update the appointments state directly for immediate UI update
-      setAppointments((prevAppointments) =>
-        prevAppointments.map((appt) =>
-          appt.id === selectedAppointment.id
-            ? { ...appt, ...updatedData }
-            : appt
-        )
-      );
-
-      // Clear form fields
-      setAppointmentDate(null);
-      setAppointmentType("");
-
-      setSnackbarMessage("Appointment successfully scheduled.");
-      setShowSnackbar(true);
-      setTimeout(() => {
-        setShowSnackbar(false);
-        setSelectedAppointment(null);
-      }, 3000);
-    } catch (error) {
-      console.error("Error scheduling appointment:", error);
-      setSnackbarMessage("Error scheduling appointment, please try again.");
-      setShowSnackbar(true);
-    }
   };
 
   const handlePrint = () => {
@@ -319,7 +251,7 @@ function ApptsFrontDesk() {
 
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
-      <div class="header">
+      <div className="header">
         <img src="${ibpLogo}" alt="IBP Logo" />
         <h2>Integrated Bar of the Philippines - Malolos</h2>
         ${
@@ -337,9 +269,9 @@ function ApptsFrontDesk() {
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
       if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div class='page-break'></div>");
+        printWindow.document.write("<div className='page-break'></div>");
         printWindow.document.write(
-          `<img src='${image.src}' class='print-image' />`
+          `<img src='${image.src}' className='print-image' />`
         );
       }
     });
@@ -429,15 +361,15 @@ function ApptsFrontDesk() {
   }, [filter]);
 
   useEffect(() => {
-    const fetchReviewerDetails = async (reviewedBy) => {
-      if (reviewedBy) {
-        const userData = await getUserById(reviewedBy);
+    const fetchReviewerDetails = async (reviewefsy) => {
+      if (reviewefsy) {
+        const userData = await getUserById(reviewefsy);
         setReviewerDetails(userData);
       }
     };
 
-    if (selectedAppointment?.appointmentDetails?.reviewedBy) {
-      fetchReviewerDetails(selectedAppointment.appointmentDetails.reviewedBy);
+    if (selectedAppointment?.appointmentDetails?.reviewefsy) {
+      fetchReviewerDetails(selectedAppointment.appointmentDetails.reviewefsy);
     }
   }, [selectedAppointment]);
 
@@ -517,70 +449,77 @@ function ApptsFrontDesk() {
     const dateTime = new Date(appointmentDate);
     dateTime.setHours(hours, minutes, 0, 0);
 
-    return !isSlotBookedByAssignedLawyer(dateTime);
+    return !isSlotBookefsyAssignedLawyer(dateTime);
   };
 
   const handleNext = async () => {
     if (currentPage < totalPages) {
-      const { data, lastDoc } = await getLawyerAppointments(
+      const { data, lastDoc } = await getAppointments(
         filter,
         lastVisible,
         pageSize,
         searchText,
         natureOfLegalAssistanceFilter,
-        currentUser
+        false // Forward navigation
       );
       setAppointments(data);
       setLastVisible(lastDoc);
-      setCurrentPage(currentPage + 1);
+      setCurrentPage((prev) => prev + 1); // Move to the next page
     }
   };
 
   const handlePrevious = async () => {
     if (currentPage > 1) {
-      const { data, firstDoc } = await getLawyerAppointments(
+      const { data, firstDoc } = await getAppointments(
         filter,
         lastVisible,
         pageSize,
         searchText,
         natureOfLegalAssistanceFilter,
-        currentUser,
-        true
+        true // Backward navigation
       );
       setAppointments(data);
       setLastVisible(firstDoc);
-      setCurrentPage((prevPage) => prevPage - 1);
+      setCurrentPage((prev) => prev - 1); // Move to the previous page
     }
   };
 
   const handleFirst = async () => {
-    const { data, firstDoc } = await getLawyerAppointments(
+    const { data, firstDoc } = await getAppointments(
       filter,
       null,
       pageSize,
       searchText,
-      natureOfLegalAssistanceFilter,
-      currentUser
+      natureOfLegalAssistanceFilter
     );
     setAppointments(data);
     setLastVisible(firstDoc);
-    setCurrentPage(1);
+    setCurrentPage(1); // Reset to the first page
   };
-
   const handleLast = async () => {
-    const { data, lastDoc } = await getLawyerAppointments(
-      filter,
-      lastVisible,
-      pageSize,
-      searchText,
-      natureOfLegalAssistanceFilter,
-      currentUser,
-      false,
-      true
-    );
-    setAppointments(data);
-    setLastVisible(lastDoc);
-    setCurrentPage(totalPages);
+    try {
+      // Calculate the correct starting point for the last page
+      const skipDocuments = (totalPages - 1) * pageSize;
+
+      // Fetch data starting from the calculated point for the last page
+      const { data, lastDoc } = await getAppointments(
+        filter,
+        null, // We start fresh for the last page fetch
+        pageSize,
+        searchText,
+        natureOfLegalAssistanceFilter,
+        false, // Forward navigation
+        true, // Indicates moving to the last page
+        skipDocuments // Skip documents to reach the last page
+      );
+
+      // Update the state with the last page data
+      setAppointments(data);
+      setLastVisible(lastDoc);
+      setCurrentPage(totalPages); // Set to the last page
+    } catch (error) {
+      console.error("Error navigating to the last page:", error);
+    }
   };
 
   const toggleDetails = (appointment) => {
@@ -656,6 +595,20 @@ function ApptsFrontDesk() {
   const handleRescheduleChange = (e) => {
     setRescheduleReason(e.target.value);
   };
+  const fetchLatestLoginActivity = async (uid) => {
+    const loginActivityRef = collection(fs, "users", uid, "loginActivity");
+    const loginActivityQuery = query(loginActivityRef, orderBy("loginTime", "desc"), limit(1));
+    const loginActivitySnapshot = await getDocs(loginActivityQuery);
+  
+    if (!loginActivitySnapshot.empty) {
+      const activityData = loginActivitySnapshot.docs[0].data();
+      return {
+        ipAddress: activityData.ipAddress || "Unknown",
+        deviceName: activityData.deviceName || "Unknown",
+      };
+    }
+    return { ipAddress: "Unknown", deviceName: "Unknown" };
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -664,235 +617,107 @@ function ApptsFrontDesk() {
     setIsSubmitting(true);
 
     try {
+      // Get selected lawyer's full name
+      const selectedLawyer = lawyers.find(
+        (lawyer) => lawyer.uid === clientEligibility.assistingCounsel
+      );
+      const lawyerFullName = selectedLawyer
+        ? `${selectedLawyer.display_name} ${selectedLawyer.middle_name} ${selectedLawyer.last_name}`
+        : "Not Available";
+
       const updatedData = {
         "clientEligibility.eligibility": clientEligibility.eligibility,
         "appointmentDetails.appointmentStatus":
           clientEligibility.eligibility === "yes" ? "approved" : "denied",
         "clientEligibility.denialReason": clientEligibility.denialReason,
+        "clientEligibility.notes": clientEligibility.notes,
+        "appointmentDetails.assignedLawyer": clientEligibility.assistingCounsel,
+        "appointmentDetails.assignedLawyerFullName": lawyerFullName,
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
       };
 
       await updateAppointment(selectedAppointment.id, updatedData);
+
+      // Fetch latest login activity
+      const { ipAddress, deviceName } = await fetchLatestLoginActivity(
+        currentUser.uid
+      );
+
+      // Prepare audit log with checks for undefined fields
+      const auditLogEntry = {
+        actionType: "UPDATE",
+        timestamp: new Date(),
+        uid: currentUser.uid,
+        changes: {
+          eligibility:
+            selectedAppointment.clientEligibility?.eligibility !== undefined
+              ? {
+                  oldValue: selectedAppointment.clientEligibility.eligibility,
+                  newValue: clientEligibility.eligibility,
+                }
+              : null,
+          appointmentStatus:
+            selectedAppointment.appointmentDetails?.appointmentStatus !==
+            undefined
+              ? {
+                  oldValue:
+                    selectedAppointment.appointmentDetails.appointmentStatus,
+                  newValue:
+                    clientEligibility.eligibility === "yes"
+                      ? "approved"
+                      : "denied",
+                }
+              : null,
+          denialReason:
+            selectedAppointment.clientEligibility?.denialReason !== undefined
+              ? {
+                  oldValue: selectedAppointment.clientEligibility.denialReason,
+                  newValue: clientEligibility.denialReason,
+                }
+              : null,
+          updatedTime:
+            selectedAppointment.appointmentDetails?.updatedTime !== undefined
+              ? {
+                  oldValue: selectedAppointment.appointmentDetails.updatedTime,
+                  newValue: Timestamp.fromDate(new Date()),
+                }
+              : null,
+        },
+        affectedData: { appointmentId: selectedAppointment.id },
+        metadata: { ipAddress, userAgent: deviceName },
+      };
+
+      // Remove any null entries in the `changes` map
+      Object.keys(auditLogEntry.changes).forEach(
+        (key) =>
+          auditLogEntry.changes[key] === undefined &&
+          delete auditLogEntry.changes[key]
+      );
+
+      // Add audit log entry
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
+
       setSnackbarMessage("Form has been successfully submitted.");
       setSelectedAppointment(null);
     } catch (error) {
+      console.error("Error submitting form:", error);
       setSnackbarMessage("Error submitting form, please try again.");
     } finally {
       setIsSubmitting(false);
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
-    }
-  };
-
-  const handleSubmitProceedingNotes = async (e) => {
-    e.preventDefault();
-
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-
-    try {
-      let fileUrl = null;
-
-      // Check if a file is selected and upload it to Firebase Storage
-      if (proceedingFile) {
-        const currentUid = currentUser.uid; // Current user's UID
-        const controlNumber = selectedAppointment.controlNumber; // Get control number from selected appointment
-        const fullName = selectedAppointment.fullName.replace(/ /g, "_"); // Replace spaces with underscores in full name
-
-        // Get Firebase storage reference
-        const storage = getStorage(); // Initialize Firebase Storage
-        const fileRef = ref(
-          storage,
-          `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
-        );
-
-        // Upload the file
-        await uploadBytes(fileRef, proceedingFile);
-        fileUrl = await getDownloadURL(fileRef); // Get the download URL after upload
-      }
-
-      // Update appointment data in Firestore
-      const updatedData = {
-        "appointmentDetails.proceedingNotes": proceedingNotes,
-        "appointmentDetails.ibpParalegalStaff":
-          clientEligibility.ibpParalegalStaff,
-        "appointmentDetails.assistingCounsel":
-          clientEligibility.assistingCounsel,
-        "appointmentDetails.appointmentStatus": "done",
-        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
-        "appointmentDetails.clientAttend": clientAttend,
-        "appointmentDetails.proceedingFileUrl": fileUrl, // Save the file URL (if uploaded)
-      };
-
-      // Update the appointment document in Firestore with the proceeding notes and file URL
-      await updateAppointment(selectedAppointment.id, updatedData);
-
-      // Notify success and reset form values
-      setSnackbarMessage("Remarks have been successfully submitted.");
-      setProceedingNotes(""); // Reset proceeding notes
-      setProceedingFile(null); // Reset file input
-      setClientAttend(null);
+      // Reset form fields
       setClientEligibility({
-        ...clientEligibility,
+        eligibility: "",
+        denialReason: "",
+        notes: "",
         ibpParalegalStaff: "",
         assistingCounsel: "",
       });
-
-      // Send notifications as needed
-      const clientFullName = selectedAppointment.fullName;
-      const appointmentId = selectedAppointment.id;
-
-      await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been marked as done.`,
-        selectedAppointment.uid,
-        "appointment",
-        selectedAppointment.controlNumber
-      );
-
-      if (assignedLawyerDetails?.uid) {
-        await sendNotification(
-          `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
-          assignedLawyerDetails.uid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
-
-      const headLawyerUid = await getHeadLawyerUid();
-      if (headLawyerUid) {
-        await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as done.`,
-          headLawyerUid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
-
-      // Optionally close the form/modal after successful submission
-      setShowProceedingNotesForm(false);
-    } catch (error) {
-      setSnackbarMessage("Error submitting remarks, please try again.");
-    } finally {
-      setShowSnackbar(true);
-      setTimeout(() => setShowSnackbar(false), 3000);
-      setIsSubmitting(false);
+      setSelectedAppointment(null);
     }
   };
-
-  const handleRescheduleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!rescheduleDate || !rescheduleAppointmentType) {
-      setSnackbarMessage("Reschedule date and type are required.");
-      setShowSnackbar(true);
-      return;
-    }
-
-    let meetingLink =
-      selectedAppointment.appointmentDetails?.meetingLink || null;
-    let meetingPass =
-      selectedAppointment.appointmentDetails?.meetingPass || null;
-
-    if (rescheduleAppointmentType === "Online") {
-      const { link, password } = generateJitsiLink(
-        selectedAppointment.controlNumber
-      );
-      meetingLink = link;
-      meetingPass = password;
-    } else if (rescheduleAppointmentType === "In-person") {
-      meetingLink = null;
-      meetingPass = null;
-    }
-
-    const appointmentRef = doc(fs, "appointments", selectedAppointment.id);
-    const appointmentSnapshot = await getDoc(appointmentRef);
-    const appointmentData = appointmentSnapshot.data();
-
-    const rescheduleEntry = {
-      rescheduleDate: selectedAppointment.appointmentDetails?.appointmentDate,
-      rescheduleAppointmentType:
-        selectedAppointment.appointmentDetails?.apptType,
-      rescheduleReason: rescheduleReason,
-      rescheduleTimestamp: Timestamp.fromDate(new Date()),
-    };
-
-    const updatedRescheduleHistory = appointmentData.rescheduleHistory
-      ? [...appointmentData.rescheduleHistory, rescheduleEntry]
-      : [rescheduleEntry];
-
-    const updatedData = {
-      "appointmentDetails.appointmentDate": Timestamp.fromDate(rescheduleDate),
-      "appointmentDetails.apptType": rescheduleAppointmentType,
-      rescheduleHistory: updatedRescheduleHistory,
-      "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
-      ...(meetingLink && {
-        "appointmentDetails.meetingLink": meetingLink,
-        "appointmentDetails.meetingPass": meetingPass,
-      }),
-    };
-
-    try {
-      // Save the updated appointment information first
-      await updateDoc(appointmentRef, updatedData);
-
-      const clientFullName = selectedAppointment.fullName;
-      const appointmentId = selectedAppointment.id;
-
-      const lawyerFullName = assignedLawyerDetails
-        ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
-        : "Assigned Lawyer Not Available";
-
-      // Send notifications after successfully updating Firestore
-      await sendNotification(
-        `Your appointment (ID: ${appointmentId}) has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
-        selectedAppointment.uid,
-        "appointment",
-        selectedAppointment.controlNumber
-      );
-
-      if (assignedLawyerDetails?.uid) {
-        await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
-          assignedLawyerDetails.uid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
-
-      const headLawyerUid = await getHeadLawyerUid();
-      if (headLawyerUid) {
-        await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
-          headLawyerUid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
-
-      setAppointments((prevAppointments) =>
-        prevAppointments.map((appt) =>
-          appt.id === selectedAppointment.id
-            ? { ...appt, ...updatedData }
-            : appt
-        )
-      );
-
-      setRescheduleDate(null);
-      setRescheduleReason("");
-      setRescheduleAppointmentType("");
-
-      setSnackbarMessage("Appointment successfully rescheduled.");
-      setShowSnackbar(true);
-      setTimeout(() => {
-        setShowSnackbar(false);
-        setSelectedAppointment(null);
-      }, 3000);
-    } catch (error) {
-      console.error("Error rescheduling appointment:", error);
-      setSnackbarMessage("Error rescheduling appointment, please try again.");
-      setShowSnackbar(true);
-    }
-  };
+  
 
   const getFormattedDate = (timestamp, includeTime = false) => {
     if (!timestamp || !(timestamp instanceof Timestamp)) {
@@ -944,7 +769,7 @@ function ApptsFrontDesk() {
     dateTime.setHours(hours, time.getMinutes(), 0, 0);
 
     // Check if the slot is already booked
-    if (isSlotBookedByAssignedLawyer(dateTime)) {
+    if (isSlotBookefsyAssignedLawyer(dateTime)) {
       return "booked-time disabled-time"; // Mark the slot as booked and disable it
     }
 
@@ -962,10 +787,10 @@ function ApptsFrontDesk() {
     const dateTime = new Date(rescheduleDate);
     dateTime.setHours(hours, minutes, 0, 0);
 
-    return !isSlotBookedByAssignedLawyer(dateTime);
+    return !isSlotBookefsyAssignedLawyer(dateTime);
   };
 
-  const isSlotBookedByAssignedLawyer = (dateTime) => {
+  const isSlotBookefsyAssignedLawyer = (dateTime) => {
     return appointments.some((appointment) => {
       const appointmentDate = appointment.appointmentDetails?.appointmentDate;
       const assignedLawyer = appointment.appointmentDetails?.assignedLawyer;
@@ -978,7 +803,7 @@ function ApptsFrontDesk() {
     });
   };
 
-  const isSlotBookedByCurrentUser = (dateTime) => {
+  const isSlotBookefsyCurrentUser = (dateTime) => {
     return bookedSlots.some(
       (slot) =>
         slot.getDate() === dateTime.getDate() &&
@@ -1002,7 +827,7 @@ function ApptsFrontDesk() {
     dateTime.setHours(hours, time.getMinutes(), 0, 0);
 
     // Check if the slot is booked by the assigned lawyer
-    if (isSlotBookedByAssignedLawyer(dateTime)) {
+    if (isSlotBookefsyAssignedLawyer(dateTime)) {
       return "booked-time disabled-time"; // Apply class for booked slots
     }
 
@@ -1068,7 +893,7 @@ function ApptsFrontDesk() {
         <button onClick={resetFilters}>Reset Filters</button>
         <br />
         <p>Total Filtered Items: {totalFilteredItems}</p>
-        <table class="flexible-table">
+        <table className="table table-striped table-bordered">
           <thead>
             <tr>
               <th>#</th>
@@ -1099,18 +924,6 @@ function ApptsFrontDesk() {
                     {capitalizeFirstLetter(
                       appointment.appointmentDetails?.appointmentStatus
                     )}
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        color:
-                          appointment.appointmentStatus === "pending"
-                            ? "black"
-                            : "normal", // Highlight the "Pending" status
-                      }}
-                    >
-                      {capitalizeFirstLetter(appointment.appointmentStatus)}
-                    </span>
                   </td>
                   <td>
                     <center>
@@ -1273,7 +1086,7 @@ function ApptsFrontDesk() {
                 <section className="mb-4 print-section">
                   {(selectedAppointment.appointmentDetails?.newRequest ||
                     selectedAppointment.appointmentDetails?.requestReason) && (
-                      <section className="mb-4 print-section no-print">
+                    <section className="mb-4 print-section no-print">
                       <h2>
                         <em style={{ color: "#a34bc9", fontSize: "16px" }}>
                           New Request Details
@@ -1370,7 +1183,7 @@ function ApptsFrontDesk() {
                                 // Appointment is done, show "Done" with a check icon
                                 <button
                                   style={{
-                                    backgroundColor: "#1DB954", // Green background for "Done"
+                                    backgroundColor: "#1fs954", // Green background for "Done"
                                     color: "white",
                                     border: "none",
                                     padding: "5px 8px",
