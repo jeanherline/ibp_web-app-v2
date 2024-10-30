@@ -51,7 +51,7 @@ function ApptsFrontDesk() {
   const [filter, setFilter] = useState("all");
   const [searchText, setSearchText] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
   const [lastVisible, setLastVisible] = useState(null);
   const pageSize = 7;
   const [clientEligibility, setClientEligibility] = useState({
@@ -150,7 +150,7 @@ function ApptsFrontDesk() {
     printWindow.document.write(`
       @media print {
         @page {
-          size: A4;
+          size: 8.5in 13in;
           margin: 0.8in;
         }
         body {
@@ -251,7 +251,7 @@ function ApptsFrontDesk() {
 
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
-      <div className="header">
+      <div class="header">
         <img src="${ibpLogo}" alt="IBP Logo" />
         <h2>Integrated Bar of the Philippines - Malolos</h2>
         ${
@@ -269,9 +269,9 @@ function ApptsFrontDesk() {
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
       if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div className='page-break'></div>");
+        printWindow.document.write("<div class='page-break'></div>");
         printWindow.document.write(
-          `<img src='${image.src}' className='print-image' />`
+          `<img src='${image.src}' class='print-image' />`
         );
       }
     });
@@ -597,9 +597,13 @@ function ApptsFrontDesk() {
   };
   const fetchLatestLoginActivity = async (uid) => {
     const loginActivityRef = collection(fs, "users", uid, "loginActivity");
-    const loginActivityQuery = query(loginActivityRef, orderBy("loginTime", "desc"), limit(1));
+    const loginActivityQuery = query(
+      loginActivityRef,
+      orderBy("loginTime", "desc"),
+      limit(1)
+    );
     const loginActivitySnapshot = await getDocs(loginActivityQuery);
-  
+
     if (!loginActivitySnapshot.empty) {
       const activityData = loginActivitySnapshot.docs[0].data();
       return {
@@ -717,7 +721,6 @@ function ApptsFrontDesk() {
       setSelectedAppointment(null);
     }
   };
-  
 
   const getFormattedDate = (timestamp, includeTime = false) => {
     if (!timestamp || !(timestamp instanceof Timestamp)) {
@@ -868,6 +871,7 @@ function ApptsFrontDesk() {
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
           <option value="all">Status</option>
+          <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="scheduled">Scheduled</option>
           <option value="denied">Denied</option>

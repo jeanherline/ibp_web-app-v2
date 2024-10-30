@@ -408,7 +408,7 @@ function Settings() {
                     <th>Last Login</th>
                     <th>Location</th>
                     <th>Platform</th>
-                    <th>Actions</th>
+                    {/* <th>Actions</th> */}
                   </tr>
                 </thead>
                 <tbody>
@@ -423,14 +423,14 @@ function Settings() {
                       </td>
                       <td>{device.location}</td>
                       <td>{device.platform}</td>
-                      <td>
+                      {/* <td>
                         <button
                           className="remove-device-btn"
                           onClick={() => removeDevice(device.id)}
                         >
                           <FontAwesomeIcon icon={faTrash} />
                         </button>
-                      </td>
+                      </td> */}
                     </tr>
                   ))}
                 </tbody>

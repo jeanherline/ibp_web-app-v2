@@ -24,9 +24,22 @@ import {
   faEyeSlash,
   faKey,
 } from "@fortawesome/free-solid-svg-icons";
-import { auth, doc, fs, collection } from "../../Config/Firebase";
-import { addDoc, getDoc, onSnapshot } from "firebase/firestore";
-import { createUserWithEmailAndPassword } from "firebase/auth"; // Import Firebase Auth
+import {
+  auth,
+  doc,
+  fs,
+  collection,
+  query,
+  orderBy,
+  limit,
+} from "../../Config/Firebase";
+import { addDoc, getDocs, setDoc, onSnapshot } from "firebase/firestore";
+import {
+  getAuth,
+  signOut,
+
+  createUserWithEmailAndPassword,
+} from "firebase/auth"; // Import Firebase Auth
 
 function Users() {
   const [users, setUsers] = useState([]);
@@ -65,7 +78,16 @@ function Users() {
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [passwordError, setPasswordError] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false); // State to toggle password visibility
-  const currentUser = auth.currentUser;
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        setCurrentUser(user);
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   // Function to toggle password visibility
   const togglePasswordVisibility = () => {
@@ -288,13 +310,13 @@ function Users() {
 
       try {
         // Fetch latest login activity for metadata
-        const loginActivitySnapshot = await fs
-          .collection("users")
-          .doc(auth.currentUser.uid)
-          .collection("loginActivity")
-          .orderBy("loginTime", "desc")
-          .limit(1)
-          .get();
+        const loginActivitySnapshot = await getDocs(
+          query(
+            collection(fs, "users", currentUser.uid, "loginActivity"),
+            orderBy("loginTime", "desc"),
+            limit(1)
+          )
+        );
 
         let ipAddress = "Unknown";
         let deviceName = "Unknown";
@@ -326,7 +348,7 @@ function Users() {
           },
         };
 
-        await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
+        await addDoc(collection(fs, "audit_logs"), auditLogEntry);
       } catch (error) {
         console.error("Error logging edit access:", error);
       }
@@ -389,7 +411,7 @@ function Users() {
         },
       };
 
-      await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
     } catch (error) {
       console.error("Failed to update user member type:", error);
     }
@@ -441,7 +463,7 @@ function Users() {
           },
         };
 
-        await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
+        await addDoc(collection(fs, "audit_logs"), auditLogEntry);
       } catch (error) {
         console.error("Error logging archive initiation:", error);
       }
@@ -494,7 +516,7 @@ function Users() {
           },
         };
 
-        await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
+        await addDoc(collection(fs, "audit_logs"), auditLogEntry);
       } catch (error) {
         console.error("Error logging activation initiation:", error);
       }
@@ -655,7 +677,7 @@ function Users() {
         },
       };
 
-      await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
     } catch (error) {
       console.error("Failed to update user:", error);
     }
@@ -714,51 +736,52 @@ function Users() {
       ? new Date(timestamp.seconds * 1000).toLocaleString()
       : "-";
 
+  // Updated handleNewUserSubmit function
   const handleNewUserSubmit = async (e) => {
     e.preventDefault();
 
+    // Validate password strength before proceeding
     if (passwordError || passwordStrength < 3) {
       alert("Please use a stronger password.");
       return;
     }
 
+    let userCredential = null; // Initialize userCredential
+
     try {
-      // Step 1: Create user in Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        newUser.email,
-        newUser.password
+      // Step 1: Get the current user's login activity data for metadata logging
+      const loginActivitySnapshot = await getDocs(
+        collection(fs, "users", auth.currentUser.uid, "loginActivity")
       );
 
-      // Step 2: Retrieve the created user UID from Firebase Auth
-      const { uid } = userCredential.user;
-
-      // Step 3: Add user to Firestore, using the UID from Firebase Auth
-      await addUser({
-        ...newUser,
-        uid,
-        user_status: "active", // Assuming new user is active by default
-      });
-
-      // Fetch latest login activity for metadata
-      const loginActivitySnapshot = await fs
-        .collection("users")
-        .doc(currentUser.uid)
-        .collection("loginActivity")
-        .orderBy("loginTime", "desc")
-        .limit(1)
-        .get();
-
+      // Set default metadata values
       let ipAddress = "Unknown";
       let deviceName = "Unknown";
 
+      // Extract IP and device info if login activity is available
       if (!loginActivitySnapshot.empty) {
         const loginData = loginActivitySnapshot.docs[0].data();
         ipAddress = loginData.ipAddress || "Unknown";
         deviceName = loginData.deviceName || "Unknown";
       }
 
-      // Add audit log entry with "CREATE" as the action type
+      // Step 2: Create the new user in Firebase Authentication
+      userCredential = await createUserWithEmailAndPassword(
+        auth,
+        newUser.email,
+        newUser.password
+      );
+      const { uid } = userCredential.user;
+
+      // Step 3: Add the new user to Firestore directly within the users collection
+      await setDoc(doc(fs, "users", uid), {
+        ...newUser,
+        uid,
+        user_status: "active", // Set new user to active by default
+        created_time: new Date(), // Add a timestamp if desired
+      });
+
+      // Step 4: Log the creation in the audit logs
       const auditLogEntry = {
         actionType: "CREATE",
         timestamp: new Date(),
@@ -769,28 +792,34 @@ function Users() {
           targetEmail: newUser.email,
         },
         affectedData: {
-          adminUserId: currentUser.uid,
+          adminUserId: auth.currentUser.uid,
           adminUserName: auth.currentUser.displayName || "Unknown",
           newUserId: uid,
         },
         metadata: {
-          ipAddress: ipAddress,
+          ipAddress,
           userAgent: deviceName,
         },
       };
 
-      await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
 
-      // Close the modal and show success message
+      // Step 5: Close modal, reset the form, and navigate back to the root URL
       setShowSignUpModal(false);
       clearForm();
-      fetchUsers(currentPage);
-      setSnackbarMessage("New user has been successfully added.");
-      setShowSnackbar(true);
-      setTimeout(() => setShowSnackbar(false), 3000);
+      alert("User added successfully.");
+
+      // Optional: sign out the current user and redirect to login
+      await signOut(auth);
+      window.location.href = "/";
     } catch (error) {
       console.error("Failed to add new user:", error);
-      alert("Failed to add new user: " + error.message); // Show a user-friendly error
+      alert("Failed to add new user: " + error.message);
+
+      // If user creation failed mid-process, delete the orphaned user from Firebase Auth
+      if (userCredential?.user) {
+        await userCredential.user.delete();
+      }
     }
   };
 
@@ -1185,7 +1214,7 @@ function Users() {
               </button>
             </div>
             <div className="custom-modal-body">
-              <form onSubmit={handleNewUserSubmit} autoComplete="off">
+              <form onSubmit={(e) => handleNewUserSubmit(e)} autoComplete="off">
                 <div className="form-group">
                   <label htmlFor="display_name">First Name</label>
                   <input

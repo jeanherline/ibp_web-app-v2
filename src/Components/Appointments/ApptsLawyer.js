@@ -422,7 +422,7 @@ function ApptsLawyer() {
 
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
-      <div className="header">
+      <div class="header">
         <img src="${ibpLogo}" alt="IBP Logo" />
         <h2>Integrated Bar of the Philippines - Malolos</h2>
         ${
@@ -440,9 +440,9 @@ function ApptsLawyer() {
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
       if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div className='page-break'></div>");
+        printWindow.document.write("<div class='page-break'></div>");
         printWindow.document.write(
-          `<img src='${image.src}' className='print-image' />`
+          `<img src='${image.src}' class='print-image' />`
         );
       }
     });
@@ -933,27 +933,35 @@ function ApptsLawyer() {
         timestamp: new Date(),
         uid: currentUser.uid,
         changes: {
-          proceedingNotes: selectedAppointment.appointmentDetails?.proceedingNotes
+          proceedingNotes: selectedAppointment.appointmentDetails
+            ?.proceedingNotes
             ? {
-                oldValue: selectedAppointment.appointmentDetails.proceedingNotes,
+                oldValue:
+                  selectedAppointment.appointmentDetails.proceedingNotes,
                 newValue: proceedingNotes,
               }
             : null,
-          ibpParalegalStaff: selectedAppointment.appointmentDetails?.ibpParalegalStaff
+          ibpParalegalStaff: selectedAppointment.appointmentDetails
+            ?.ibpParalegalStaff
             ? {
-                oldValue: selectedAppointment.appointmentDetails.ibpParalegalStaff,
+                oldValue:
+                  selectedAppointment.appointmentDetails.ibpParalegalStaff,
                 newValue: clientEligibility.ibpParalegalStaff,
               }
             : null,
-          assistingCounsel: selectedAppointment.appointmentDetails?.assistingCounsel
+          assistingCounsel: selectedAppointment.appointmentDetails
+            ?.assistingCounsel
             ? {
-                oldValue: selectedAppointment.appointmentDetails.assistingCounsel,
+                oldValue:
+                  selectedAppointment.appointmentDetails.assistingCounsel,
                 newValue: clientEligibility.assistingCounsel,
               }
             : null,
-          appointmentStatus: selectedAppointment.appointmentDetails?.appointmentStatus
+          appointmentStatus: selectedAppointment.appointmentDetails
+            ?.appointmentStatus
             ? {
-                oldValue: selectedAppointment.appointmentDetails.appointmentStatus,
+                oldValue:
+                  selectedAppointment.appointmentDetails.appointmentStatus,
                 newValue: appointmentStatus,
               }
             : null,
@@ -963,9 +971,11 @@ function ApptsLawyer() {
                 newValue: clientAttend,
               }
             : null,
-          proceedingFileUrl: selectedAppointment.appointmentDetails?.proceedingFileUrl
+          proceedingFileUrl: selectedAppointment.appointmentDetails
+            ?.proceedingFileUrl
             ? {
-                oldValue: selectedAppointment.appointmentDetails.proceedingFileUrl,
+                oldValue:
+                  selectedAppointment.appointmentDetails.proceedingFileUrl,
                 newValue: fileUrl,
               }
             : null,
@@ -985,15 +995,17 @@ function ApptsLawyer() {
           userAgent: deviceName,
         },
       };
-      
+
       // Remove any null entries in the `changes` map
       Object.keys(auditLogEntry.changes).forEach(
-        (key) => auditLogEntry.changes[key] === null && delete auditLogEntry.changes[key]
+        (key) =>
+          auditLogEntry.changes[key] === null &&
+          delete auditLogEntry.changes[key]
       );
-      
+
       // Add audit log entry to Firestore
       await addDoc(collection(fs, "audit_logs"), auditLogEntry);
-      
+
       // Notify success and reset form values
       setSnackbarMessage("Remarks have been successfully submitted.");
       setProceedingNotes("");
@@ -1192,9 +1204,11 @@ function ApptsLawyer() {
         timestamp: new Date(),
         uid: currentUser.uid,
         changes: {
-          appointmentDate: selectedAppointment.appointmentDetails?.appointmentDate
+          appointmentDate: selectedAppointment.appointmentDetails
+            ?.appointmentDate
             ? {
-                oldValue: selectedAppointment.appointmentDetails.appointmentDate,
+                oldValue:
+                  selectedAppointment.appointmentDetails.appointmentDate,
                 newValue: rescheduleDate,
               }
             : null,
@@ -1236,15 +1250,17 @@ function ApptsLawyer() {
           userAgent: deviceName,
         },
       };
-      
+
       // Remove any null entries in the `changes` map
       Object.keys(auditLogEntry.changes).forEach(
-        (key) => auditLogEntry.changes[key] === null && delete auditLogEntry.changes[key]
+        (key) =>
+          auditLogEntry.changes[key] === null &&
+          delete auditLogEntry.changes[key]
       );
-      
+
       // Add audit log entry to Firestore
       await addDoc(collection(fs, "audit_logs"), auditLogEntry);
-      
+
       setAppointments((prevAppointments) =>
         prevAppointments.map((appt) =>
           appt.id === selectedAppointment.id
@@ -1419,6 +1435,7 @@ function ApptsLawyer() {
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
           <option value="all">Status</option>
+          <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="scheduled">Scheduled</option>
           <option value="denied">Denied</option>
@@ -1489,14 +1506,26 @@ function ApptsLawyer() {
                             )
                           }
                           style={{
-                            backgroundColor: "#28a745", // Change button color to green
+                            backgroundColor:
+                              appointment.appointmentDetails
+                                .appointmentStatus === "done"
+                                ? "gray"
+                                : "#28a745", // Disable button background color when status is 'done'
                             color: "white",
                             border: "none",
                             padding: "5px 8px",
-                            cursor: "pointer",
+                            cursor:
+                              appointment.appointmentDetails
+                                .appointmentStatus === "done"
+                                ? "not-allowed"
+                                : "pointer", // Set cursor to 'not-allowed' when disabled
                             display: "flex",
                             alignItems: "center",
                           }}
+                          disabled={
+                            appointment.appointmentDetails.appointmentStatus ===
+                            "done"
+                          } // Disable button if status is 'done'
                         >
                           <FontAwesomeIcon
                             icon={faVideo}
@@ -1509,6 +1538,7 @@ function ApptsLawyer() {
                       "N/A"
                     )}
                   </td>
+
                   <td>
                     <OverlayTrigger
                       placement="top"

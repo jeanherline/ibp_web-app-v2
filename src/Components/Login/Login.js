@@ -70,7 +70,7 @@ function Login() {
       if (userSnap.exists()) {
         const userData = userSnap.data();
 
-        if (userData.user_status === "active") {
+        if (userData.user_status === "active" && userData.member_type !== "client") {
           // If user is active, log activity and update trusted devices
           const loginActivity = await logLoginActivity(user); // Assuming this function already logs the activity
 
@@ -166,10 +166,11 @@ function Login() {
     }
   };
 
-  // Log Login Activity
+  // Log Login Activity and save trusted device if not already present
   const logLoginActivity = async (user) => {
     const { deviceName, ipAddress, location, platform } = await getDeviceInfo();
 
+    // Save to loginActivity
     const loginActivityRef = collection(fs, `users/${user.uid}/loginActivity`);
     await addDoc(loginActivityRef, {
       deviceName,
@@ -177,6 +178,24 @@ function Login() {
       location,
       loginTime: new Date(),
     });
+
+    // Save to trusted_devices only if the device is not already present
+    const trustedDeviceRef = doc(
+      fs,
+      `users/${user.uid}/trusted_devices`,
+      deviceName
+    );
+    const trustedDeviceSnapshot = await getDoc(trustedDeviceRef);
+
+    if (!trustedDeviceSnapshot.exists()) {
+      await setDoc(trustedDeviceRef, {
+        device_name: deviceName || "Unknown",
+        ipAddress: ipAddress || "Unknown",
+        last_login: new Date(),
+        location: location || "Unknown",
+        platform: platform || "Unknown",
+      });
+    }
   };
 
   // Function to get device info (uses UAParser and ipapi for location and IP)

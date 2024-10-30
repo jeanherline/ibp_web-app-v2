@@ -263,7 +263,7 @@ function ApptsCalendar() {
 
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
-      <div className="header">
+      <div class="header">
         <img src="${ibpLogo}" alt="IBP Logo" />
         <h2>Integrated Bar of the Philippines - Malolos</h2>
         ${
@@ -281,9 +281,9 @@ function ApptsCalendar() {
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
       if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div className='page-break'></div>");
+        printWindow.document.write("<div class='page-break'></div>");
         printWindow.document.write(
-          `<img src='${image.src}' className='print-image' />`
+          `<img src='${image.src}' class='print-image' />`
         );
       }
     });

@@ -10,7 +10,7 @@ import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import "./Profile.css";
-import { addDoc } from "firebase/firestore"; 
+import { addDoc, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { fs, collection } from "../../Config/Firebase"; // Ensure Firebase is initialized
 const defaultImageUrl =
   "https://firebasestorage.googleapis.com/v0/b/lawyer-app-ed056.appspot.com/o/DefaultUserImage.jpg?alt=media&token=3ba45526-99d8-4d30-9cb5-505a5e23eda1";
@@ -85,19 +85,36 @@ function Profile() {
     return changes;
   };
 
+  const fetchLatestLoginActivity = async (uid) => {
+    const loginActivityRef = collection(fs, "users", uid, "loginActivity");
+    const loginActivityQuery = query(
+      loginActivityRef,
+      orderBy("loginTime", "desc"),
+      limit(1)
+    );
+    const loginActivitySnapshot = await getDocs(loginActivityQuery);
+  
+    if (!loginActivitySnapshot.empty) {
+      const activityData = loginActivitySnapshot.docs[0].data();
+      return {
+        ipAddress: activityData.ipAddress || null,
+        deviceName: activityData.deviceName || null,
+      };
+    }
+    return { ipAddress: null, deviceName: null };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-
+  
     let updatedData = { ...userData };
-
-    // Remove any invalid keys from updatedData
+    // Remove empty values
     Object.keys(updatedData).forEach((key) => {
-      if (updatedData[key] === "") {
-        delete updatedData[key];
-      }
+      if (updatedData[key] === "") delete updatedData[key];
     });
-
+  
+    // Add profile image with timestamp if provided
     if (profileImage) {
       const now = new Date();
       const timestamp = `${now.getFullYear()}-${(now.getMonth() + 1)
@@ -109,66 +126,56 @@ function Profile() {
         .getSeconds()
         .toString()
         .padStart(2, "0")}`;
-
+      
       const imageUrl = await uploadImage(
         profileImage,
         `profile_images/${currentUser.uid}/profileImage_${timestamp}.png`
       );
       updatedData.photo_url = imageUrl;
     }
-
-    // Add updated_time as the current timestamp
+  
+    // Add current timestamp for updated_time
     updatedData.updated_time = new Date();
-
+  
     try {
-      const changes = findChangedFields(); // Track the changes before updating
+      const changes = findChangedFields();
       await updateUser(currentUser.uid, updatedData);
-
+  
       if (Object.keys(changes).length > 0) {
         const message = `Your profile has been updated. Fields changed: ${Object.keys(
           changes
         ).join(", ")}`;
-
-        // Send notification about profile changes
         await sendNotification(message, currentUser.uid, "profile");
       }
-
-      // Fetch latest login activity for metadata
-      const loginActivitySnapshot = await fs
-        .collection("users")
-        .doc(currentUser.uid)
-        .collection("loginActivity")
-        .orderBy("loginTime", "desc")
-        .limit(1)
-        .get();
-
-      let ipAddress = "Unknown";
-      let deviceName = "Unknown";
-
-      if (!loginActivitySnapshot.empty) {
-        const loginData = loginActivitySnapshot.docs[0].data();
-        ipAddress = loginData.ipAddress || "Unknown";
-        deviceName = loginData.deviceName || "Unknown";
-      }
-
-      // Add audit log entry with "UPDATE" as the action type
+  
+      // Fetch latest login activity metadata
+      const { ipAddress, deviceName } = await fetchLatestLoginActivity(
+        currentUser.uid
+      );
+  
+      // Create and clean audit log entry
       const auditLogEntry = {
         actionType: "UPDATE",
         timestamp: new Date(),
-        uid: currentUser.uid,
-        changes: changes,
+        uid: currentUser?.uid || null,
+        changes: changes || {},
         affectedData: {
-          userId: currentUser.uid,
-          userName: updatedData.display_name || "Unknown",
+          userId: currentUser?.uid || null,
+          userName: updatedData?.display_name || null,
         },
         metadata: {
           ipAddress: ipAddress,
           userAgent: deviceName,
         },
       };
-
-      await addDoc(collection(fs, "audit_logs"), auditLogEntry); 
-
+  
+      Object.keys(auditLogEntry.changes).forEach(
+        (key) =>
+          auditLogEntry.changes[key] === undefined &&
+          (auditLogEntry.changes[key] = null)
+      );
+  
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
       setSnackbarMessage("Profile has been successfully updated.");
     } catch (error) {
       setSnackbarMessage("Failed to update profile. Please try again.");
@@ -178,7 +185,7 @@ function Profile() {
       setTimeout(() => setShowSnackbar(false), 3000);
     }
   };
-
+  
   if (!currentUser) {
     return <div>Loading...</div>;
   }

@@ -61,7 +61,7 @@ function ApptsHead() {
     assistingCounsel: "",
   });
   const [rescheduleAppointmentType, setRescheduleAppointmentType] =
-  useState(""); // Rescheduled appointment type
+    useState(""); // Rescheduled appointment type
   const [appointmentDate, setAppointmentDate] = useState(null);
   const [rescheduleDate, setRescheduleDate] = useState(null);
   const [rescheduleReason, setRescheduleReason] = useState("");
@@ -115,46 +115,49 @@ function ApptsHead() {
 
   useEffect(() => {
     if (!currentUser) return;
-
+  
     const fetchAppointments = async () => {
-      // Fetch a large number of appointments instead of null for the limit
-      const { data, total } = await getAdminAppointments(
-        filter,
-        null, // No lastVisible, fetch all appointments
-        1000, // Set a large limit instead of null
-        searchText,
-        natureOfLegalAssistanceFilter,
-        currentUser
-      );
-
-      // Sort appointments to have pending first
-      const sortedAppointments = data.sort((a, b) => {
-        if (
-          a.appointmentStatus === "pending" &&
-          b.appointmentStatus !== "pending"
-        ) {
-          return -1; // "pending" comes first
+      try {
+        const result = await getAdminAppointments(
+          filter,
+          null,
+          1000,
+          searchText,
+          natureOfLegalAssistanceFilter,
+          () => {}
+        );
+        
+        if (result && result.data && result.total !== undefined) {
+          const { data, total } = result;
+  
+          // Sort appointments to have pending first
+          const sortedAppointments = data.sort((a, b) => {
+            if (a.appointmentStatus === "pending" && b.appointmentStatus !== "pending") {
+              return -1; // "pending" comes first
+            }
+            if (a.appointmentStatus !== "pending" && b.appointmentStatus === "pending") {
+              return 1; // "pending" comes first
+            }
+            return 0; // Keep order for other statuses
+          });
+  
+          // Set total pages based on sorted data and pageSize
+          const paginatedAppointments = sortedAppointments.slice(
+            (currentPage - 1) * pageSize,
+            currentPage * pageSize
+          );
+  
+          setAppointments(paginatedAppointments);
+          setTotalPages(Math.ceil(total / pageSize));
+          setTotalFilteredItems(total);
+        } else {
+          console.error("Failed to fetch valid appointments data.");
         }
-        if (
-          a.appointmentStatus !== "pending" &&
-          b.appointmentStatus === "pending"
-        ) {
-          return 1; // "pending" comes first
-        }
-        return 0; // Keep order for other statuses
-      });
-
-      // Set total pages based on sorted data and pageSize
-      const paginatedAppointments = sortedAppointments.slice(
-        (currentPage - 1) * pageSize,
-        currentPage * pageSize
-      );
-
-      setAppointments(paginatedAppointments);
-      setTotalPages(Math.ceil(total / pageSize));
-      setTotalFilteredItems(total);
+      } catch (error) {
+        console.error("Error fetching appointments:", error);
+      }
     };
-
+  
     fetchAppointments();
   }, [
     filter,
@@ -162,8 +165,9 @@ function ApptsHead() {
     searchText,
     natureOfLegalAssistanceFilter,
     currentUser,
-    currentPage, // Make sure it re-fetches when page changes
+    currentPage,
   ]);
+  
 
   const handlePrint = () => {
     if (!selectedAppointment) {
@@ -197,7 +201,7 @@ function ApptsHead() {
     printWindow.document.write(`
       @media print {
         @page {
-          size: A4;
+          size: 8.5in 13in;
           margin: 0.8in;
         }
         body {
@@ -298,7 +302,7 @@ function ApptsHead() {
 
     // Add the IBP logo and QR code to the print layout
     printWindow.document.write(`
-      <div className="header">
+      <div class="header">
         <img src="${ibpLogo}" alt="IBP Logo" />
         <h2>Integrated Bar of the Philippines - Malolos</h2>
         ${
@@ -316,9 +320,9 @@ function ApptsHead() {
     const images = document.querySelectorAll(".img-thumbnail");
     images.forEach((image) => {
       if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div className='page-break'></div>");
+        printWindow.document.write("<div class='page-break'></div>");
         printWindow.document.write(
-          `<img src='${image.src}' className='print-image' />`
+          `<img src='${image.src}' class='print-image' />`
         );
       }
     });
@@ -775,27 +779,35 @@ function ApptsHead() {
         timestamp: new Date(),
         uid: currentUser.uid,
         changes: {
-          proceedingNotes: selectedAppointment.appointmentDetails?.proceedingNotes
+          proceedingNotes: selectedAppointment.appointmentDetails
+            ?.proceedingNotes
             ? {
-                oldValue: selectedAppointment.appointmentDetails.proceedingNotes,
+                oldValue:
+                  selectedAppointment.appointmentDetails.proceedingNotes,
                 newValue: proceedingNotes,
               }
             : null,
-          ibpParalegalStaff: selectedAppointment.appointmentDetails?.ibpParalegalStaff
+          ibpParalegalStaff: selectedAppointment.appointmentDetails
+            ?.ibpParalegalStaff
             ? {
-                oldValue: selectedAppointment.appointmentDetails.ibpParalegalStaff,
+                oldValue:
+                  selectedAppointment.appointmentDetails.ibpParalegalStaff,
                 newValue: clientEligibility.ibpParalegalStaff,
               }
             : null,
-          assistingCounsel: selectedAppointment.appointmentDetails?.assistingCounsel
+          assistingCounsel: selectedAppointment.appointmentDetails
+            ?.assistingCounsel
             ? {
-                oldValue: selectedAppointment.appointmentDetails.assistingCounsel,
+                oldValue:
+                  selectedAppointment.appointmentDetails.assistingCounsel,
                 newValue: clientEligibility.assistingCounsel,
               }
             : null,
-          appointmentStatus: selectedAppointment.appointmentDetails?.appointmentStatus
+          appointmentStatus: selectedAppointment.appointmentDetails
+            ?.appointmentStatus
             ? {
-                oldValue: selectedAppointment.appointmentDetails.appointmentStatus,
+                oldValue:
+                  selectedAppointment.appointmentDetails.appointmentStatus,
                 newValue: appointmentStatus,
               }
             : null,
@@ -805,9 +817,11 @@ function ApptsHead() {
                 newValue: clientAttend,
               }
             : null,
-          proceedingFileUrl: selectedAppointment.appointmentDetails?.proceedingFileUrl
+          proceedingFileUrl: selectedAppointment.appointmentDetails
+            ?.proceedingFileUrl
             ? {
-                oldValue: selectedAppointment.appointmentDetails.proceedingFileUrl,
+                oldValue:
+                  selectedAppointment.appointmentDetails.proceedingFileUrl,
                 newValue: fileUrl,
               }
             : null,
@@ -827,15 +841,17 @@ function ApptsHead() {
           userAgent: deviceName,
         },
       };
-      
+
       // Remove any null entries in the `changes` map
       Object.keys(auditLogEntry.changes).forEach(
-        (key) => auditLogEntry.changes[key] === null && delete auditLogEntry.changes[key]
+        (key) =>
+          auditLogEntry.changes[key] === null &&
+          delete auditLogEntry.changes[key]
       );
-      
+
       // Add audit log entry to Firestore
       await addDoc(collection(fs, "audit_logs"), auditLogEntry);
-      
+
       // Notify success and reset form values
       setSnackbarMessage("Remarks have been successfully submitted.");
       setProceedingNotes("");
@@ -1208,9 +1224,11 @@ function ApptsHead() {
         timestamp: new Date(),
         uid: currentUser.uid,
         changes: {
-          appointmentDate: selectedAppointment.appointmentDetails?.appointmentDate
+          appointmentDate: selectedAppointment.appointmentDetails
+            ?.appointmentDate
             ? {
-                oldValue: selectedAppointment.appointmentDetails.appointmentDate,
+                oldValue:
+                  selectedAppointment.appointmentDetails.appointmentDate,
                 newValue: rescheduleDate,
               }
             : null,
@@ -1252,15 +1270,17 @@ function ApptsHead() {
           userAgent: deviceName,
         },
       };
-      
+
       // Remove any null entries in the `changes` map
       Object.keys(auditLogEntry.changes).forEach(
-        (key) => auditLogEntry.changes[key] === null && delete auditLogEntry.changes[key]
+        (key) =>
+          auditLogEntry.changes[key] === null &&
+          delete auditLogEntry.changes[key]
       );
-      
+
       // Add audit log entry to Firestore
       await addDoc(collection(fs, "audit_logs"), auditLogEntry);
-      
+
       setAppointments((prevAppointments) =>
         prevAppointments.map((appt) =>
           appt.id === selectedAppointment.id
@@ -1434,6 +1454,7 @@ function ApptsHead() {
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
           <option value="all">Status</option>
+          <option value="approved">Approved</option>
           <option value="pending">Pending</option>
           <option value="scheduled">Scheduled</option>
           <option value="denied">Denied</option>
@@ -1487,16 +1508,11 @@ function ApptsHead() {
                     )}
                   </td>
                   <td>
-                    {capitalizeFirstLetter(
-                      appointment.appointmentDetails?.appointmentStatus
-                    )}
-                  </td>
-                  <td>
                     <span
                       style={{
                         color:
                           appointment.appointmentStatus === "pending"
-                            ? "red"
+                            ? "blue"
                             : "black", // Highlight the "Pending" status
                         fontWeight:
                           appointment.appointmentStatus === "pending"
