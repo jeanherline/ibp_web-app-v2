@@ -37,7 +37,6 @@ import { addDoc, getDocs, setDoc, onSnapshot } from "firebase/firestore";
 import {
   getAuth,
   signOut,
-
   createUserWithEmailAndPassword,
 } from "firebase/auth"; // Import Firebase Auth
 
@@ -79,7 +78,53 @@ function Users() {
   const [passwordError, setPasswordError] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false); // State to toggle password visibility
   const [currentUser, setCurrentUser] = useState(null);
+  const [lawyersList, setLawyersList] = useState([]);
 
+  useEffect(() => {
+    const fetchLawyers = async () => {
+      try {
+        const { users } = await getUsers(
+          "active", // status
+          "lawyer", // role
+          "all", // cityFilter
+          "", // searchText
+          null,
+          100
+        );
+
+        // Mark lawyers with associate
+        const updatedLawyers = users.map((lawyer) => ({
+          ...lawyer,
+          hasAssociate: lawyer.associate ? true : false, // ✅ Add this flag
+        }));
+
+        setLawyersList(updatedLawyers);
+      } catch (error) {
+        console.error("Failed to fetch lawyers:", error);
+      }
+    };
+
+    fetchLawyers();
+  }, []);
+
+  const refreshLawyersList = async () => {
+    try {
+      const { users } = await getUsers("active", "lawyer", "all", "", null, 100);
+      const updatedLawyers = users.map((lawyer) => ({
+        ...lawyer,
+        hasAssociate: lawyer.associate ? true : false,
+      }));
+      setLawyersList(updatedLawyers);
+    } catch (error) {
+      console.error("Failed to refresh lawyers:", error);
+    }
+  };
+  
+  useEffect(() => {
+    refreshLawyersList();
+  }, []);
+  
+  
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
@@ -299,7 +344,7 @@ function Users() {
   const handleEdit = async (user) => {
     if (
       userData.member_type === "admin" &&
-      ["frontdesk", "head", "lawyer", "client", "admin"].includes(
+      ["frontdesk", "head", "lawyer", "client", "admin", "secretary"].includes(
         user.member_type
       )
     ) {
@@ -357,13 +402,23 @@ function Users() {
 
   const handleSave = async (user) => {
     try {
-      const previousMemberType = user.member_type; // Capture the previous member type before updating
-
-      // Update user member type in Firestore
+      const previousMemberType = user.member_type;
+  
+      // Update the secretary
       await updateUser(user.uid, {
         ...user,
         member_type: selectedUser.member_type,
+        associate: selectedUser.member_type === "secretary" ? selectedUser.associate : "",
       });
+  
+      // If assigned as secretary and has a lawyer selected
+      if (selectedUser.member_type === "secretary" && selectedUser.associate) {
+        // 1. Update lawyer's document to link secretary
+        await updateUser(selectedUser.associate, {
+          associate: user.uid, // Lawyer's 'associate' field = secretary's UID
+        });
+      }
+      await refreshLawyersList();
 
       setEditingUserId(null);
       setIsEditing(false);
@@ -371,8 +426,8 @@ function Users() {
       setSnackbarMessage("User member type has been successfully updated.");
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
-
-      // Fetch latest login activity for metadata
+  
+      // (Optional) You still have the audit logging here
       const loginActivitySnapshot = await fs
         .collection("users")
         .doc(currentUser.uid)
@@ -380,17 +435,16 @@ function Users() {
         .orderBy("loginTime", "desc")
         .limit(1)
         .get();
-
+  
       let ipAddress = "Unknown";
       let deviceName = "Unknown";
-
+  
       if (!loginActivitySnapshot.empty) {
         const loginData = loginActivitySnapshot.docs[0].data();
         ipAddress = loginData.ipAddress || "Unknown";
         deviceName = loginData.deviceName || "Unknown";
       }
-
-      // Add audit log entry with "UPDATE" as the action type
+  
       const auditLogEntry = {
         actionType: "UPDATE",
         timestamp: new Date(),
@@ -410,12 +464,13 @@ function Users() {
           userAgent: deviceName,
         },
       };
-
+  
       await addDoc(collection(fs, "audit_logs"), auditLogEntry);
     } catch (error) {
       console.error("Failed to update user member type:", error);
     }
   };
+  
 
   const handleArchive = async (user) => {
     if (userData.member_type === "admin") {
@@ -525,10 +580,31 @@ function Users() {
 
   const confirmArchive = async () => {
     try {
-      await updateUser(selectedUser.uid, {
-        ...selectedUser,
-        user_status: "inactive",
-      });
+      if (selectedUser.member_type === "secretary" && selectedUser.associate) {
+        // 1. Clear the lawyer's associate field (the lawyer linked to this secretary)
+        await updateUser(selectedUser.associate, {
+          associate: "",
+        });
+        await refreshLawyersList();
+
+        // 2. Then clear the secretary's associate field too
+        await updateUser(selectedUser.uid, {
+          ...selectedUser,
+          associate: "",
+          user_status: "inactive", // also set user to inactive
+        });
+        await refreshLawyersList();
+
+      } else {
+        // If not secretary or no associate, just archive
+        await updateUser(selectedUser.uid, {
+          ...selectedUser,
+          user_status: "inactive",
+        });
+        await refreshLawyersList();
+
+      }
+  
       setSelectedUser(null);
       setShowArchiveModal(false);
       fetchUsers(currentPage);
@@ -539,7 +615,6 @@ function Users() {
       console.error("Failed to archive user:", error);
     }
   };
-
   const confirmActivate = async () => {
     try {
       await updateUser(selectedUser.uid, {
@@ -556,7 +631,7 @@ function Users() {
       console.error("Failed to activate user:", error);
     }
   };
-
+  
   useEffect(() => {
     const handleResizeObserverError = (e) => {
       if (
@@ -845,6 +920,7 @@ function Users() {
           <option value="lawyer">Lawyer</option>
           <option value="frontdesk">Frontdesk</option>
           <option value="client">Client</option>
+          <option value="secretary">Secretary</option>
         </select>
         &nbsp;&nbsp;
         <select onChange={handleFilterChange(setCityFilter)} value={cityFilter}>
@@ -926,21 +1002,76 @@ function Users() {
                 <td>{user.city || "N/A"}</td>
                 <td>
                   {editingUserId === user.uid ? (
-                    <select
-                      name="member_type"
-                      value={selectedUser ? selectedUser.member_type : ""}
-                      onChange={handleChange}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        width: "200px",
+                      }}
                     >
-                      <option value="admin">Admin</option>
-                      <option value="head">Head Lawyer</option>
-                      <option value="lawyer">Legal Aid Volunteer</option>
-                      <option value="frontdesk">Front Desk</option>
-                      <option value="client">Client</option>
-                    </select>
+                      <select
+                        name="member_type"
+                        value={selectedUser ? selectedUser.member_type : ""}
+                        onChange={handleChange}
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="head">Head Lawyer</option>
+                        <option value="lawyer">Legal Aid Volunteer</option>
+                        <option value="frontdesk">Front Desk</option>
+                        <option value="client">Client</option>
+                        <option value="secretary">Secretary</option>
+                      </select>
+                      {selectedUser?.member_type === "secretary" && (
+                        <select
+                          name="associate"
+                          value={selectedUser.associate || ""}
+                          onChange={handleChange}
+                          style={{ marginTop: "5px" }}
+                        >
+                          <option value="" disabled>
+                            Select Lawyer
+                          </option>
+                          {lawyersList.map((lawyer) => (
+                            <option
+                              key={lawyer.uid}
+                              value={lawyer.uid}
+                              disabled={
+                                lawyer.hasAssociate &&
+                                lawyer.uid !== selectedUser.associate
+                              }
+                            >
+                              {lawyer.display_name} {lawyer.middle_name}{" "}
+                              {lawyer.last_name}
+                              {lawyer.hasAssociate &&
+                              lawyer.uid !== selectedUser.associate
+                                ? " (Already has Secretary)"
+                                : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   ) : (
-                    capitalizeFirstLetter(user.member_type)
+                    <>
+                      {capitalizeFirstLetter(user.member_type)}
+                      {user.member_type === "secretary" && user.associate && (
+                        <>
+                          {" "}
+                          of{" "}
+                          {(() => {
+                            const lawyer = lawyersList.find(
+                              (l) => l.uid === user.associate
+                            );
+                            return lawyer
+                              ? `${lawyer.display_name} ${lawyer.middle_name} ${lawyer.last_name}`
+                              : "Lawyer";
+                          })()}
+                        </>
+                      )}
+                    </>
                   )}
                 </td>
+
                 <td>{capitalizeFirstLetter(user.user_status)}</td>
                 <td>
                   <button
@@ -957,9 +1088,14 @@ function Users() {
                   </button>
                   &nbsp; &nbsp;
                   {userData?.member_type === "admin" &&
-                    ["frontdesk", "head", "lawyer", "client", "admin"].includes(
-                      user.member_type
-                    ) && (
+                    [
+                      "frontdesk",
+                      "head",
+                      "lawyer",
+                      "client",
+                      "admin",
+                      "secretary",
+                    ].includes(user.member_type) && (
                       <button
                         onClick={() =>
                           editingUserId === user.uid
@@ -1379,8 +1515,42 @@ function Users() {
                     <option value="lawyer">Legal Aid Volunteer</option>
                     <option value="frontdesk">Front Desk</option>
                     <option value="client">Client</option>
+                    <option value="secretary">Secretary</option>
                   </select>
                 </div>
+
+                {/* Show assigned lawyer select only if Secretary is chosen */}
+                {newUser.member_type === "secretary" && (
+                  <div className="form-group">
+                    <label htmlFor="assigned_lawyer">Assign to Lawyer</label>
+                    <select
+                      className="form-control"
+                      id="assigned_lawyer"
+                      name="assigned_lawyer"
+                      value={newUser.assigned_lawyer || ""}
+                      onChange={handleNewUserChange}
+                      required
+                    >
+                      <option value="" disabled>
+                        Select Lawyer
+                      </option>
+                      {lawyersList.map((lawyer) => (
+                        <option
+                          key={lawyer.uid}
+                          value={lawyer.uid}
+                          disabled={lawyer.hasAssociate} // ✅ disable if already has associate
+                        >
+                          {lawyer.display_name} {lawyer.middle_name}{" "}
+                          {lawyer.last_name}
+                          {lawyer.hasAssociate
+                            ? " (Already has Secretary)"
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div
                   className="form-group-full"
                   style={{ textAlign: "center" }}

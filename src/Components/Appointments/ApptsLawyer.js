@@ -38,6 +38,8 @@ import {
   faCheck,
   faCalendarAlt,
   faVideo,
+  faBan,
+  faFileEdit,
 } from "@fortawesome/free-solid-svg-icons";
 import { Tooltip, OverlayTrigger } from "react-bootstrap";
 import ibpLogo from "../../Assets/img/ibp_logo.png";
@@ -87,6 +89,9 @@ function ApptsLawyer() {
   const [proceedingFile, setProceedingFile] = useState(null);
   const navigate = useNavigate();
   const auth = getAuth();
+  const [showAcceptRefuseModal, setShowAcceptRefuseModal] = useState(false);
+  const [actionType, setActionType] = useState(""); // "accept" or "refuse"
+  const [refuseReason, setRefuseReason] = useState("");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -863,6 +868,65 @@ function ApptsLawyer() {
       setSelectedAppointment(null);
     }
   };
+  const handleAccept = async () => {
+    if (!selectedAppointment) return;
+    try {
+      await updateAppointment(selectedAppointment.id, {
+        "appointmentDetails.appointmentStatus": "accepted",
+      });
+      setSnackbarMessage("Appointment successfully accepted!");
+      setShowSnackbar(true);
+      setShowAcceptRefuseModal(false);
+      setSelectedAppointment(null);
+    } catch (error) {
+      console.error("Error accepting appointment:", error);
+      setSnackbarMessage("Error accepting appointment. Please try again.");
+      setShowSnackbar(true);
+    }
+  };
+  
+
+  const handleRefuse = async () => {
+    if (!selectedAppointment) return;
+    if (!refuseReason.trim()) {
+      alert("Please provide a refusal reason.");
+      return;
+    }
+  
+    try {
+      const lawyerUid = currentUser?.uid || "Unknown UID";
+  
+      const refusalEntry = {
+        reason: refuseReason,
+        lawyerUid: lawyerUid, // ✅ Save the UID, not the displayName
+        timestamp: Timestamp.fromDate(new Date()),
+      };
+  
+      const appointmentRef = doc(fs, "appointments", selectedAppointment.id);
+      const appointmentSnapshot = await getDoc(appointmentRef);
+  
+      const existingData = appointmentSnapshot.data();
+      const currentRefusalHistory =
+        existingData?.appointmentDetails?.refusalHistory || [];
+  
+      const updatedData = {
+        "appointmentDetails.appointmentStatus": "refused",
+        "appointmentDetails.refusalHistory": [...currentRefusalHistory, refusalEntry],
+      };
+  
+      await updateDoc(appointmentRef, updatedData);
+  
+      setSnackbarMessage("Appointment has been refused.");
+      setShowSnackbar(true);
+      setShowAcceptRefuseModal(false);
+      setRefuseReason("");
+      setSelectedAppointment(null);
+    } catch (error) {
+      console.error("Error refusing appointment:", error);
+      setSnackbarMessage("Error refusing appointment. Please try again.");
+      setShowSnackbar(true);
+    }
+  };
 
   const handleSubmitProceedingNotes = async (e) => {
     e.preventDefault();
@@ -1438,7 +1502,7 @@ function ApptsLawyer() {
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="scheduled">Scheduled</option>
-          <option value="denied">Denied</option>
+          <option value="refused">Refused</option>
           <option value="done">Done</option>
         </select>
         &nbsp;&nbsp;
@@ -1558,28 +1622,28 @@ function ApptsLawyer() {
                       </button>
                     </OverlayTrigger>
                     &nbsp; &nbsp;
-                    {appointment.appointmentStatus === "approved" && (
+                    {appointment.appointmentDetails?.appointmentStatus ===
+                      "approved" && (
                       <>
                         <OverlayTrigger
                           placement="top"
-                          overlay={renderTooltip({ title: "Schedule" })}
+                          overlay={renderTooltip({ title: "Accept/Refuse" })}
                         >
                           <button
                             onClick={() => {
                               setSelectedAppointment(appointment);
-                              setShowProceedingNotesForm(false);
-                              setShowRescheduleForm(false);
-                              setShowScheduleForm(true);
+                              setShowAcceptRefuseModal(true);
+                              setActionType("accept");
                             }}
                             style={{
-                              backgroundColor: "#1fs954",
+                              backgroundColor: "#1f5954",
                               color: "white",
                               border: "none",
-                              padding: "5px 10px",
+                              padding: "5px 9px",
                               cursor: "pointer",
                             }}
                           >
-                            <FontAwesomeIcon icon={faCalendarAlt} />
+                            <FontAwesomeIcon icon={faFileEdit} />
                           </button>
                         </OverlayTrigger>
                         &nbsp; &nbsp;
@@ -1588,28 +1652,14 @@ function ApptsLawyer() {
                           overlay={renderTooltip({ title: "Done" })}
                         >
                           <button
-                            onClick={() => {
-                              setSelectedAppointment(appointment);
-                              setShowProceedingNotesForm(true);
-                              setShowRescheduleForm(false);
-                              setShowScheduleForm(false);
-                            }}
+                            disabled
                             style={{
-                              backgroundColor:
-                                appointment.appointmentStatus === "approved"
-                                  ? "gray"
-                                  : "#1fs954",
+                              backgroundColor: "gray",
                               color: "white",
                               border: "none",
                               padding: "5px 10px",
-                              cursor:
-                                appointment.appointmentStatus === "approved"
-                                  ? "not-allowed"
-                                  : "pointer",
+                              cursor: "not-allowed",
                             }}
-                            disabled={
-                              appointment.appointmentStatus === "approved"
-                            } // Disable when status is approved
                           >
                             <FontAwesomeIcon icon={faCheck} />
                           </button>
@@ -1653,11 +1703,11 @@ function ApptsLawyer() {
                               setShowScheduleForm(false);
                             }}
                             style={{
-                              backgroundColor: "#1fs954",
+                              backgroundColor: "gray",
                               color: "white",
                               border: "none",
                               padding: "5px 10px",
-                              cursor: "pointer",
+                              cursor: "not-allowed",
                             }}
                           >
                             <FontAwesomeIcon icon={faCheck} />
@@ -2870,6 +2920,69 @@ function ApptsLawyer() {
           </div>
         )}
       </div>
+      {/* MODAL for Accept / Refuse */}
+      {showAcceptRefuseModal && (
+  <div className="modal-overlay">
+    <div className="modal-content">
+      {actionType === "refuse" ? (
+        <>
+          <h5>Please specify the reason for refusing this appointment.</h5>
+          <textarea
+            value={refuseReason}
+            onChange={(e) => setRefuseReason(e.target.value)}
+            placeholder="Please specify the reason..."
+            style={{ width: "100%", height: "100px", marginTop: "10px" }}
+            required
+          />
+          <div style={{ marginTop: "15px", display: "flex", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => setActionType("accept")}
+              style={{ backgroundColor: "#6c757d", color: "white", border: "none", padding: "5px 10px", marginRight: "10px" }}
+            >
+              Back
+            </button>
+            <button
+              onClick={handleRefuse}
+              style={{ backgroundColor: "#dc3545", color: "white", border: "none", padding: "5px 10px" }}
+              disabled={!refuseReason.trim()}
+            >
+              Submit Refusal
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <h5>Are you sure you want to accept this appointment?</h5>
+          <div style={{ marginTop: "15px", display: "flex", justifyContent: "flex-end" }}>
+            <button
+              onClick={handleAccept}
+              style={{ backgroundColor: "#28a745", color: "white", border: "none", padding: "5px 10px", marginRight: "10px" }}
+            >
+              Accept
+            </button>
+            <button
+              onClick={() => setActionType("refuse")}
+              style={{ backgroundColor: "#dc3545", color: "white", border: "none", padding: "5px 10px", marginRight: "10px" }}
+            >
+              Refuse
+            </button>
+            <button
+              onClick={() => {
+                setShowAcceptRefuseModal(false);
+                setActionType("");
+                setRefuseReason("");
+              }}
+              style={{ backgroundColor: "#6c757d", color: "white", border: "none", padding: "5px 10px" }}
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+)}
+
     </div>
   );
 }
