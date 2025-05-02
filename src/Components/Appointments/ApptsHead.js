@@ -37,7 +37,10 @@ import {
   faCheck,
   faCalendarAlt,
   faVideo,
+  faFileSignature,
+  faUserEdit,
 } from "@fortawesome/free-solid-svg-icons";
+
 import { Tooltip, OverlayTrigger } from "react-bootstrap";
 import ibpLogo from "../../Assets/img/ibp_logo.png";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
@@ -70,7 +73,7 @@ function ApptsHead() {
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentImageUrl, setCurrentImageUrl] = useState("");
-  const { currentUser } = useAuth();
+  const [currentUserData, setCurrentUserData] = useState(null);
   const [reviewerDetails, setReviewerDetails] = useState(null);
   const [proceedingNotes, setProceedingNotes] = useState("");
   const [showProceedingNotesForm, setShowProceedingNotesForm] = useState(false);
@@ -87,7 +90,45 @@ function ApptsHead() {
   const [clientAttend, setClientAttend] = useState(null);
   const navigate = useNavigate();
   const auth = getAuth();
+const currentUser = auth.currentUser;
+  const [showReassignForm, setShowReassignForm] = useState(false);
+  const [reassignLawyerId, setReassignLawyerId] = useState("");
+  const [reassignNotes, setReassignNotes] = useState("");
+  const [showEligibilityForm, setShowEligibilityForm] = useState(false);
 
+  const refusedLawyers = new Set(
+    (selectedAppointment?.appointmentDetails?.refusalHistory || []).map(
+      (entry) => entry.lawyerUid
+    )
+  );
+
+  const getRefusedLawyerUids = (appointment) => {
+    return appointment.refusalHistory?.map((entry) => entry.lawyerUid) || [];
+  };
+
+  const getLatestRefusalReason = (appointment) => {
+    const history = appointment?.appointmentDetails?.refusalHistory;
+    if (!history || history.length === 0) {
+      return "No refusal history.";
+    }
+    const sorted = [...history].sort(
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    return sorted[0]?.reason || "No reason provided.";
+  };
+
+  useEffect(() => {
+    const fetchCurrentUserData = async () => {
+      if (!currentUser?.uid) return;
+      const userDoc = await getDoc(doc(fs, "users", currentUser.uid));
+      if (userDoc.exists()) {
+        setCurrentUserData(userDoc.data());
+      }
+    };
+    fetchCurrentUserData();
+  }, [currentUser]);
+
+  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!user) {
@@ -115,7 +156,7 @@ function ApptsHead() {
 
   useEffect(() => {
     if (!currentUser) return;
-  
+
     const fetchAppointments = async () => {
       try {
         const result = await getAdminAppointments(
@@ -126,27 +167,32 @@ function ApptsHead() {
           natureOfLegalAssistanceFilter,
           () => {}
         );
-        
+
         if (result && result.data && result.total !== undefined) {
           const { data, total } = result;
-  
+
           // Sort appointments to have pending first
+          const statusPriority = {
+            refused: 0,
+            pending: 1,
+            approved: 2,
+            scheduled: 3,
+            denied: 4,
+            done: 5,
+          };
           const sortedAppointments = data.sort((a, b) => {
-            if (a.appointmentStatus === "pending" && b.appointmentStatus !== "pending") {
-              return -1; // "pending" comes first
-            }
-            if (a.appointmentStatus !== "pending" && b.appointmentStatus === "pending") {
-              return 1; // "pending" comes first
-            }
-            return 0; // Keep order for other statuses
+            return (
+              (statusPriority[a.appointmentStatus] ?? 99) -
+              (statusPriority[b.appointmentStatus] ?? 99)
+            );
           });
-  
+
           // Set total pages based on sorted data and pageSize
           const paginatedAppointments = sortedAppointments.slice(
             (currentPage - 1) * pageSize,
             currentPage * pageSize
           );
-  
+
           setAppointments(paginatedAppointments);
           setTotalPages(Math.ceil(total / pageSize));
           setTotalFilteredItems(total);
@@ -157,7 +203,7 @@ function ApptsHead() {
         console.error("Error fetching appointments:", error);
       }
     };
-  
+
     fetchAppointments();
   }, [
     filter,
@@ -167,7 +213,28 @@ function ApptsHead() {
     currentUser,
     currentPage,
   ]);
-  
+
+  const handleReassignSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await updateAppointment(selectedAppointment.id, {
+        "appointmentDetails.assignedLawyer": reassignLawyerId,
+        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
+        "clientEligibility.notes": reassignNotes,
+        "appointmentDetails.appointmentStatus": "approved",
+      });
+      setSnackbarMessage("Lawyer successfully reassigned.");
+      setShowSnackbar(true);
+      setShowReassignForm(false);
+      setSelectedAppointment(null);
+      setTimeout(() => setShowSnackbar(false), 3000);
+    } catch (error) {
+      console.error("Error reassigning lawyer:", error);
+      setSnackbarMessage("Failed to reassign. Please try again.");
+      setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 3000);
+    }
+  };
 
   const handlePrint = () => {
     if (!selectedAppointment) {
@@ -1456,9 +1523,8 @@ function ApptsHead() {
           <option value="all">Status</option>
           <option value="approved">Approved</option>
           <option value="pending">Pending</option>
-          <option value="scheduled">Scheduled</option>
+          <option value="refused">Refused</option>
           <option value="denied">Denied</option>
-          <option value="done">Done</option>
         </select>
         &nbsp;&nbsp;
         <select
@@ -1513,19 +1579,35 @@ function ApptsHead() {
                         color:
                           appointment.appointmentStatus === "pending"
                             ? "blue"
-                            : "black", // Highlight the "Pending" status
+                            : "black",
                         fontWeight:
                           appointment.appointmentStatus === "pending"
                             ? "bold"
-                            : "normal", // Make it bold for "Pending"
+                            : "normal",
                       }}
                     >
                       {capitalizeFirstLetter(appointment.appointmentStatus)}
                     </span>
+                    {appointment.appointmentStatus === "refused" && (
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          color: "red",
+                          marginTop: "4px",
+                        }}
+                      >
+                        Please reassign a lawyer
+                      </div>
+                    )}
                   </td>
+
                   <td>
                     <button
-                      onClick={() => toggleDetails(appointment)}
+                      onClick={() => {
+                        toggleDetails(appointment);
+                        setShowEligibilityForm(false);
+                        setShowReassignForm(false);
+                      }}
                       style={{
                         backgroundColor: "#4267B2",
                         color: "white",
@@ -1537,32 +1619,72 @@ function ApptsHead() {
                       <FontAwesomeIcon icon={faEye} />
                     </button>
                     &nbsp; &nbsp;
-                    <button
-                      disabled
-                      style={{
-                        backgroundColor: "gray",
-                        color: "white",
-                        border: "none",
-                        padding: "5px 10px",
-                        cursor: "not-allowed",
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faCalendarAlt} />
-                    </button>
-                    &nbsp; &nbsp;
-                    <button
-                      disabled
-                      style={{
-                        backgroundColor: "gray",
-                        color: "white",
-                        border: "none",
-                        padding: "5px 10px",
-                        cursor: "not-allowed",
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faCheck} />
-                    </button>
-                    &nbsp; &nbsp;
+                    {appointment.appointmentStatus === "pending" && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedAppointment(appointment);
+                            setShowEligibilityForm(true);
+                            setShowReassignForm(false);
+                          }}
+                          style={{
+                            backgroundColor: "#17a2b8",
+                            color: "white",
+                            border: "none",
+                            padding: "5px 10px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faFileSignature} />
+                        </button>
+                        &nbsp; &nbsp;
+                        <button
+                          disabled
+                          style={{
+                            backgroundColor: "gray",
+                            color: "white",
+                            border: "none",
+                            padding: "5px 10px",
+                            cursor: "not-allowed",
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faUserEdit} />
+                        </button>
+                      </>
+                    )}
+                    {appointment.appointmentStatus === "refused" && (
+                      <>
+                        <button
+                          disabled
+                          style={{
+                            backgroundColor: "gray",
+                            color: "white",
+                            border: "none",
+                            padding: "5px 10px",
+                            cursor: "not-allowed",
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faFileSignature} />
+                        </button>
+                        &nbsp; &nbsp;
+                        <button
+                          onClick={() => {
+                            setSelectedAppointment(appointment);
+                            setShowReassignForm(true);
+                            setShowEligibilityForm(false);
+                          }}
+                          style={{
+                            backgroundColor: "#28a745",
+                            color: "white",
+                            border: "none",
+                            padding: "5px 10px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faUserEdit} />
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))
@@ -1608,8 +1730,9 @@ function ApptsHead() {
         {selectedAppointment &&
           !showProceedingNotesForm &&
           !showRescheduleForm &&
-          (!showScheduleForm ||
-            selectedAppointment.appointmentStatus !== "approved") && (
+          !showScheduleForm &&
+          !showReassignForm &&
+          !showEligibilityForm && (
             <div className="client-eligibility">
               <div style={{ position: "relative" }}>
                 <button
@@ -1896,44 +2019,72 @@ function ApptsHead() {
                         </td>
                       </tr>
                       <>
-                        {selectedAppointment.appointmentStatus ===
-                          "scheduled" && (
-                          <>
-                            <tr>
-                              <th>Eligibility:</th>
-                              <td>
-                                {capitalizeFirstLetter(
-                                  selectedAppointment.clientEligibility
-                                    ?.eligibility || "N/A"
-                                )}
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>Assigned Lawyer:</th>
-                              <td>
-                                {assignedLawyerDetails
-                                  ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
-                                  : "Not Available"}
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>Eligibility Notes:</th>
-                              <td>
-                                {selectedAppointment.clientEligibility?.notes ||
-                                  "N/A"}
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>Appointment Date:</th>
-                              <td>
-                                {getFormattedDate(
-                                  selectedAppointment.appointmentDate,
-                                  true
-                                )}
-                              </td>
-                            </tr>
-                          </>
-                        )}
+                      {selectedAppointment.appointmentDetails?.appointmentStatus === "scheduled" && (
+  <>
+    {/* Reschedule Button */}
+    <OverlayTrigger
+      placement="top"
+      overlay={renderTooltip({ title: "Reschedule" })}
+    >
+      <button
+        onClick={() => {
+          setSelectedAppointment(selectedAppointment);
+          setShowProceedingNotesForm(false);
+          setShowRescheduleForm(true);
+          setShowScheduleForm(false);
+        }}
+        style={{
+          backgroundColor: "#ff8b61",
+          color: "white",
+          border: "none",
+          padding: "5px 10px",
+          cursor: "pointer",
+        }}
+      >
+        <FontAwesomeIcon icon={faCalendarAlt} />
+      </button>
+    </OverlayTrigger>
+    &nbsp;&nbsp;
+
+    {/* Done Button */}
+    <OverlayTrigger
+      placement="top"
+      overlay={renderTooltip({ title: "Done" })}
+    >
+      <button
+        onClick={() => {
+          setSelectedAppointment(selectedAppointment);
+          setShowProceedingNotesForm(true);
+          setShowRescheduleForm(false);
+          setShowScheduleForm(false);
+        }}
+        disabled={
+          new Date() <
+          new Date(
+            selectedAppointment.appointmentDetails.appointmentDate.toDate()
+          )
+        }
+        style={{
+          backgroundColor:
+            new Date() >=
+            new Date(selectedAppointment.appointmentDetails.appointmentDate.toDate())
+              ? "#28a745"
+              : "gray",
+          color: "white",
+          border: "none",
+          padding: "5px 10px",
+          cursor:
+            new Date() >=
+            new Date(selectedAppointment.appointmentDetails.appointmentDate.toDate())
+              ? "pointer"
+              : "not-allowed",
+        }}
+      >
+        <FontAwesomeIcon icon={faCheck} />
+      </button>
+    </OverlayTrigger>
+  </>
+)}
 
                         {selectedAppointment.appointmentStatus === "denied" && (
                           <>
@@ -2356,6 +2507,95 @@ function ApptsHead() {
           )}
         <br />
         <br />
+        {selectedAppointment &&
+          selectedAppointment.appointmentStatus === "refused" &&
+          showReassignForm && (
+            <div className="client-eligibility">
+              <h2>Reassign Lawyer</h2>
+              {selectedAppointment?.appointmentDetails?.refusalHistory?.length > 0 && (
+  <div style={{ marginBottom: "1rem" }}>
+    <strong>Refusal History:</strong>
+    <ul style={{ marginTop: "0.5rem", paddingLeft: "1.2rem" }}>
+      {selectedAppointment.appointmentDetails.refusalHistory.map((entry, index) => {
+        const lawyer = lawyers.find((l) => l.uid === entry.lawyerUid);
+        const lawyerName = lawyer
+          ? `${lawyer.display_name} ${lawyer.middle_name} ${lawyer.last_name}`
+          : "Unknown Lawyer";
+        const timestamp = new Date(entry.timestamp.seconds * 1000).toLocaleString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        });
+
+        return (
+          <li key={index} style={{ marginBottom: "8px" }}>
+            <div>
+              <strong>{lawyerName}</strong>{" "}
+              <span style={{ fontStyle: "italic", color: "#555" }}>{timestamp}</span>
+            </div>
+            <div >Reason: {entry.reason}</div>
+            <br />
+          </li>
+        );
+      })}
+    </ul>
+  </div>
+)}
+
+              <form onSubmit={handleReassignSubmit}>
+                <label>Select a new Lawyer:</label>
+                <select
+                  value={reassignLawyerId}
+                  onChange={(e) => setReassignLawyerId(e.target.value)}
+                  className="form-control"
+                  required
+                >
+                  <option value="">Select Lawyer</option>
+                  {lawyers.map((lawyer) => {
+                    const isRefused = refusedLawyers.has(lawyer.uid);
+                    return (
+                      <option
+                        key={lawyer.uid}
+                        value={lawyer.uid}
+                        disabled={isRefused}
+                      >
+                        {lawyer.display_name} {lawyer.middle_name}{" "}
+                        {lawyer.last_name}
+                        {isRefused ? " (Refused)" : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                <br />
+                <br />
+                <label>Notes (optional):</label>
+                <br />
+                <textarea
+                  value={reassignNotes}
+                  onChange={(e) => setReassignNotes(e.target.value)}
+                  rows={3}
+                  style={{ width: "100%" }}
+                />
+                <br />
+                <br />
+                <button
+                  type="submit"
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#28a745",
+                    color: "white",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Submit Reassignment
+                </button>
+              </form>
+            </div>
+          )}
         {selectedAppointment &&
           selectedAppointment.appointmentStatus === "pending" && (
             <div className="client-eligibility">

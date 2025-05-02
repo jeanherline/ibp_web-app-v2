@@ -458,12 +458,23 @@ const getLawyerAppointments = (
     }
 
     // Ensure only appointments assigned to the current user are fetched
-    if (currentUser?.uid) {
-      queryRef = query(
-        queryRef,
-        where("appointmentDetails.assignedLawyer", "==", currentUser.uid)
-      );
-    }
+// Only fetch appointments assigned to lawyer or secretary's associated lawyer
+if (
+  currentUser?.member_type === "lawyer" ||
+  currentUser?.member_type === "secretary"
+) {
+  const targetUid =
+    currentUser.member_type === "secretary"
+      ? currentUser.associate
+      : currentUser.uid;
+
+  if (targetUid) {
+    queryRef = query(
+      queryRef,
+      where("appointmentDetails.assignedLawyer", "==", targetUid)
+    );
+  }
+}
 
     // Order by createdDate and limit results for pagination
     queryRef = query(

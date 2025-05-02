@@ -17,6 +17,7 @@ import {
 import { format } from "date-fns"; // Import date-fns for date formatting
 import "./SideNavBar.css";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { getDoc } from "firebase/firestore";
 import { debounce } from "@mui/material";
 function SideNavBar() {
   const [userData, setUserData] = useState(null);
@@ -24,11 +25,13 @@ function SideNavBar() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
-
+  const [associatedLawyerName, setAssociatedLawyerName] = useState("");
   const notificationsIconRef = useRef();
   const notificationsDropdownRef = useRef();
   const navigate = useNavigate();
   const auth = getAuth();
+  const currentUser = auth.currentUser;
+  const [assignedSecretaryName, setAssignedSecretaryName] = useState("");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -40,6 +43,47 @@ function SideNavBar() {
 
     return () => unsubscribe(); // Clean up the listener on component unmount
   }, [auth, navigate]);
+
+  useEffect(() => {
+    const fetchCurrentUserData = async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser?.uid) return;
+
+      const userDoc = await getDoc(doc(fs, "users", currentUser.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        setUserData(userData); // assuming this is your set function
+
+        if (userData.member_type === "lawyer") {
+          const secretariesQuery = query(
+            collection(fs, "users"),
+            where("member_type", "==", "secretary"),
+            where("associate", "==", currentUser.uid)
+          );
+          const snapshot = await getDocs(secretariesQuery);
+          if (!snapshot.empty) {
+            const secretary = snapshot.docs[0].data();
+            setAssignedSecretaryName(
+              `${secretary.display_name} ${secretary.middle_name} ${secretary.last_name}`
+            );
+          }
+        } else if (userData.member_type === "secretary" && userData.associate) {
+          const lawyerDoc = await getDoc(doc(fs, "users", userData.associate));
+          if (lawyerDoc.exists()) {
+            const lawyer = lawyerDoc.data();
+            setAssociatedLawyerName(
+              `${lawyer.display_name} ${lawyer.middle_name} ${lawyer.last_name}`
+            );
+          } else {
+            setAssociatedLawyerName("Unknown Lawyer");
+          }
+        }
+        
+      }
+    };
+
+    fetchCurrentUserData();
+  }, []);
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -198,7 +242,7 @@ function SideNavBar() {
   const handleLogout = async () => {
     try {
       const currentUser = auth.currentUser;
-  
+
       if (currentUser) {
         const loginActivityRef = collection(
           fs,
@@ -212,11 +256,11 @@ function SideNavBar() {
           limit(1) // Get the latest login activity
         );
         const loginActivitySnapshot = await getDocs(loginActivityQuery);
-  
+
         let ipAddress = "Unknown"; // Default value
         let deviceName = "Unknown"; // Default value
         let location = "Unknown"; // Default value (if you want to capture location too)
-  
+
         // Check if the snapshot is not empty
         if (!loginActivitySnapshot.empty) {
           const loginData = loginActivitySnapshot.docs[0].data();
@@ -226,7 +270,7 @@ function SideNavBar() {
         } else {
           console.warn("No login activity found for the current user.");
         }
-  
+
         const auditLogEntry = {
           actionType: "ACCESS",
           timestamp: new Date(),
@@ -238,10 +282,10 @@ function SideNavBar() {
           },
           metadata: { ipAddress, userAgent: deviceName, location }, // Log the IP address, device name, and location
         };
-  
+
         const auditLogsRef = collection(fs, "audit_logs");
         await addDoc(auditLogsRef, auditLogEntry); // Log the audit entry
-  
+
         await signOut(auth); // Perform logout
         window.location.replace("/"); // Redirect after logout
       } else {
@@ -251,7 +295,6 @@ function SideNavBar() {
       console.error("Error during logout:", error);
     }
   };
-  
 
   const handleNotificationsClick = async () => {
     setShowNotifications((prevState) => !prevState);
@@ -270,7 +313,7 @@ function SideNavBar() {
         navigate("/frontdesk");
       } else if (userData.member_type === "admin") {
         navigate("/appointments");
-      } else if (userData.member_type === "lawyer") {
+      } else if (userData.member_type === "lawyer" || "secretary") {
         navigate("/lawyer");
       }
     }
@@ -303,17 +346,31 @@ function SideNavBar() {
         ) : userData ? (
           <div className="member-type">
             Kumusta,{" "}
-            {userData.member_type === "lawyer"
-              ? `Volunteer Lawyer ${capitalizeFirstLetter(
-                  userData.display_name
-                )}`
-              : userData.member_type === "admin"
-              ? `Admin ${capitalizeFirstLetter(userData.display_name)}`
-              : userData.member_type === "frontdesk"
-              ? `Front Desk ${capitalizeFirstLetter(userData.display_name)}`
-              : userData.member_type === "head"
-              ? `Head Lawyer ${capitalizeFirstLetter(userData.display_name)}`
-              : capitalizeFirstLetter(userData.display_name)}
+            {userData.member_type === "lawyer" ? (
+              <>
+                Volunteer Lawyer {capitalizeFirstLetter(userData.display_name)}
+                <br />
+                <small style={{ color: "#888", fontStyle: "italic" }}>
+                  Secretary: {assignedSecretaryName || "None"}
+                </small>
+              </>
+            ) : userData.member_type === "admin" ? (
+              `Admin ${capitalizeFirstLetter(userData.display_name)}`
+            ) : userData.member_type === "secretary" ? (
+              <>
+                Secretary {capitalizeFirstLetter(userData.display_name)}
+                <br />
+                <small style={{ color: "#888", fontStyle: "italic" }}>
+                  Associated with: {associatedLawyerName || "Loading..."}
+                </small>
+              </>
+            ) : userData.member_type === "frontdesk" ? (
+              `Front Desk ${capitalizeFirstLetter(userData.display_name)}`
+            ) : userData.member_type === "head" ? (
+              `Head Lawyer ${capitalizeFirstLetter(userData.display_name)}`
+            ) : (
+              capitalizeFirstLetter(userData.display_name)
+            )}
           </div>
         ) : (
           <div className="member-type">User data not available</div>
@@ -384,26 +441,28 @@ function SideNavBar() {
                 Dashboard
               </NavLink>
             </li>
-            {userData && userData.member_type === "lawyer" && (
-              <>
-                <li>
-                  <NavLink
-                    to="/calendarLawyer"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                  >
-                    Appts. Calendar
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink
-                    to="/lawyer"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                  >
-                    Appointments
-                  </NavLink>
-                </li>
-              </>
-            )}
+            {userData &&
+              (userData.member_type === "lawyer" ||
+                userData.member_type === "secretary") && (
+                <>
+                  <li>
+                    <NavLink
+                      to="/calendarLawyer"
+                      className={({ isActive }) => (isActive ? "active" : "")}
+                    >
+                      Appts. Calendar
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink
+                      to="/lawyer"
+                      className={({ isActive }) => (isActive ? "active" : "")}
+                    >
+                      Appointments
+                    </NavLink>
+                  </li>
+                </>
+              )}
 
             {userData && userData.member_type === "admin" && (
               <>

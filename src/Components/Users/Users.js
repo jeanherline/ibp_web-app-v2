@@ -109,7 +109,14 @@ function Users() {
 
   const refreshLawyersList = async () => {
     try {
-      const { users } = await getUsers("active", "lawyer", "all", "", null, 100);
+      const { users } = await getUsers(
+        "active",
+        "lawyer",
+        "all",
+        "",
+        null,
+        100
+      );
       const updatedLawyers = users.map((lawyer) => ({
         ...lawyer,
         hasAssociate: lawyer.associate ? true : false,
@@ -119,12 +126,11 @@ function Users() {
       console.error("Failed to refresh lawyers:", error);
     }
   };
-  
+
   useEffect(() => {
     refreshLawyersList();
   }, []);
-  
-  
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
@@ -147,7 +153,22 @@ function Users() {
     for (let i = 0; i < 12; i++) {
       password += chars[Math.floor(Math.random() * chars.length)];
     }
-    setNewUser({ ...newUser, password });
+
+    setNewUser((prev) => ({ ...prev, password }));
+
+    // ✅ Add this block to update password strength and error
+    const passwordScore = zxcvbn(password).score;
+    setPasswordStrength(passwordScore);
+
+    const strongPasswordRegex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
+    if (!strongPasswordRegex.test(password)) {
+      setPasswordError(
+        "Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters."
+      );
+    } else {
+      setPasswordError("");
+    }
   };
 
   useEffect(() => {
@@ -403,14 +424,17 @@ function Users() {
   const handleSave = async (user) => {
     try {
       const previousMemberType = user.member_type;
-  
+
       // Update the secretary
       await updateUser(user.uid, {
         ...user,
         member_type: selectedUser.member_type,
-        associate: selectedUser.member_type === "secretary" ? selectedUser.associate : "",
+        associate:
+          selectedUser.member_type === "secretary"
+            ? selectedUser.associate
+            : "",
       });
-  
+
       // If assigned as secretary and has a lawyer selected
       if (selectedUser.member_type === "secretary" && selectedUser.associate) {
         // 1. Update lawyer's document to link secretary
@@ -426,7 +450,7 @@ function Users() {
       setSnackbarMessage("User member type has been successfully updated.");
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
-  
+
       // (Optional) You still have the audit logging here
       const loginActivitySnapshot = await fs
         .collection("users")
@@ -435,16 +459,16 @@ function Users() {
         .orderBy("loginTime", "desc")
         .limit(1)
         .get();
-  
+
       let ipAddress = "Unknown";
       let deviceName = "Unknown";
-  
+
       if (!loginActivitySnapshot.empty) {
         const loginData = loginActivitySnapshot.docs[0].data();
         ipAddress = loginData.ipAddress || "Unknown";
         deviceName = loginData.deviceName || "Unknown";
       }
-  
+
       const auditLogEntry = {
         actionType: "UPDATE",
         timestamp: new Date(),
@@ -464,13 +488,12 @@ function Users() {
           userAgent: deviceName,
         },
       };
-  
+
       await addDoc(collection(fs, "audit_logs"), auditLogEntry);
     } catch (error) {
       console.error("Failed to update user member type:", error);
     }
   };
-  
 
   const handleArchive = async (user) => {
     if (userData.member_type === "admin") {
@@ -594,7 +617,6 @@ function Users() {
           user_status: "inactive", // also set user to inactive
         });
         await refreshLawyersList();
-
       } else {
         // If not secretary or no associate, just archive
         await updateUser(selectedUser.uid, {
@@ -602,9 +624,8 @@ function Users() {
           user_status: "inactive",
         });
         await refreshLawyersList();
-
       }
-  
+
       setSelectedUser(null);
       setShowArchiveModal(false);
       fetchUsers(currentPage);
@@ -631,7 +652,7 @@ function Users() {
       console.error("Failed to activate user:", error);
     }
   };
-  
+
   useEffect(() => {
     const handleResizeObserverError = (e) => {
       if (
@@ -790,15 +811,8 @@ function Users() {
       const passwordScore = zxcvbn(value).score;
       setPasswordStrength(passwordScore);
 
-      const strongPasswordRegex =
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
-      if (!strongPasswordRegex.test(value)) {
-        setPasswordError(
-          "Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters."
-        );
-      } else {
-        setPasswordError("");
-      }
+      const score = zxcvbn(value).score;
+      setPasswordStrength(score);
     }
   };
   const formatDate = (timestamp) =>
@@ -816,8 +830,8 @@ function Users() {
     e.preventDefault();
 
     // Validate password strength before proceeding
-    if (passwordError || passwordStrength < 3) {
-      alert("Please use a stronger password.");
+    if (passwordError) {
+      alert("Please fix password issues.");
       return;
     }
 
@@ -856,6 +870,19 @@ function Users() {
         created_time: new Date(), // Add a timestamp if desired
       });
 
+      // ✅ If secretary, update the lawyer's document with associate field
+      if (newUser.member_type === "secretary" && newUser.assigned_lawyer) {
+        // 1. Update the lawyer's associate field to the secretary's UID
+        await updateUser(newUser.assigned_lawyer, {
+          associate: uid,
+        });
+
+        // 2. Also add the lawyer's ID to the secretary's user document
+        await updateUser(uid, {
+          associate: newUser.assigned_lawyer,
+        });
+      }
+
       // Step 4: Log the creation in the audit logs
       const auditLogEntry = {
         actionType: "CREATE",
@@ -885,8 +912,13 @@ function Users() {
       alert("User added successfully.");
 
       // Optional: sign out the current user and redirect to login
+      // Optional: sign out the current user and redirect to login
       await signOut(auth);
       window.location.href = "/";
+
+      setSnackbarMessage("New user added successfully.");
+      setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 3000);
     } catch (error) {
       console.error("Failed to add new user:", error);
       alert("Failed to add new user: " + error.message);
@@ -1434,9 +1466,7 @@ function Users() {
                       }}
                     />
                   </div>
-                  {passwordError && (
-                    <small className="text-danger">{passwordError}</small>
-                  )}
+                  {passwordError && <small>{passwordError}</small>}
                   <div className="password-strength-meter">
                     <progress
                       className={`strength-meter strength-${passwordStrength}`}
