@@ -1520,7 +1520,7 @@ const currentUser = auth.currentUser;
         />
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
-          <option value="all">Status</option>
+          <option value="all">All Status</option>
           <option value="approved">Approved</option>
           <option value="pending">Pending</option>
           <option value="refused">Refused</option>

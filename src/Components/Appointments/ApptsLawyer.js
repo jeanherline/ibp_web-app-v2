@@ -95,6 +95,13 @@ function ApptsLawyer() {
   const [refuseReason, setRefuseReason] = useState("");
   const [activeView, setActiveView] = useState(""); // 'view', 'eligibility', 'reassign'
   const [userData, setUserData] = useState(null);
+  const [appointmentHour, setAppointmentHour] = useState("");
+  const [appointmentMinute, setAppointmentMinute] = useState("");
+  const [appointmentAmPm, setAppointmentAmPm] = useState("PM");
+  const [rescheduleHour, setRescheduleHour] = useState("");
+  const [rescheduleMinute, setRescheduleMinute] = useState("");
+  const [rescheduleAmPm, setRescheduleAmPm] = useState("PM");
+  const [selectedLawyerUid, setSelectedLawyerUid] = useState("");
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -156,9 +163,21 @@ function ApptsLawyer() {
       meetingLink = link;
       meetingPass = password;
     }
+    const fullDate = new Date(appointmentDate);
+    let h = parseInt(appointmentHour);
+    if (appointmentAmPm === "PM" && h < 12) h += 12;
+    if (appointmentAmPm === "AM" && h === 12) h = 0;
+    fullDate.setHours(h, parseInt(appointmentMinute), 0, 0);
+
+    if (isSlotTakenForLawyer(fullDate, selectedLawyerUid, appointments)) {
+      setSnackbarMessage("That time is already taken for this lawyer.");
+      setShowSnackbar(true);
+      return;
+    }
 
     const updatedData = {
-      "appointmentDetails.appointmentDate": Timestamp.fromDate(appointmentDate),
+      "appointmentDetails.appointmentDate": Timestamp.fromDate(fullDate),
+
       "appointmentDetails.appointmentStatus": "scheduled",
       "appointmentDetails.apptType": appointmentType,
       ...(meetingLink && {
@@ -303,6 +322,7 @@ function ApptsLawyer() {
       setTimeout(() => {
         setShowSnackbar(false);
         setSelectedAppointment(null);
+        clearFormFields();
       }, 3000);
     } catch (error) {
       console.error("Error scheduling appointment:", error);
@@ -525,6 +545,8 @@ function ApptsLawyer() {
 
   useEffect(() => {
     setSelectedAppointment(null);
+    clearFormFields();
+
     setShowProceedingNotesForm(false);
     setShowRescheduleForm(false);
     setShowScheduleForm(false);
@@ -606,6 +628,15 @@ function ApptsLawyer() {
         .length === 4;
 
     return !isHoliday && isWeekday(date) && date >= today && !isFullyBooked;
+  };
+
+  const isHourFullyBooked = (hour, date, lawyerUid) => {
+    const minutes = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+    return minutes.every((minute) => {
+      const slot = new Date(date);
+      slot.setHours(hour, minute, 0, 0);
+      return isSlotTakenForLawyer(slot, lawyerUid, appointments);
+    });
   };
 
   const filterTime = (time) => {
@@ -698,6 +729,10 @@ function ApptsLawyer() {
 
   const handleCloseModal = () => {
     setSelectedAppointment(null);
+    clearFormFields();
+    setShowScheduleForm(false);
+    setShowRescheduleForm(false);
+    setShowProceedingNotesForm(false);
   };
 
   const handleEligibilityChange = (e) => {
@@ -867,6 +902,7 @@ function ApptsLawyer() {
 
       setSnackbarMessage("Form has been successfully submitted.");
       setSelectedAppointment(null);
+      clearFormFields();
     } catch (error) {
       console.error("Error submitting form:", error);
       setSnackbarMessage("Error submitting form, please try again.");
@@ -883,6 +919,7 @@ function ApptsLawyer() {
         assistingCounsel: "",
       });
       setSelectedAppointment(null);
+      clearFormFields();
     }
   };
   const handleAccept = async () => {
@@ -895,6 +932,7 @@ function ApptsLawyer() {
       setShowSnackbar(true);
       setShowAcceptRefuseModal(false);
       setSelectedAppointment(null);
+      clearFormFields();
     } catch (error) {
       console.error("Error accepting appointment:", error);
       setSnackbarMessage("Error accepting appointment. Please try again.");
@@ -940,11 +978,24 @@ function ApptsLawyer() {
       setShowAcceptRefuseModal(false);
       setRefuseReason("");
       setSelectedAppointment(null);
+      clearFormFields();
     } catch (error) {
       console.error("Error refusing appointment:", error);
       setSnackbarMessage("Error refusing appointment. Please try again.");
       setShowSnackbar(true);
     }
+  };
+
+  const isSlotTakenForLawyer = (date, lawyerUid, appointments) => {
+    return appointments.some((appt) => {
+      const apptLawyer = appt?.appointmentDetails?.assignedLawyer;
+      const apptDate = appt?.appointmentDetails?.appointmentDate?.toDate();
+      return (
+        apptLawyer === lawyerUid &&
+        apptDate?.getTime() === date?.getTime() &&
+        appt?.appointmentDetails?.appointmentStatus !== "done"
+      );
+    });
   };
 
   const handleSubmitProceedingNotes = async (e) => {
@@ -1187,13 +1238,25 @@ function ApptsLawyer() {
     let meetingPass =
       selectedAppointment.appointmentDetails?.meetingPass || null;
 
+    if (
+      !["Online", "In-person", "Face-to-Face"].includes(
+        rescheduleAppointmentType
+      )
+    ) {
+      setSnackbarMessage("Invalid appointment type selected.");
+      setShowSnackbar(true);
+      return;
+    }
+
     if (rescheduleAppointmentType === "Online") {
       const { link, password } = generateJitsiLink(
         selectedAppointment.controlNumber
       );
       meetingLink = link;
       meetingPass = password;
-    } else if (rescheduleAppointmentType === "In-person") {
+    } else if (
+      ["In-person", "Face-to-Face"].includes(rescheduleAppointmentType)
+    ) {
       meetingLink = null;
       meetingPass = null;
     }
@@ -1214,19 +1277,35 @@ function ApptsLawyer() {
       ? [...appointmentData.rescheduleHistory, rescheduleEntry]
       : [rescheduleEntry];
 
-    const updatedData = {
-      "appointmentDetails.appointmentDate": Timestamp.fromDate(rescheduleDate),
-      "appointmentDetails.apptType": rescheduleAppointmentType,
-      rescheduleHistory: updatedRescheduleHistory,
-      "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
-      ...(meetingLink && {
-        "appointmentDetails.meetingLink": meetingLink,
-        "appointmentDetails.meetingPass": meetingPass,
-      }),
-    };
+    if (!rescheduleHour || !rescheduleMinute) {
+      setSnackbarMessage("Please select hour and minute.");
+      setShowSnackbar(true);
+      return;
+    }
+
+    const fullDate = new Date(rescheduleDate);
+    let h = parseInt(rescheduleHour);
+    if (rescheduleAmPm === "PM" && h < 12) h += 12;
+    if (rescheduleAmPm === "AM" && h === 12) h = 0;
+    fullDate.setHours(h, parseInt(rescheduleMinute), 0, 0);
+
+    if (isSlotTakenForLawyer(fullDate, selectedLawyerUid, appointments)) {
+      setSnackbarMessage("That time is already taken for this lawyer.");
+      setShowSnackbar(true);
+      return;
+    }
 
     try {
-      // Save the updated appointment information
+      const updatedData = {
+        "appointmentDetails.appointmentDate": Timestamp.fromDate(fullDate),
+        "appointmentDetails.apptType": rescheduleAppointmentType,
+        "appointmentDetails.meetingLink": meetingLink,
+        "appointmentDetails.meetingPass": meetingPass,
+        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
+        "appointmentDetails.rescheduleReason": rescheduleReason,
+        rescheduleHistory: updatedRescheduleHistory,
+      };
+
       await updateDoc(appointmentRef, updatedData);
 
       const clientFullName = selectedAppointment.fullName;
@@ -1361,12 +1440,35 @@ function ApptsLawyer() {
       setTimeout(() => {
         setShowSnackbar(false);
         setSelectedAppointment(null);
+        clearFormFields();
       }, 3000);
     } catch (error) {
       console.error("Error rescheduling appointment:", error);
-      setSnackbarMessage("Error rescheduling appointment, please try again.");
+      setSnackbarMessage(
+        "The selected schedule is already taken. Please choose a different time."
+      );
       setShowSnackbar(true);
+      setTimeout(() => {
+        setShowSnackbar(false);
+        setSelectedAppointment(null);
+        clearFormFields();
+      }, 3000);
     }
+  };
+  const clearFormFields = () => {
+    setAppointmentDate(null);
+    setAppointmentHour("");
+    setAppointmentMinute("");
+    setAppointmentAmPm("PM");
+
+    setRescheduleDate(null);
+    setRescheduleHour("");
+    setRescheduleMinute("");
+    setRescheduleAmPm("PM");
+    setRescheduleReason("");
+    setRescheduleAppointmentType("");
+
+    setAppointmentType("");
   };
 
   const getFormattedDate = (timestamp, includeTime = false) => {
@@ -1517,9 +1619,10 @@ function ApptsLawyer() {
         />
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
-          <option value="all">Status</option>
+        <option value="all">All Status</option>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
+          <option value="accepted">Accepted</option>
           <option value="scheduled">Scheduled</option>
           <option value="refused">Refused</option>
           <option value="done">Done</option>
@@ -1629,6 +1732,13 @@ function ApptsLawyer() {
                       <button
                         onClick={() => {
                           setSelectedAppointment(appointment);
+                          setSelectedLawyerUid(
+                            appointment.appointmentDetails?.assignedLawyer || ""
+                          );
+
+                          setShowScheduleForm(false);
+                          setShowRescheduleForm(false);
+                          setShowProceedingNotesForm(false);
                           setActiveView("view");
                         }}
                         style={{
@@ -1653,6 +1763,11 @@ function ApptsLawyer() {
                           <button
                             onClick={() => {
                               setSelectedAppointment(appointment);
+                              setSelectedLawyerUid(
+                                appointment.appointmentDetails
+                                  ?.assignedLawyer || ""
+                              );
+
                               setShowAcceptRefuseModal(true);
                               setActionType("accept");
                             }}
@@ -1699,6 +1814,11 @@ function ApptsLawyer() {
                             disabled
                             onClick={() => {
                               setSelectedAppointment(appointment);
+                              setSelectedLawyerUid(
+                                appointment.appointmentDetails
+                                  ?.assignedLawyer || ""
+                              );
+
                               setShowAcceptRefuseModal(true);
                               setActionType("accept");
                             }}
@@ -1744,6 +1864,11 @@ function ApptsLawyer() {
                           <button
                             onClick={() => {
                               setSelectedAppointment(appointment);
+                              setSelectedLawyerUid(
+                                appointment.appointmentDetails
+                                  ?.assignedLawyer || ""
+                              );
+
                               setShowProceedingNotesForm(false);
                               setShowRescheduleForm(false);
                               setShowScheduleForm(true);
@@ -1788,6 +1913,11 @@ function ApptsLawyer() {
                           <button
                             onClick={() => {
                               setSelectedAppointment(appointment);
+                              setSelectedLawyerUid(
+                                appointment.appointmentDetails
+                                  ?.assignedLawyer || ""
+                              );
+
                               setShowProceedingNotesForm(false);
                               setShowRescheduleForm(true);
                               setShowScheduleForm(false);
@@ -1811,6 +1941,11 @@ function ApptsLawyer() {
                           <button
                             onClick={() => {
                               setSelectedAppointment(appointment);
+                              setSelectedLawyerUid(
+                                appointment.appointmentDetails
+                                  ?.assignedLawyer || ""
+                              );
+
                               setShowProceedingNotesForm(true);
                               setShowRescheduleForm(false);
                               setShowScheduleForm(false);
@@ -1916,16 +2051,6 @@ function ApptsLawyer() {
           !showRescheduleForm &&
           !showScheduleForm && (
             <div className="client-eligibility">
-              <div style={{ position: "relative" }}>
-                <button
-                  onClick={handleCloseModal}
-                  className="close-button"
-                  style={{ position: "absolute", top: "15px", right: "15px" }}
-                >
-                  ×
-                </button>
-              </div>
-              <br />
               <h2>Appointment Details</h2>
               <div id="appointment-details-section">
                 <section className="mb-4 print-section">
@@ -2914,25 +3039,86 @@ function ApptsLawyer() {
                   required
                 ></textarea>
               </div>
+              <br />
               <div>
                 <b>
                   <label>Reschedule Date and Time: *</label>
                 </b>
-                <br />
                 <ReactDatePicker
                   selected={rescheduleDate}
                   onChange={(date) => setRescheduleDate(date)}
-                  showTimeSelect
                   filterDate={(date) => filterDate(date) && date > new Date()}
-                  filterTime={(time) => filterRescheduleTime(time)} // Apply the correct filter
-                  dateFormat="MM/dd/yy h:mm aa"
+                  dateFormat="MM/dd/yyyy"
                   inline
-                  timeIntervals={60}
-                  minTime={new Date(new Date().setHours(13, 0, 0))} // Starting from 1:00 PM
-                  maxTime={new Date(new Date().setHours(17, 0, 0))} // Ending at 5:00 PM
-                  dayClassName={(date) => getDayClassName(date)}
-                  timeClassName={(time) => getTimeRescheduleClassName(time)} // Ensure className application
                 />
+                <br />
+                <div style={{ gap: "0.5rem" }}>
+                  <b>
+                    <label>Select Time (1:00 PM - 5:00 PM): *</label>
+                  </b>
+                  <select
+                    required
+                    value={rescheduleHour}
+                    onChange={(e) => setRescheduleHour(e.target.value)}
+                  >
+                    <option value="">Hour</option>
+                    {[1, 2, 3, 4, 5].map((h) => {
+                      const isDisabled = isHourFullyBooked(
+                        h + 12,
+                        appointmentDate,
+                        selectedLawyerUid
+                      ); // 1pm = 13
+                      return (
+                        <option key={h} value={h} disabled={isDisabled}>
+                          {h}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  <select
+                    required
+                    value={rescheduleMinute}
+                    onChange={(e) => setRescheduleMinute(e.target.value)}
+                  >
+                    <option value="">Minute</option>
+                    {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => {
+                      const fullDate = new Date(rescheduleDate);
+                      let h = parseInt(rescheduleHour);
+                      if (rescheduleAmPm === "PM" && h < 12) h += 12;
+                      if (rescheduleAmPm === "AM" && h === 12) h = 0;
+                      fullDate.setHours(h, m, 0, 0);
+
+                      const disabled = isSlotTakenForLawyer(
+                        fullDate,
+                        selectedLawyerUid,
+                        appointments
+                      );
+
+                      return (
+                        <option
+                          key={m}
+                          value={m}
+                          disabled={disabled}
+                          style={{
+                            backgroundColor: disabled ? "red" : "inherit",
+                          }}
+                        >
+                          {m.toString().padStart(2, "0")}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  <select
+                    required
+                    value={rescheduleAmPm}
+                    onChange={(e) => setRescheduleAmPm(e.target.value)}
+                    disabled
+                  >
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
               </div>
               <br />
               <div>
@@ -2981,26 +3167,87 @@ function ApptsLawyer() {
                 </tr>
               </tbody>
             </table>
+            <br />
             <form onSubmit={handleScheduleSubmit}>
               <div>
                 <b>
                   <label>Appointment Date and Time: *</label>
                 </b>
-                <br />
                 <ReactDatePicker
-                  selected={appointmentDate} // Correct state for scheduling
-                  onChange={(date) => setAppointmentDate(date)} // Ensure it updates appointmentDate
-                  showTimeSelect
+                  selected={appointmentDate}
+                  onChange={(date) => setAppointmentDate(date)}
                   filterDate={(date) => filterDate(date) && date > new Date()}
-                  filterTime={(time) => filterTime(time)} // Apply correct filtering for valid times
-                  dateFormat="MM/dd/yy h:mm aa"
+                  dateFormat="MM/dd/yyyy"
                   inline
-                  timeIntervals={60} // Set to 60 minutes for 1-hour intervals
-                  minTime={new Date(new Date().setHours(13, 0, 0))} // Starting from 1:00 PM
-                  maxTime={new Date(new Date().setHours(17, 0, 0))} // Ending at 5:00 PM
-                  dayClassName={(date) => getDayClassName(date)} // Add class for fully booked days
-                  timeClassName={(time) => getTimeClassName(time)} // Ensure className application for time
                 />
+                <br />
+                <div style={{ gap: "0.5rem" }}>
+                  <b>
+                    <label>Select Time (1:00 PM - 5:00 PM): *</label>
+                  </b>
+                  <select
+                    required
+                    value={appointmentHour}
+                    onChange={(e) => setAppointmentHour(e.target.value)}
+                  >
+                    <option value="">Hour</option>
+                    {[1, 2, 3, 4, 5].map((h) => {
+                      const isDisabled = isHourFullyBooked(
+                        h + 12,
+                        rescheduleDate,
+                        selectedLawyerUid
+                      );
+                      return (
+                        <option key={h} value={h} disabled={isDisabled}>
+                          {h}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  <select
+                    required
+                    value={appointmentMinute}
+                    onChange={(e) => setAppointmentMinute(e.target.value)}
+                  >
+                    <option value="">Minute</option>
+                    {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => {
+                      const fullDate = new Date(appointmentDate);
+                      let h = parseInt(appointmentHour);
+                      if (appointmentAmPm === "PM" && h < 12) h += 12;
+                      if (appointmentAmPm === "AM" && h === 12) h = 0;
+                      fullDate.setHours(h, m, 0, 0);
+
+                      const disabled = isSlotTakenForLawyer(
+                        fullDate,
+                        selectedLawyerUid,
+                        appointments
+                      );
+
+                      return (
+                        <option
+                          key={m}
+                          value={m}
+                          disabled={disabled}
+                          style={{
+                            backgroundColor: disabled ? "red" : "inherit",
+                          }}
+                        >
+                          {m.toString().padStart(2, "0")}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  <select
+                    required
+                    value={appointmentAmPm}
+                    onChange={(e) => setAppointmentAmPm(e.target.value)}
+                    disabled
+                  >
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
               </div>
               <br />
               <div>
@@ -3020,6 +3267,7 @@ function ApptsLawyer() {
                   <option value="Online">Online Video Consultation</option>
                 </select>
               </div>
+              <br />
               <br />
               <button disabled={isSubmitting}>Submit</button>
             </form>

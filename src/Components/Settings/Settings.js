@@ -24,6 +24,13 @@ import {
   multiFactor,
   RecaptchaVerifier,
 } from "firebase/auth";
+import firebase from "firebase/compat/app";
+import zxcvbn from "zxcvbn";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import { EmailAuthProvider } from "firebase/auth";
+import { reauthenticateWithCredential } from "firebase/auth";
 
 function Settings() {
   const { currentUser } = useAuth();
@@ -46,6 +53,57 @@ function Settings() {
   const db = fs; // Firestore instance
   const navigate = useNavigate();
   const auth = getAuth();
+  const [showTrustedDevices, setShowTrustedDevices] = useState(false);
+  const [showLoginActivity, setShowLoginActivity] = useState(false);
+  const [showAuditLogs, setShowAuditLogs] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState(0);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setSnackbarMessage("Please fill in all fields.");
+      setShowSnackbar(true);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setSnackbarMessage("New passwords do not match.");
+      setShowSnackbar(true);
+      return;
+    }
+
+    if (passwordStrength < 2) {
+      setSnackbarMessage("Please use a stronger password.");
+      setShowSnackbar(true);
+      return;
+    }
+
+    const user = auth.currentUser;
+    const credential = EmailAuthProvider.credential(
+      user.email,
+      currentPassword
+    );
+
+    try {
+      await reauthenticateWithCredential(user, credential);
+      await user.updatePassword(newPassword);
+      setSnackbarMessage("Password changed successfully.");
+      setShowSnackbar(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      console.error("Error changing password:", error.message);
+      setSnackbarMessage(error.message || "Failed to change password.");
+      setShowSnackbar(true);
+    }
+  };
 
   // Listen for authentication state changes
   useEffect(() => {
@@ -394,91 +452,182 @@ function Settings() {
             )}
           </div>
         </div> */}
+        <div className="settings-section">
+          <h4>Change Password</h4>
+          <button
+            onClick={() => {
+              const willHide = showChangePassword;
+              setShowChangePassword(!showChangePassword);
+              if (willHide) {
+                // Clear fields when hiding
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                setPasswordStrength(0);
+                setShowCurrent(false);
+                setShowNew(false);
+                setShowConfirm(false);
+              }
+            }}
+          >
+            {showChangePassword ? "Hide" : "Change Password"}
+          </button>
+
+          {showChangePassword && (
+            <div className="change-password-form">
+              <div className="input-with-icon">
+                <input
+                  type={showCurrent ? "text" : "password"}
+                  placeholder="Current Password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+                <span
+                  className="icon"
+                  onClick={() => setShowCurrent(!showCurrent)}
+                >
+                  {showCurrent ? <VisibilityOff /> : <Visibility />}
+                </span>
+              </div>
+
+              <div className="input-with-icon">
+                <input
+                  type={showNew ? "text" : "password"}
+                  placeholder="New Password"
+                  value={newPassword}
+                  onChange={(e) => {
+                    const pwd = e.target.value;
+                    setNewPassword(pwd);
+                    const result = zxcvbn(pwd);
+                    setPasswordStrength(result.score);
+                  }}
+                />
+                <span className="icon" onClick={() => setShowNew(!showNew)}>
+                  {showNew ? <VisibilityOff /> : <Visibility />}
+                </span>
+              </div>
+
+              <div className="input-with-icon">
+                <input
+                  type={showConfirm ? "text" : "password"}
+                  placeholder="Confirm New Password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+                <span
+                  className="icon"
+                  onClick={() => setShowConfirm(!showConfirm)}
+                >
+                  {showConfirm ? <VisibilityOff /> : <Visibility />}
+                </span>
+              </div>
+
+              <div className="password-strength-meter">
+                <progress
+                  className={`strength-meter strength-${passwordStrength}`}
+                  value={passwordStrength}
+                  max="4"
+                />
+                <p>
+                  Password Strength:{" "}
+                  {
+                    ["Too Weak", "Weak", "Fair", "Good", "Strong"][
+                      passwordStrength
+                    ]
+                  }
+                </p>
+              </div>
+
+              <button onClick={handleChangePassword}>Change Password</button>
+            </div>
+          )}
+        </div>
 
         {/* Trusted Devices Section */}
         <div className="settings-section">
           <h4>Trusted Devices</h4>
-          {trustedDevices.length > 0 ? (
-            <div className="table-container">
-              <table className="trusted-devices-table">
-                <thead>
-                  <tr>
-                    <th>Device Name</th>
-                    <th>IP Address</th>
-                    <th>Last Login</th>
-                    <th>Location</th>
-                    <th>Platform</th>
-                    {/* <th>Actions</th> */}
-                  </tr>
-                </thead>
-                <tbody>
-                  {trustedDevices.map((device) => (
-                    <tr key={device.id}>
-                      <td>{device.device_name}</td>
-                      <td>{device.ipAddress}</td>
-                      <td>
-                        {new Date(
-                          device.last_login.seconds * 1000
-                        ).toLocaleString()}
-                      </td>
-                      <td>{device.location}</td>
-                      <td>{device.platform}</td>
-                      {/* <td>
-                        <button
-                          className="remove-device-btn"
-                          onClick={() => removeDevice(device.id)}
-                        >
-                          <FontAwesomeIcon icon={faTrash} />
-                        </button>
-                      </td> */}
+          <button onClick={() => setShowTrustedDevices(!showTrustedDevices)}>
+            {showTrustedDevices ? "Hide" : "View"} Trusted Devices
+          </button>
+          {showTrustedDevices &&
+            (trustedDevices.length > 0 ? (
+              <div className="table-container">
+                <table className="trusted-devices-table">
+                  <thead>
+                    <tr>
+                      <th>Device Name</th>
+                      <th>IP Address</th>
+                      <th>Last Login</th>
+                      <th>Location</th>
+                      <th>Platform</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p>No trusted devices found.</p>
-          )}
+                  </thead>
+                  <tbody>
+                    {trustedDevices.map((device) => (
+                      <tr key={device.id}>
+                        <td>{device.device_name}</td>
+                        <td>{device.ipAddress}</td>
+                        <td>
+                          {new Date(
+                            device.last_login.seconds * 1000
+                          ).toLocaleString()}
+                        </td>
+                        <td>{device.location}</td>
+                        <td>{device.platform}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p>No trusted devices found.</p>
+            ))}
         </div>
 
         {/* Login Activity Section */}
         <div className="settings-section">
           <h4>Login Activity</h4>
-          {loginActivities.length > 0 ? (
-            <div className="table-container">
-              <table className="login-activity-table">
-                <thead>
-                  <tr>
-                    <th>Device Name</th>
-                    <th>IP Address</th>
-                    <th>Login Time</th>
-                    <th>Location</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loginActivities.map((activity) => (
-                    <tr key={activity.id}>
-                      <td>{activity.deviceName}</td>
-                      <td>{activity.ipAddress}</td>
-                      <td>
-                        {new Date(
-                          activity.loginTime.seconds * 1000
-                        ).toLocaleString()}
-                      </td>
-                      <td>{activity.location}</td>
+          <button onClick={() => setShowLoginActivity(!showLoginActivity)}>
+            {showLoginActivity ? "Hide" : "View"} Login Activity
+          </button>
+          {showLoginActivity &&
+            (loginActivities.length > 0 ? (
+              <div className="table-container">
+                <table className="login-activity-table">
+                  <thead>
+                    <tr>
+                      <th>Device Name</th>
+                      <th>IP Address</th>
+                      <th>Login Time</th>
+                      <th>Location</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {loginActivities.map((activity) => (
+                      <tr key={activity.id}>
+                        <td>{activity.deviceName}</td>
+                        <td>{activity.ipAddress}</td>
+                        <td>
+                          {new Date(
+                            activity.loginTime.seconds * 1000
+                          ).toLocaleString()}
+                        </td>
+                        <td>{activity.location}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p>No login activity found.</p>
+            ))}
+          {showLoginActivity && (
+            <div className="logout-all-container">
+              <button className="logout-all-btn" onClick={logoutAllDevices}>
+                <FontAwesomeIcon icon={faSignOutAlt} /> Logout from All Devices
+              </button>
             </div>
-          ) : (
-            <p>No login activity found.</p>
           )}
-          <div className="logout-all-container">
-            <button className="logout-all-btn" onClick={logoutAllDevices}>
-              <FontAwesomeIcon icon={faSignOutAlt} /> Logout from All Devices
-            </button>
-          </div>
         </div>
 
         {/* Snackbar for session expiration */}
@@ -493,130 +642,134 @@ function Settings() {
         {/* Audit Logs Section */}
         <div className="settings-section">
           <h4>Audit Logs</h4>
-          {auditLogs.length > 0 ? (
-            <div className="table-container">
-              <table className="audit-logs-table">
-                <thead>
-                  <tr>
-                    <th>Action Type</th>
-                    <th>Timestamp</th>
-                    <th>Changes</th>
-                    <th>Affected Data</th>
-                    <th>Metadata</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditLogs.map((log) => (
-                    <tr key={log.id}>
-                      <td>{log.actionType}</td>
-                      <td>
-                        {new Date(
-                          log.timestamp.seconds * 1000
-                        ).toLocaleString()}
-                      </td>
-                      <td>
-                        <div className="collapsible">
-                          <button
-                            className="collapsible-button"
-                            onClick={() =>
-                              setOpenSections((prev) => ({
-                                ...prev,
-                                changes: {
-                                  ...prev.changes,
-                                  [log.id]: !prev.changes[log.id],
-                                },
-                              }))
-                            }
-                          >
-                            {openSections.changes[log.id]
-                              ? "Hide Changes"
-                              : "View Changes"}
-                          </button>
-                          {openSections.changes[log.id] && (
-                            <div className="collapsible-content">
-                              {log.changes ? (
-                                <pre>{log.changes}</pre>
-                              ) : (
-                                <p>No changes recorded.</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="collapsible">
-                          <button
-                            className="collapsible-button"
-                            onClick={() =>
-                              setOpenSections((prev) => ({
-                                ...prev,
-                                affectedData: {
-                                  ...prev.affectedData,
-                                  [log.id]: !prev.affectedData[log.id],
-                                },
-                              }))
-                            }
-                          >
-                            {openSections.affectedData[log.id]
-                              ? "Hide Affected Data"
-                              : "View Affected Data"}
-                          </button>
-                          {openSections.affectedData[log.id] && (
-                            <div className="collapsible-content">
-                              {log.affectedData ? (
-                                <pre>{log.affectedData}</pre>
-                              ) : (
-                                <p>No affected data recorded.</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="collapsible">
-                          <button
-                            className="collapsible-button"
-                            onClick={() =>
-                              setOpenSections((prev) => ({
-                                ...prev,
-                                metadata: {
-                                  ...prev.metadata,
-                                  [log.id]: !prev.metadata[log.id],
-                                },
-                              }))
-                            }
-                          >
-                            {openSections.metadata[log.id]
-                              ? "Hide Metadata"
-                              : "View Metadata"}
-                          </button>
-                          {openSections.metadata[log.id] && (
-                            <div className="collapsible-content">
-                              {log.metadata ? (
-                                <pre>{log.metadata}</pre>
-                              ) : (
-                                <p>No metadata recorded.</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
+          <button onClick={() => setShowAuditLogs(!showAuditLogs)}>
+            {showAuditLogs ? "Hide" : "View"} Audit Logs
+          </button>
+          {showAuditLogs &&
+            (auditLogs.length > 0 ? (
+              <div className="table-container">
+                <table className="audit-logs-table">
+                  <thead>
+                    <tr>
+                      <th>Action Type</th>
+                      <th>Timestamp</th>
+                      <th>Changes</th>
+                      <th>Affected Data</th>
+                      <th>Metadata</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p>No audit logs found.</p>
-          )}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              marginTop: "10px",
-            }}
-          >
-            {isAdmin && (
+                  </thead>
+                  <tbody>
+                    {auditLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td>{log.actionType}</td>
+                        <td>
+                          {new Date(
+                            log.timestamp.seconds * 1000
+                          ).toLocaleString()}
+                        </td>
+                        <td>
+                          <div className="collapsible">
+                            <button
+                              className="collapsible-button"
+                              onClick={() =>
+                                setOpenSections((prev) => ({
+                                  ...prev,
+                                  changes: {
+                                    ...prev.changes,
+                                    [log.id]: !prev.changes[log.id],
+                                  },
+                                }))
+                              }
+                            >
+                              {openSections.changes[log.id]
+                                ? "Hide Changes"
+                                : "View Changes"}
+                            </button>
+                            {openSections.changes[log.id] && (
+                              <div className="collapsible-content">
+                                {log.changes ? (
+                                  <pre>{log.changes}</pre>
+                                ) : (
+                                  <p>No changes recorded.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="collapsible">
+                            <button
+                              className="collapsible-button"
+                              onClick={() =>
+                                setOpenSections((prev) => ({
+                                  ...prev,
+                                  affectedData: {
+                                    ...prev.affectedData,
+                                    [log.id]: !prev.affectedData[log.id],
+                                  },
+                                }))
+                              }
+                            >
+                              {openSections.affectedData[log.id]
+                                ? "Hide Affected Data"
+                                : "View Affected Data"}
+                            </button>
+                            {openSections.affectedData[log.id] && (
+                              <div className="collapsible-content">
+                                {log.affectedData ? (
+                                  <pre>{log.affectedData}</pre>
+                                ) : (
+                                  <p>No affected data recorded.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="collapsible">
+                            <button
+                              className="collapsible-button"
+                              onClick={() =>
+                                setOpenSections((prev) => ({
+                                  ...prev,
+                                  metadata: {
+                                    ...prev.metadata,
+                                    [log.id]: !prev.metadata[log.id],
+                                  },
+                                }))
+                              }
+                            >
+                              {openSections.metadata[log.id]
+                                ? "Hide Metadata"
+                                : "View Metadata"}
+                            </button>
+                            {openSections.metadata[log.id] && (
+                              <div className="collapsible-content">
+                                {log.metadata ? (
+                                  <pre>{log.metadata}</pre>
+                                ) : (
+                                  <p>No metadata recorded.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p>No audit logs found.</p>
+            ))}
+          {showAuditLogs && isAdmin && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: "10px",
+              }}
+            >
               <Button
                 variant="contained"
                 color="primary"
@@ -624,8 +777,8 @@ function Settings() {
               >
                 View All Audit Logs
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

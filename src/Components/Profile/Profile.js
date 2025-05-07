@@ -93,7 +93,7 @@ function Profile() {
       limit(1)
     );
     const loginActivitySnapshot = await getDocs(loginActivityQuery);
-  
+
     if (!loginActivitySnapshot.empty) {
       const activityData = loginActivitySnapshot.docs[0].data();
       return {
@@ -107,13 +107,13 @@ function Profile() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-  
+
     let updatedData = { ...userData };
     // Remove empty values
     Object.keys(updatedData).forEach((key) => {
       if (updatedData[key] === "") delete updatedData[key];
     });
-  
+
     // Add profile image with timestamp if provided
     if (profileImage) {
       const now = new Date();
@@ -126,33 +126,33 @@ function Profile() {
         .getSeconds()
         .toString()
         .padStart(2, "0")}`;
-      
+
       const imageUrl = await uploadImage(
         profileImage,
         `profile_images/${currentUser.uid}/profileImage_${timestamp}.png`
       );
       updatedData.photo_url = imageUrl;
     }
-  
+
     // Add current timestamp for updated_time
     updatedData.updated_time = new Date();
-  
+
     try {
       const changes = findChangedFields();
       await updateUser(currentUser.uid, updatedData);
-  
+
       if (Object.keys(changes).length > 0) {
         const message = `Your profile has been updated. Fields changed: ${Object.keys(
           changes
         ).join(", ")}`;
         await sendNotification(message, currentUser.uid, "profile");
       }
-  
+
       // Fetch latest login activity metadata
       const { ipAddress, deviceName } = await fetchLatestLoginActivity(
         currentUser.uid
       );
-  
+
       // Create and clean audit log entry
       const auditLogEntry = {
         actionType: "UPDATE",
@@ -168,13 +168,13 @@ function Profile() {
           userAgent: deviceName,
         },
       };
-  
+
       Object.keys(auditLogEntry.changes).forEach(
         (key) =>
           auditLogEntry.changes[key] === undefined &&
           (auditLogEntry.changes[key] = null)
       );
-  
+
       await addDoc(collection(fs, "audit_logs"), auditLogEntry);
       setSnackbarMessage("Profile has been successfully updated.");
     } catch (error) {
@@ -185,7 +185,7 @@ function Profile() {
       setTimeout(() => setShowSnackbar(false), 3000);
     }
   };
-  
+
   if (!currentUser) {
     return <div>Loading...</div>;
   }

@@ -259,3 +259,191 @@ table tr:hover {
   max-height: 150px; /* Limits height for overflow */
   overflow: auto; /* Adds scroll if content overflows */
 }
+.change-password-form {
+  background-color: #f8f9fa;
+  padding: 20px 25px;
+  border-radius: 10px;
+  border: 1px solid #dee2e6;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.05);
+  max-width: 500px;
+  margin-top: 20px;
+}
+
+.change-password-form .MuiTextField-root {
+  margin-bottom: 20px;
+}
+
+.change-password-form .MuiButton-root {
+  background-color: #0052d4;
+  color: white;
+  font-weight: 600;
+  padding: 10px 24px;
+  border-radius: 8px;
+}
+
+.change-password-form .MuiButton-root:hover {
+  background-color: #003f9a;
+}
+.password-strength-meter {
+  margin-top: 10px;
+}
+
+.strength-meter {
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  margin-top: 5px;
+  appearance: none;
+}
+.MuiInputBase-root {
+  background-color: #fff;
+  border-radius: 8px;
+}
+
+.MuiInputAdornment-root {
+  margin-right: 4px;
+}
+
+.MuiIconButton-root {
+  padding: 8px;
+  color: #6c757d;
+}
+
+.change-password-form .MuiTextField-root {
+  margin-bottom: 16px;
+}
+
+/* Reset and unify input styling */
+.change-password-form .MuiOutlinedInput-root {
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 56px;
+  box-sizing: border-box;
+}
+
+/* Fix adornment (eye icon) alignment */
+.change-password-form .MuiInputAdornment-root {
+  margin-right: 8px;
+}
+
+.change-password-form .MuiIconButton-root {
+  color: #6c757d;
+  padding: 8px;
+}
+/* Fix consistent input height regardless of type */
+.change-password-form input[type="password"],
+.change-password-form input[type="text"] {
+  font-size: 16px;
+  height: 24px;
+  padding: 14px !important;
+  box-sizing: border-box;
+  background-color: white;
+}
+
+/* Override MUI label float behavior so it's smooth and consistent */
+.change-password-form .MuiInputLabel-root {
+  font-size: 15px;
+  transform: translate(14px, 16px) scale(1);
+}
+
+.change-password-form .MuiInputLabel-shrink {
+  transform: translate(14px, -6px) scale(0.75);
+}
+.input-with-icon {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.input-with-icon input {
+  width: 100%;
+  padding: 16px 44px 16px 14px;
+  font-size: 1em;
+  min-height: 60px; /* <-- NEW: makes the field visibly taller */
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  outline: none;
+  box-sizing: border-box;
+  background-color: #fff;
+}
+
+
+.input-with-icon .icon {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: #888;
+  font-size: 1.2em;
+  transition: color 0.3s;
+  line-height: 1;
+}
+
+.input-with-icon .icon:hover {
+  color: #333;
+}
+.password-strength-meter {
+  margin-top: 10px;
+  margin-bottom: 15px;
+}
+
+.password-strength-meter progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  appearance: none;
+}
+
+.strength-0::-webkit-progress-value {
+  background-color: #e74c3c;
+}
+.strength-1::-webkit-progress-value {
+  background-color: #e67e22;
+}
+.strength-2::-webkit-progress-value {
+  background-color: #f1c40f;
+}
+.strength-3::-webkit-progress-value {
+  background-color: #2ecc71;
+}
+.strength-4::-webkit-progress-value {
+  background-color: #27ae60;
+}
+
+.password-strength-meter p {
+  font-size: 0.85em;
+  margin-top: 5px;
+  color: #555;
+}
+.change-password-form button {
+  width: 100%;
+  padding: 10px;
+  font-size: 1em;
+  background-color: #580049;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.change-password-form button:hover {
+  background-color: #932b62;
+}
+
+.strength-0::-webkit-progress-value {
+  background-color: #e74c3c;
+}
+.strength-1::-webkit-progress-value {
+  background-color: #e67e22;
+}
+.strength-2::-webkit-progress-value {
+  background-color: #f1c40f;
+}
+.strength-3::-webkit-progress-value {
+  background-color: #2ecc71;
+}
+.strength-4::-webkit-progress-value {
+  background-color: #27ae60;
+}

@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "lawyer-app-ed056"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }

@@ -1473,11 +1473,12 @@ function Appointments() {
         />
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
-          <option value="all">Status</option>
+          <option value="all">All Status</option>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
+          <option value="accepted">Accepted</option>
           <option value="scheduled">Scheduled</option>
-          <option value="denied">Denied</option>
+          <option value="refused">Refused</option>
           <option value="done">Done</option>
         </select>
         &nbsp;&nbsp;
@@ -1538,41 +1539,52 @@ function Appointments() {
                     )}
                   </td>
                   <td>
-  {appointment.appointmentDetails?.apptType === "Online" &&
-  appointment.appointmentDetails?.meetingLink ? (
-    <button
-      onClick={() =>
-        window.open(
-          `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
-          "_blank"
-        )
-      }
-      style={{
-        backgroundColor:
-          appointment.appointmentDetails.appointmentStatus === "done"
-            ? "gray" // Disabled button color
-            : "#28a745", // Active button color
-        color: "white",
-        border: "none",
-        padding: "5px 8px",
-        cursor:
-          appointment.appointmentDetails.appointmentStatus === "done"
-            ? "not-allowed" // Cursor style when disabled
-            : "pointer",
-        display: "flex",
-        alignItems: "center",
-        opacity:
-          appointment.appointmentDetails.appointmentStatus === "done" ? 0.6 : 1, // Slight opacity when disabled
-      }}
-      disabled={appointment.appointmentDetails.appointmentStatus === "done"} // Disable if status is "done"
-    >
-      <FontAwesomeIcon icon={faVideo} style={{ marginRight: "8px" }} />
-      Join Meeting
-    </button>
-  ) : (
-    "N/A"
-  )}
-</td>
+                    {appointment.appointmentDetails?.apptType === "Online" &&
+                    appointment.appointmentDetails?.meetingLink ? (
+                      <button
+                        onClick={() =>
+                          window.open(
+                            `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
+                            "_blank"
+                          )
+                        }
+                        style={{
+                          backgroundColor:
+                            appointment.appointmentDetails.appointmentStatus ===
+                            "done"
+                              ? "gray" // Disabled button color
+                              : "#28a745", // Active button color
+                          color: "white",
+                          border: "none",
+                          padding: "5px 8px",
+                          cursor:
+                            appointment.appointmentDetails.appointmentStatus ===
+                            "done"
+                              ? "not-allowed" // Cursor style when disabled
+                              : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          opacity:
+                            appointment.appointmentDetails.appointmentStatus ===
+                            "done"
+                              ? 0.6
+                              : 1, // Slight opacity when disabled
+                        }}
+                        disabled={
+                          appointment.appointmentDetails.appointmentStatus ===
+                          "done"
+                        } // Disable if status is "done"
+                      >
+                        <FontAwesomeIcon
+                          icon={faVideo}
+                          style={{ marginRight: "8px" }}
+                        />
+                        Join Meeting
+                      </button>
+                    ) : (
+                      "N/A"
+                    )}
+                  </td>
 
                   <td>
                     <OverlayTrigger

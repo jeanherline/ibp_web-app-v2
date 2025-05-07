@@ -7,13 +7,10 @@ import ReactDatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Pagination from "react-bootstrap/Pagination";
 import {
-  getLawyerAppointments,
   updateAppointment,
   getBookedSlots,
   getUserById,
   getUsers,
-  sendNotification,
-  getHeadLawyerUid,
   getAppointments,
 } from "../../Config/FirebaseServices";
 import { useAuth } from "../../contexts/AuthContext";
@@ -124,165 +121,176 @@ function ApptsFrontDesk() {
       return;
     }
 
-    // Get the contents of the appointment details section
-    const printContents = document.getElementById(
-      "appointment-details-section"
-    ).innerHTML;
+    const printWindow = window.open("", "", "width=900,height=1200");
 
-    // Create a temporary div to modify the contents for printing
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = printContents;
+    const uploaded = selectedAppointment.uploadedImages || {};
+    const images = [
+      { label: "Barangay Certificate", url: uploaded.barangayImageUrl },
+      { label: "DSWD Certificate", url: uploaded.dswdImageUrl },
+      { label: "PAO Disqualification Letter", url: uploaded.paoImageUrl },
+      { label: "Consultation Attachment", url: uploaded.proceedingFileUrl },
+      { label: "New Request File", url: uploaded.newRequestUrl },
+    ].filter((img) => img.url);
 
-    // Remove any elements you don't want to print (with class 'no-print')
-    const noPrintSection = tempDiv.querySelectorAll(".no-print");
-    noPrintSection.forEach((section) => section.remove());
+    const qr = selectedAppointment.qrCode || "";
+    const appointmentDate = selectedAppointment.appointmentDate?.toDate
+      ? selectedAppointment.appointmentDate.toDate().toLocaleString("en-US")
+      : "N/A";
 
-    const modifiedPrintContents = tempDiv.innerHTML;
+    const dob = selectedAppointment.dob?.toDate
+      ? selectedAppointment.dob.toDate().toLocaleDateString("en-US")
+      : "N/A";
 
-    // Open a new window for printing
-    const printWindow = window.open("", "", "height=500, width=500");
-    printWindow.document.write(
-      "<html><head><title>Appointment Details</title></head><body>"
-    );
-
-    // Add modern, professional styles for printing
-    printWindow.document.write("<style>");
     printWindow.document.write(`
-      @media print {
-        @page {
-          size: 8.5in 13in;
-          margin: 0.8in;
-        }
-        body {
-          font-family: 'Arial', sans-serif;
-          font-size: 12px;
-          line-height: 1.6;
-          color: #333;
-        }
-        .header {
-          text-align: center;
-          margin-bottom: 20px;
-        }
-        .header h2 {
-          font-size: 18px;
-          font-weight: normal;
-          color: #333;
-          margin-bottom: 5px;
-        }
-        .header img {
-          width: 60px;
-          display: block;
-          margin: 0 auto;
-        }
-        .section-title {
-          font-size: 14px;
-          font-weight: bold;
-          margin-top: 30px;
-          margin-bottom: 10px;
-          color: #555;
-          border-bottom: 1px solid #ddd;
-          padding-bottom: 5px;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 20px;
-          font-size: 12px;
-          color: #333;
-        }
-        table, th, td {
-          border: 1px solid #ddd;
-        }
-        th, td {
-          padding: 10px;
-          text-align: left;
-        }
-        th {
-          background-color: #f7f7f7;
-          font-weight: normal;
-          font-size: 12px;
-          text-transform: uppercase;
-          color: #555;
-        }
-        td {
-          font-size: 12px;
-          color: #333;
-        }
-        .form-label {
-          font-size: 12px;
-          font-weight: bold;
-          margin-top: 15px;
-          color: #333;
-        }
-        .form-field {
-          font-size: 12px;
-          padding: 5px 0;
-          border-bottom: 1px solid #ddd;
-          color: #555;
-        }
-        .print-image {
-          width: 100%;
-          height: auto;
-          max-height: 10in;
-          object-fit: contain;
-          display: block;
-          margin-bottom: 10px;
-        }
-        .no-print {
-          display: none;
-        }
-        /* Modern table style */
-        table thead {
-          background-color: #f9f9f9;
-        }
-        table th {
-          letter-spacing: 1px;
-        }
-        table tbody tr:nth-child(even) {
-          background-color: #f5f5f5;
-        }
-        /* Add a page break before Employment Profile section */
-        .employment-profile {
-          page-break-before: always; /* Forces a page break before this section */
-        }
-      }
+      <html>
+      <head>
+        <title>Appointment Summary</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 0.2in 0.3in; /* top/bottom 0.2in, left/right 0.3in */
+          }
+          body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            color: #000;
+            margin: 0;
+          }
+          .section {
+            page-break-after: always;
+            padding: 0.3in;
+          }
+          .section:last-of-type {
+            page-break-after: auto;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          }
+          .header .logo {
+            width: 80px;
+          }
+          .header .qr {
+            width: 100px;
+          }
+          h2 {
+            text-align: center;
+            margin-top: 0;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+          }
+          table, th, td {
+            border: 1px solid #444;
+          }
+          th, td {
+            padding: 8px;
+            text-align: left;
+          }
+.image-page {
+  page-break-before: always;
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.image-page img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+
+        </style>
+      </head>
+      <body>
+        <div class="section">
+          <div class="header">
+            <img src="${ibpLogo}" class="logo" alt="IBP Logo" />
+            ${
+              qr
+                ? `<img src="${qr}" class="qr" alt="Appointment QR Code" />`
+                : ""
+            }
+          </div>
+          <h2>Integrated Bar of the Philippines – Malolos Chapter</h2>
+          <table>
+            <tr><th>Control Number</th><td>${
+              selectedAppointment.controlNumber
+            }</td></tr>
+            <tr><th>Status</th><td>${
+              selectedAppointment.appointmentStatus
+            }</td></tr>
+            <tr><th>Type</th><td>${selectedAppointment.apptType}</td></tr>
+            <tr><th>Appointment Date</th><td>${appointmentDate}</td></tr>
+            <tr><th>Full Name</th><td>${selectedAppointment.display_name} ${
+      selectedAppointment.middle_name
+    } ${selectedAppointment.last_name}</td></tr>
+            <tr><th>Birthdate</th><td>${dob}</td></tr>
+            <tr><th>Phone</th><td>${selectedAppointment.phone}</td></tr>
+            <tr><th>Gender</th><td>${selectedAppointment.gender}</td></tr>
+            <tr><th>Address</th><td>${selectedAppointment.address}</td></tr>
+            <tr><th>Spouse</th><td>${selectedAppointment.spouse}</td></tr>
+            <tr><th>Spouse Occupation</th><td>${
+              selectedAppointment.spouseOccupation
+            }</td></tr>
+            <tr><th>Children Names and Ages</th><td>${
+              selectedAppointment.childrenNamesAges
+            }</td></tr>
+            <tr><th>Occupation</th><td>${
+              selectedAppointment.occupation
+            }</td></tr>
+            <tr><th>Employment Type</th><td>${
+              selectedAppointment.employmentType
+            }</td></tr>
+            <tr><th>Employer</th><td>${
+              selectedAppointment.employerName
+            }</td></tr>
+            <tr><th>Employer Address</th><td>${
+              selectedAppointment.employerAddress
+            }</td></tr>
+            <tr><th>Monthly Income</th><td>${
+              selectedAppointment.monthlyIncome
+            }</td></tr>
+            <tr><th>Legal Assistance Type</th><td>${
+              selectedAppointment.selectedAssistanceType
+            }</td></tr>
+            <tr><th>Problem</th><td>${selectedAppointment.problems}</td></tr>
+            <tr><th>Problem Reason</th><td>${
+              selectedAppointment.problemReason
+            }</td></tr>
+            <tr><th>Desired Solutions</th><td>${
+              selectedAppointment.desiredSolutions
+            }</td></tr>
+          </table>
+        </div>
+  
+        ${images
+          .map(
+            (img) => `
+          <div class="image-page">
+            <img src="${img.url}" />
+          </div>`
+          )
+          .join("")}
+      </body>
+      </html>
     `);
-    printWindow.document.write("</style>");
 
-    // Add the IBP logo and QR code to the print layout
-    printWindow.document.write(`
-      <div class="header">
-        <img src="${ibpLogo}" alt="IBP Logo" />
-        <h2>Integrated Bar of the Philippines - Malolos</h2>
-        ${
-          selectedAppointment.appointmentDetails.qrCode
-            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 60px; margin: 0 auto;" />`
-            : ""
-        }
-      </div>
-    `);
-
-    // Insert the modified contents
-    printWindow.document.write(modifiedPrintContents);
-
-    // Handle image printing with modern margins and scaling
-    const images = document.querySelectorAll(".img-thumbnail");
-    images.forEach((image) => {
-      if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div class='page-break'></div>");
-        printWindow.document.write(
-          `<img src='${image.src}' class='print-image' />`
-        );
-      }
-    });
-
-    // Close and trigger the print dialog
-    printWindow.document.write("</body></html>");
     printWindow.document.close();
-    printWindow.focus(); // Focus the window to ensure it shows up
-    printWindow.print(); // Trigger print
-
-    // Close the print window after printing
+    printWindow.focus();
+    printWindow.print();
     printWindow.onafterprint = () => printWindow.close();
   };
 
@@ -308,15 +316,11 @@ function ApptsFrontDesk() {
 
       const sortedAppointments = data.sort((a, b) => {
         const today = new Date();
-        const aDate = a.appointmentDetails?.appointmentDate?.toDate
-          ? a.appointmentDetails.appointmentDate.toDate()
-          : null;
-        const bDate = b.appointmentDetails?.appointmentDate?.toDate
-          ? b.appointmentDetails.appointmentDate.toDate()
-          : null;
+        const aDate = a.appointmentDate?.toDate?.() ?? null;
+        const bDate = b.appointmentDate?.toDate?.() ?? null;
 
-        const isAWalkIn = a.appointmentDetails?.apptType === "Walk-in";
-        const isBWalkIn = b.appointmentDetails?.apptType === "Walk-in";
+        const isAWalkIn = a.apptType === "Walk-in";
+        const isBWalkIn = b.apptType === "Walk-in";
 
         const isAToday = aDate && aDate.toDateString() === today.toDateString();
         const isBToday = bDate && bDate.toDateString() === today.toDateString();
@@ -368,8 +372,8 @@ function ApptsFrontDesk() {
       }
     };
 
-    if (selectedAppointment?.appointmentDetails?.reviewefsy) {
-      fetchReviewerDetails(selectedAppointment.appointmentDetails.reviewefsy);
+    if (selectedAppointment?.reviewefsy) {
+      fetchReviewerDetails(selectedAppointment.reviewefsy);
     }
   }, [selectedAppointment]);
 
@@ -381,10 +385,8 @@ function ApptsFrontDesk() {
       }
     };
 
-    if (selectedAppointment?.appointmentDetails?.assignedLawyer) {
-      fetchAssignedLawyerDetails(
-        selectedAppointment.appointmentDetails.assignedLawyer
-      );
+    if (selectedAppointment?.assignedLawyer) {
+      fetchAssignedLawyerDetails(selectedAppointment.assignedLawyer);
     }
   }, [selectedAppointment]);
 
@@ -661,11 +663,9 @@ function ApptsFrontDesk() {
                 }
               : null,
           appointmentStatus:
-            selectedAppointment.appointmentDetails?.appointmentStatus !==
-            undefined
+            selectedAppointment.appointmentStatus !== undefined
               ? {
-                  oldValue:
-                    selectedAppointment.appointmentDetails.appointmentStatus,
+                  oldValue: selectedAppointment.appointmentStatus,
                   newValue:
                     clientEligibility.eligibility === "yes"
                       ? "approved"
@@ -680,9 +680,9 @@ function ApptsFrontDesk() {
                 }
               : null,
           updatedTime:
-            selectedAppointment.appointmentDetails?.updatedTime !== undefined
+            selectedAppointment.updatedTime !== undefined
               ? {
-                  oldValue: selectedAppointment.appointmentDetails.updatedTime,
+                  oldValue: selectedAppointment.updatedTime,
                   newValue: Timestamp.fromDate(new Date()),
                 }
               : null,
@@ -795,12 +795,11 @@ function ApptsFrontDesk() {
 
   const isSlotBookefsyAssignedLawyer = (dateTime) => {
     return appointments.some((appointment) => {
-      const appointmentDate = appointment.appointmentDetails?.appointmentDate;
-      const assignedLawyer = appointment.appointmentDetails?.assignedLawyer;
+      const appointmentDate = appointment.appointmentDate;
+      const assignedLawyer = appointment.assignedLawyer;
 
       return (
-        assignedLawyer ===
-          selectedAppointment?.appointmentDetails?.assignedLawyer &&
+        assignedLawyer === selectedAppointment?.assignedLawyer &&
         appointmentDate?.toDate().getTime() === dateTime.getTime()
       );
     });
@@ -870,11 +869,12 @@ function ApptsFrontDesk() {
         />
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
-          <option value="all">Status</option>
+          <option value="all">All Status</option>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
+          <option value="accepted">Accepted</option>
           <option value="scheduled">Scheduled</option>
-          <option value="denied">Denied</option>
+          <option value="refused">Refused</option>
           <option value="done">Done</option>
         </select>
         &nbsp;&nbsp;
@@ -916,17 +916,18 @@ function ApptsFrontDesk() {
                 <tr key={appointment.id}>
                   <td>{(currentPage - 1) * pageSize + index + 1}.</td>
                   <td>{appointment.controlNumber}</td>
-                  <td>{appointment.fullName}</td>
+                  <td>
+                    {appointment.display_name} {appointment.middle_name}{" "}
+                    {appointment.last_name}
+                  </td>
                   <td>{appointment.selectedAssistanceType}</td>
                   <td>{getFormattedDate(appointment.appointmentDate, true)}</td>
                   <td>
-                    {capitalizeFirstLetter(
-                      appointment.appointmentDetails?.apptType || "N/A"
-                    )}
+                    {capitalizeFirstLetter(appointment.apptType || "N/A")}
                   </td>
                   <td>
                     {capitalizeFirstLetter(
-                      appointment.appointmentDetails?.appointmentStatus
+                      appointment.appointmentStatus || "N/A"
                     )}
                   </td>
                   <td>
@@ -1025,47 +1026,47 @@ function ApptsFrontDesk() {
                     <tbody>
                       <tr>
                         <th>Full Name:</th>
-                        <td>{selectedAppointment.fullName}</td>
+                        <td>
+                          {selectedAppointment.display_name}{" "}
+                          {selectedAppointment.middle_name}{" "}
+                          {selectedAppointment.last_name}
+                        </td>
                       </tr>
                       <tr>
                         <th>Date of Birth:</th>
                         <td>
-                          {selectedAppointment.dob
-                            ? new Date(
-                                selectedAppointment.dob
-                              ).toLocaleDateString("en-US", {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              })
+                          {selectedAppointment.dob?.toDate
+                            ? selectedAppointment.dob
+                                .toDate()
+                                .toLocaleDateString("en-US", {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                })
                             : "N/A"}
                         </td>
                       </tr>
                       <tr>
                         <th>Contact Number:</th>
-                        <td>
-                          {selectedAppointment?.contactNumber ||
-                            "Not Available"}
-                        </td>
+                        <td>{selectedAppointment.phone || "Not Available"}</td>
                       </tr>
                       <>
                         <tr>
                           <th>Address:</th>
                           <td>
-                            {selectedAppointment?.address || "Not Available"}
+                            {selectedAppointment.address || "Not Available"}
                           </td>
                         </tr>
                         <tr>
                           <th>Gender:</th>
                           <td>
-                            {selectedAppointment?.selectedGender ||
-                              "Not Specified"}
+                            {selectedAppointment.gender || "Not Specified"}
                           </td>
                         </tr>
                         <tr>
                           <th>Spouse Name:</th>
                           <td>
-                            {selectedAppointment.spouseName || "Not Available"}
+                            {selectedAppointment.spouse || "Not Available"}
                           </td>
                         </tr>
                         <tr>
@@ -1088,8 +1089,8 @@ function ApptsFrontDesk() {
                 </section>
                 <br />
                 <section className="mb-4 print-section">
-                  {(selectedAppointment.appointmentDetails?.newRequest ||
-                    selectedAppointment.appointmentDetails?.requestReason) && (
+                  {(selectedAppointment.newRequest ||
+                    selectedAppointment.requestReason) && (
                     <section className="mb-4 print-section no-print">
                       <h2>
                         <em style={{ color: "#a34bc9", fontSize: "16px" }}>
@@ -1099,35 +1100,29 @@ function ApptsFrontDesk() {
                       <table className="table table-striped table-bordered">
                         <tbody>
                           {/* Only show the control number if newRequest is true */}
-                          {selectedAppointment.appointmentDetails?.newRequest &&
-                            !selectedAppointment.appointmentDetails
-                              ?.requestReason && (
+                          {selectedAppointment.newRequest &&
+                            !selectedAppointment?.requestReason && (
                               <tr>
                                 <th>New Request Control Number:</th>
                                 <td>
-                                  {selectedAppointment.appointmentDetails
-                                    ?.newControlNumber || "N/A"}
+                                  {selectedAppointment?.newControlNumber ||
+                                    "N/A"}
                                 </td>
                               </tr>
                             )}
                           <tr>
                             <th>Reason for New Request:</th>
                             <td>
-                              {selectedAppointment.appointmentDetails
-                                ?.requestReason || "N/A"}
+                              {selectedAppointment?.requestReason || "N/A"}
                             </td>
                           </tr>
                           {/* Only show Attached File if it exists */}
-                          {selectedAppointment.appointmentDetails
-                            ?.newRequestUrl && (
+                          {selectedAppointment?.newRequestUrl && (
                             <tr>
                               <th>Attached File:</th>
                               <td>
                                 <a
-                                  href={
-                                    selectedAppointment.appointmentDetails
-                                      ?.newRequestUrl
-                                  }
+                                  href={selectedAppointment?.newRequestUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -1151,20 +1146,16 @@ function ApptsFrontDesk() {
                       <tr className="no-print">
                         <th>QR Code:</th>
                         <td>
-                          {selectedAppointment.appointmentDetails ? (
+                          {selectedAppointment ? (
                             <a
                               href="#"
                               onClick={(e) => {
                                 e.preventDefault();
-                                openImageModal(
-                                  selectedAppointment.appointmentDetails.qrCode
-                                );
+                                openImageModal(selectedAppointment.qrCode);
                               }}
                             >
                               <img
-                                src={
-                                  selectedAppointment.appointmentDetails.qrCode
-                                }
+                                src={selectedAppointment.qrCode}
                                 alt="QR Code"
                                 className="img-thumbnail qr-code-image"
                                 style={{ width: "100px", cursor: "pointer" }}
@@ -1175,15 +1166,13 @@ function ApptsFrontDesk() {
                           )}
                         </td>
                       </tr>
-                      {selectedAppointment.appointmentDetails?.apptType ===
-                        "Online" && (
+                      {selectedAppointment.apptType === "Online" && (
                         <tr className="no-print">
                           <th>Meeting Link:</th>
                           <td>
-                            {selectedAppointment.appointmentDetails
-                              ?.apptType === "Online" ? (
-                              selectedAppointment.appointmentDetails
-                                ?.appointmentStatus === "done" ? (
+                            {selectedAppointment?.apptType === "Online" ? (
+                              selectedAppointment?.appointmentStatus ===
+                              "done" ? (
                                 // Appointment is done, show "Done" with a check icon
                                 <button
                                   style={{
@@ -1260,10 +1249,7 @@ function ApptsFrontDesk() {
                       </tr>
                       <tr>
                         <th>Appointment Type:</th>
-                        <td>
-                          {selectedAppointment.appointmentDetails?.apptType ||
-                            "N/A"}
-                        </td>
+                        <td>{selectedAppointment.apptType || "N/A"}</td>
                       </tr>
                       <tr>
                         <th>Appointment Status:</th>
@@ -1377,8 +1363,7 @@ function ApptsFrontDesk() {
                             <tr>
                               <th>Remarks (Record of Consultation):</th>
                               <td>
-                                {selectedAppointment.appointmentDetails
-                                  ?.proceedingNotes || "N/A"}
+                                {selectedAppointment?.proceedingNotes || "N/A"}
                               </td>
                             </tr>
                             <tr>
@@ -1509,14 +1494,14 @@ function ApptsFrontDesk() {
                       <tr>
                         <th>Type of Employment:</th>
                         <td>
-                          {selectedAppointment?.kindOfEmployment ||
+                          {selectedAppointment.employmentType ||
                             "Not Specified"}
                         </td>
                       </tr>
                       <tr>
                         <th>Employer Name:</th>
                         <td>
-                          {selectedAppointment?.employerName || "Not Available"}
+                          {selectedAppointment.employerName || "Not Available"}
                         </td>
                       </tr>
                       <tr>
@@ -1593,18 +1578,23 @@ function ApptsFrontDesk() {
                       <tr>
                         <th>Barangay Certificate of Indigency:</th>
                         <td>
-                          {selectedAppointment.barangayImageUrl ? (
+                          {selectedAppointment.uploadedImages
+                            ?.barangayImageUrl ? (
                             <a
                               href="#"
                               onClick={(e) => {
                                 e.preventDefault();
                                 openImageModal(
-                                  selectedAppointment.barangayImageUrl
+                                  selectedAppointment.uploadedImages
+                                    ?.barangayImageUrl
                                 );
                               }}
                             >
                               <img
-                                src={selectedAppointment.barangayImageUrl}
+                                src={
+                                  selectedAppointment.uploadedImages
+                                    ?.barangayImageUrl
+                                }
                                 alt="Barangay Certificate of Indigency"
                                 className="img-thumbnail"
                                 style={{ width: "100px", cursor: "pointer" }}
@@ -1618,18 +1608,22 @@ function ApptsFrontDesk() {
                       <tr>
                         <th>DSWD Certificate of Indigency:</th>
                         <td>
-                          {selectedAppointment.dswdImageUrl ? (
+                          {selectedAppointment.uploadedImages?.dswdImageUrl ? (
                             <a
                               href="#"
                               onClick={(e) => {
                                 e.preventDefault();
                                 openImageModal(
-                                  selectedAppointment.dswdImageUrl
+                                  selectedAppointment.uploadedImages
+                                    ?.dswdImageUrl
                                 );
                               }}
                             >
                               <img
-                                src={selectedAppointment.dswdImageUrl}
+                                src={
+                                  selectedAppointment.uploadedImages
+                                    ?.dswdImageUrl
+                                }
                                 alt="DSWD Certificate of Indigency"
                                 className="img-thumbnail"
                                 style={{ width: "100px", cursor: "pointer" }}
@@ -1643,16 +1637,22 @@ function ApptsFrontDesk() {
                       <tr>
                         <th>Disqualification Letter from PAO:</th>
                         <td>
-                          {selectedAppointment.paoImageUrl ? (
+                          {selectedAppointment.uploadedImages?.paoImageUrl ? (
                             <a
                               href="#"
                               onClick={(e) => {
                                 e.preventDefault();
-                                openImageModal(selectedAppointment.paoImageUrl);
+                                openImageModal(
+                                  selectedAppointment.uploadedImages
+                                    ?.paoImageUrl
+                                );
                               }}
                             >
                               <img
-                                src={selectedAppointment.paoImageUrl}
+                                src={
+                                  selectedAppointment.uploadedImages
+                                    ?.paoImageUrl
+                                }
                                 alt="Disqualification Letter from PAO"
                                 className="img-thumbnail"
                                 style={{ width: "100px", cursor: "pointer" }}
@@ -1666,18 +1666,23 @@ function ApptsFrontDesk() {
                       <tr>
                         <th>Consultation Remarks Attached File:</th>
                         <td>
-                          {selectedAppointment.proceedingFileUrl ? (
+                          {selectedAppointment.uploadedImages
+                            ?.proceedingFileUrl ? (
                             <a
                               href="#"
                               onClick={(e) => {
                                 e.preventDefault();
                                 openImageModal(
-                                  selectedAppointment.proceedingFileUrl
+                                  selectedAppointment.uploadedImages
+                                    ?.proceedingFileUrl
                                 );
                               }}
                             >
                               <img
-                                src={selectedAppointment.proceedingFileUrl}
+                                src={
+                                  selectedAppointment.uploadedImages
+                                    ?.proceedingFileUrl
+                                }
                                 alt="Consultation Remarks Attached File"
                                 className="img-thumbnail"
                                 style={{ width: "100px", cursor: "pointer" }}
@@ -1691,18 +1696,22 @@ function ApptsFrontDesk() {
                       <tr>
                         <th>New Appointment Request File:</th>
                         <td>
-                          {selectedAppointment.newRequestUrl ? (
+                          {selectedAppointment.uploadedImages?.newRequestUrl ? (
                             <a
                               href="#"
                               onClick={(e) => {
                                 e.preventDefault();
                                 openImageModal(
-                                  selectedAppointment.newRequestUrl
+                                  selectedAppointment.uploadedImages
+                                    ?.newRequestUrl
                                 );
                               }}
                             >
                               <img
-                                src={selectedAppointment.newRequestUrl}
+                                src={
+                                  selectedAppointment.uploadedImages
+                                    ?.newRequestUrl
+                                }
                                 alt="New Appointment Request File"
                                 className="img-thumbnail"
                                 style={{ width: "100px", cursor: "pointer" }}

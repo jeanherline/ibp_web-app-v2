@@ -172,3 +172,28 @@
   padding: 5px 10px;
   border-radius: 5px;
 }
+/* Collapsed sidebar styles */
+.sidebar.collapsed {
+  width: 60px;
+  padding: 20px 10px;
+  transition: width 0.3s ease;
+}
+
+.sidebar .collapse-toggle {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.sidebar.collapsed .logo,
+.sidebar.collapsed .organization-name,
+.sidebar.collapsed .nav-menu li a {
+  display: none;
+}
+
+.sidebar.collapsed .footer {
+  display: none;
+}

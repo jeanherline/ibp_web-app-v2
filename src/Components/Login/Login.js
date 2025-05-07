@@ -32,6 +32,7 @@ function Login() {
   const auth = getAuth();
   const fs = getFirestore();
   const [showPassword, setShowPassword] = useState(false); // New state to control password visibility
+  const [loading, setLoading] = useState(false);
 
   // Toggle password visibility
   const togglePasswordVisibility = () => {
@@ -48,6 +49,7 @@ function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(null);
+    setLoading(true);
 
     try {
       const userCredential = await signInWithEmailAndPassword(
@@ -70,7 +72,10 @@ function Login() {
       if (userSnap.exists()) {
         const userData = userSnap.data();
 
-        if (userData.user_status === "active" && userData.member_type !== "client") {
+        if (
+          userData.user_status === "active" &&
+          userData.member_type !== "client"
+        ) {
           // If user is active, log activity and update trusted devices
           const loginActivity = await logLoginActivity(user); // Assuming this function already logs the activity
 
@@ -315,7 +320,20 @@ function Login() {
                     Forgot Password?
                   </span>
                 </div>
-                <button type="submit">Login</button>
+                <button type="submit" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <span
+                        className="spinner"
+                        style={{ marginRight: "8px" }}
+                      ></span>{" "}
+                      Signing in...
+                    </>
+                  ) : (
+                    "Login"
+                  )}
+                </button>
+
                 <p className="signup-link">
                   Need tech support?{" "}
                   <a href="mailto:nubcapstone@gmail.com" target="_blank">

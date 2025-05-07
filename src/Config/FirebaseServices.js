@@ -23,7 +23,7 @@ import { fs, storage, signOut } from "./Firebase"; // Import fs from your Fireba
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-const getAppointments = async (
+ const getAppointments = async (
   statusFilter,
   lastVisible = null,
   pageSize = 7,
@@ -34,17 +34,14 @@ const getAppointments = async (
   try {
     let queryRef = collection(fs, "appointments");
 
-    // Apply filters
     const conditions = [];
 
-    // Apply status filter
     if (statusFilter && statusFilter !== "all") {
       conditions.push(
         where("appointmentDetails.appointmentStatus", "==", statusFilter)
       );
     }
 
-    // Apply assistance type filter
     if (assistanceFilter && assistanceFilter !== "all") {
       conditions.push(
         where(
@@ -55,84 +52,91 @@ const getAppointments = async (
       );
     }
 
-    // Apply conditions to the query
     if (conditions.length > 0) {
       queryRef = query(queryRef, ...conditions);
     }
 
-    // Order by created date for pagination
     queryRef = query(
       queryRef,
       orderBy("appointmentDetails.createdDate", "desc")
     );
 
-    // Handle pagination logic
     if (lastVisible) {
       if (isPrevious) {
-        queryRef = query(
-          queryRef,
-          endBefore(lastVisible),
-          limitToLast(pageSize)
-        );
+        queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
       } else {
         queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
       }
     } else {
-      queryRef = query(queryRef, limit(pageSize)); // Initial load
+      queryRef = query(queryRef, limit(pageSize));
     }
 
-    // Fetch the data
     const querySnapshot = await getDocs(queryRef);
 
     if (querySnapshot.empty) {
       return { data: [], total: 0, firstDoc: null, lastDoc: null };
     }
 
-    // Map the results into usable data
-    let appointmentsData = querySnapshot.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data.applicantProfile,
-        ...data.employmentProfile,
+    const appointmentsData = [];
+
+    for (const docSnap of querySnapshot.docs) {
+      const data = docSnap.data();
+      const uid = data.appointmentDetails?.uid;
+
+      let userData = {};
+      if (uid) {
+        const userDoc = await getDoc(doc(fs, "users", uid));
+        if (userDoc.exists()) {
+          userData = userDoc.data();
+        }
+      }
+
+      const combined = {
+        id: docSnap.id,
+        ...data.appointmentDetails,
         ...data.legalAssistanceRequested,
+        ...data.employmentProfile,
+        ...data.applicantProfile,
         ...data.uploadedImages,
+        ...userData, // ✅ this includes display_name, gender, dob, address, etc.
+        clientEligibility: data.clientEligibility,
+        reviewerDetails: data.reviewerDetails,
+        proceedingNotes: data.proceedingNotes,
+        rescheduleHistory: data.rescheduleHistory || [],
         createdDate: data.appointmentDetails?.createdDate,
         appointmentStatus: data.appointmentDetails?.appointmentStatus,
         controlNumber: data.appointmentDetails?.controlNumber,
         appointmentDate: data.appointmentDetails?.appointmentDate,
-        clientEligibility: data.clientEligibility,
-        appointmentDetails: data.appointmentDetails,
-        reviewerDetails: data.reviewerDetails,
-        proceedingNotes: data.proceedingNotes,
-        rescheduleHistory: data.rescheduleHistory || [],
       };
-    });
 
-    // If searchText exists, filter by fullName in the results
+      appointmentsData.push(combined);
+    }
+
     if (searchText) {
       const searchLower = searchText.toLowerCase();
-      appointmentsData = appointmentsData.filter((appointment) =>
-        appointment.fullName.toLowerCase().includes(searchLower)
+      appointmentsData = appointmentsData.filter((a) =>
+        `${a.display_name} ${a.middle_name} ${a.last_name}`
+          .toLowerCase()
+          .includes(searchLower)
       );
     }
 
-    // Get the total count for pagination
     const countSnapshot = await getCountFromServer(
       query(collection(fs, "appointments"), ...conditions)
     );
 
     return {
-      data: appointmentsData, // Return the filtered and paginated data
-      total: countSnapshot.data().count, // Return the total count
-      firstDoc: querySnapshot.docs[0], // Store the first document for previous pages
-      lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1], // Store the last document for next pages
+      data: appointmentsData,
+      total: countSnapshot.data().count,
+      firstDoc: querySnapshot.docs[0],
+      lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
     };
   } catch (error) {
     console.error("Error fetching appointments:", error);
     return { data: [], total: 0, firstDoc: null, lastDoc: null };
   }
 };
+
 
 const countTotalFilteredItems = async (
   statusFilter,
@@ -458,23 +462,23 @@ const getLawyerAppointments = (
     }
 
     // Ensure only appointments assigned to the current user are fetched
-// Only fetch appointments assigned to lawyer or secretary's associated lawyer
-if (
-  currentUser?.member_type === "lawyer" ||
-  currentUser?.member_type === "secretary"
-) {
-  const targetUid =
-    currentUser.member_type === "secretary"
-      ? currentUser.associate
-      : currentUser.uid;
+    // Only fetch appointments assigned to lawyer or secretary's associated lawyer
+    if (
+      currentUser?.member_type === "lawyer" ||
+      currentUser?.member_type === "secretary"
+    ) {
+      const targetUid =
+        currentUser.member_type === "secretary"
+          ? currentUser.associate
+          : currentUser.uid;
 
-  if (targetUid) {
-    queryRef = query(
-      queryRef,
-      where("appointmentDetails.assignedLawyer", "==", targetUid)
-    );
-  }
-}
+      if (targetUid) {
+        queryRef = query(
+          queryRef,
+          where("appointmentDetails.assignedLawyer", "==", targetUid)
+        );
+      }
+    }
 
     // Order by createdDate and limit results for pagination
     queryRef = query(
@@ -781,7 +785,6 @@ const getAdminAppointments = async (
     return { data: [], total: 0, firstDoc: null, lastDoc: null };
   }
 };
-
 
 const updateAppointment = async (appointmentId, updatedData) => {
   const appointmentRef = doc(fs, "appointments", appointmentId);

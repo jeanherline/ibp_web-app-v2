@@ -4,14 +4,15 @@
   height: 100vh;
 }
 
-.left-side, .right-side {
+.left-side,
+.right-side {
   flex: none;
   width: 100%;
   height: 50%; /* Use half of the screen height for each side */
 }
 
 .left-side {
-  background: url('../../Assets/img/login_header.png') no-repeat center center;
+  background: url("../../Assets/img/login_header.png") no-repeat center center;
   background-size: cover;
   position: relative;
   color: white;
@@ -26,7 +27,11 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(180deg, rgba(87, 17, 98, 0.55) 0%, rgba(134, 24, 147, 0.73) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(87, 17, 98, 0.55) 0%,
+    rgba(134, 24, 147, 0.73) 100%
+  );
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -105,7 +110,7 @@
 }
 
 .login-box .forgot-password a {
-  color: #57636C;
+  color: #57636c;
   text-decoration: none;
   font-size: 12px;
 }
@@ -148,7 +153,8 @@
     flex-direction: row; /* Stack the sides horizontally on larger screens */
   }
 
-  .left-side, .right-side {
+  .left-side,
+  .right-side {
     flex: 1;
     height: 100%; /* Use full screen height */
   }
@@ -219,13 +225,26 @@
   margin-bottom: 15px;
 }
 
+.input-with-icon .icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: #888;
+  font-size: 16px;
+}
+
 .input-with-icon input {
   width: 100%;
-  padding: 10px 40px 10px 12px;
-  font-size: 1em;
+  height: 36px !important; /* Reduce if still too tall (try 32px or 30px) */
+  padding: 6px 36px 6px 10px !important; /* Adjusted vertical padding */
+  font-size: 14px;
   border: 1px solid #ddd;
-  border-radius: 4px;
+  border-radius: 6px;
   outline: none;
+  background-color: #eef3ff;
+  box-sizing: border-box;
 }
 
 .input-with-icon .icon {
@@ -233,21 +252,39 @@
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
+  font-size: 16px;
+  color: #888;
   cursor: pointer;
-  color: #aaa;
-  font-size: 1.1em;
-  transition: color 0.3s;
 }
 
 .input-with-icon .icon:hover {
   color: #333;
 }
 
-.success, .error {
+.success,
+.error {
   font-size: 0.9em;
   margin-bottom: 10px;
 }
 
 .success {
-  color: #4CAF50;
+  color: #4caf50;
+}
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #fff;
+  border-top: 2px solid #580049;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }

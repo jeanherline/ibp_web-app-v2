@@ -50,8 +50,10 @@ app.get("/generate-jwt", async (req, res) => {
           moderator: moderator, // Set user role (moderator or participant)
         },
         features: {
-          livestreaming: "false",
-          transcription: "false",
+          livestreaming: true,
+          "outbound-call": true,
+          "sip-outbound-call": true,
+          transcription: true,
           recording: moderator ? "true" : "false", // Only allow recording for moderators
         },
       },

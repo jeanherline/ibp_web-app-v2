@@ -78,7 +78,6 @@ function SideNavBar() {
             setAssociatedLawyerName("Unknown Lawyer");
           }
         }
-        
       }
     };
 
@@ -461,6 +460,16 @@ function SideNavBar() {
                       Appointments
                     </NavLink>
                   </li>
+                  {userData.member_type === "lawyer" && (
+                    <li>
+                      <NavLink
+                        to="/secretary"
+                        className={({ isActive }) => (isActive ? "active" : "")}
+                      >
+                        Secretaries
+                      </NavLink>
+                    </li>
+                  )}
                 </>
               )}
 

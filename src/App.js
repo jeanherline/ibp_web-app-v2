@@ -22,7 +22,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import MeetingPage from "./Components/Appointments/MeetingPage";
 import Settings from "./Components/Settings/Settings";
 import AllAuditLogs from "./Components/Settings/AllAuditLogs";
-
+import Secretary from "./Components/Secretary/Secretary";
 function App() {
   return (
     <Router>
@@ -45,6 +45,7 @@ function App() {
         <Route path="/lawyer" element={<ApptsLawyer />} />
         <Route path="/ratings" element={<Ratings />} />
         <Route path="/auditLogs" element={<AuditLogs />} />
+        <Route path="/secretary" element={<Secretary />} />
         <Route
           path="/appointment/:controlNumber"
           element={<AppointmentDetails />}
