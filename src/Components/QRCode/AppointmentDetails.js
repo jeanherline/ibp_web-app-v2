@@ -169,7 +169,7 @@ function AppointmentDetails() {
           </p>
           <p>
             <strong>Contact Number:</strong>{" "}
-            {appointmentDetails?.applicantProfile?.contactNumber}
+            {appointmentDetails?.applicantProfile?.phone}
           </p>
           <p>
             <strong>Date of Birth:</strong>{" "}
@@ -177,7 +177,7 @@ function AppointmentDetails() {
           </p>
           <p>
             <strong>Gender:</strong>{" "}
-            {appointmentDetails?.applicantProfile?.selectedGender}
+            {appointmentDetails?.applicantProfile?.gender}
           </p>
 
           <h3>Appointment Details</h3>

@@ -46,6 +46,7 @@ import { Tooltip, OverlayTrigger } from "react-bootstrap";
 import ibpLogo from "../../Assets/img/ibp_logo.png";
 
 function ApptsLawyer() {
+  const [isLoading, setIsLoading] = useState(true);
   const [appointments, setAppointments] = useState([]);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [filter, setFilter] = useState("all");
@@ -169,11 +170,30 @@ function ApptsLawyer() {
     if (appointmentAmPm === "AM" && h === 12) h = 0;
     fullDate.setHours(h, parseInt(appointmentMinute), 0, 0);
 
-    if (isSlotTakenForLawyer(fullDate, selectedLawyerUid, appointments)) {
-      setSnackbarMessage("That time is already taken for this lawyer.");
-      setShowSnackbar(true);
-      return;
-    }
+    const isSlotTakenForLawyer = async (
+      date,
+      lawyerUid,
+      currentAppointmentId
+    ) => {
+      const start = Timestamp.fromDate(date);
+      const end = Timestamp.fromDate(new Date(date.getTime() + 59 * 60 * 1000)); // +/- 59 mins
+
+      const q = query(
+        collection(fs, "appointments"),
+        where("assignedLawyer", "==", lawyerUid),
+        where("appointmentDate", ">=", start),
+        where("appointmentDate", "<=", end)
+      );
+
+      const snapshot = await getDocs(q);
+
+      return snapshot.docs.some((doc) => {
+        const data = doc.data();
+        return (
+          doc.id !== currentAppointmentId && data?.appointmentStatus !== "done"
+        );
+      });
+    };
 
     const updatedData = {
       "appointmentDetails.appointmentDate": Timestamp.fromDate(fullDate),
@@ -252,34 +272,30 @@ function ApptsLawyer() {
           appointmentDate: selectedAppointment.appointmentDetails
             ?.appointmentDate
             ? {
-                oldValue:
-                  selectedAppointment.appointmentDetails?.appointmentDate,
+                oldValue: selectedAppointment.appointmentDate,
                 newValue: appointmentDate,
               }
             : null,
-          appointmentType: selectedAppointment.appointmentDetails?.apptType
+          appointmentType: selectedAppointment.apptType
             ? {
-                oldValue: selectedAppointment.appointmentDetails?.apptType,
+                oldValue: selectedAppointment.apptType,
                 newValue: appointmentType,
               }
             : null,
           appointmentStatus: selectedAppointment.appointmentDetails
             ?.appointmentStatus
             ? {
-                oldValue:
-                  selectedAppointment.appointmentDetails?.appointmentStatus,
+                oldValue: selectedAppointment.appointmentStatus,
                 newValue: "scheduled",
               }
             : null,
           ...(meetingLink && {
             meetingLink: {
-              oldValue:
-                selectedAppointment.appointmentDetails?.meetingLink || null,
+              oldValue: selectedAppointment.meetingLink || null,
               newValue: meetingLink,
             },
             meetingPass: {
-              oldValue:
-                selectedAppointment.appointmentDetails?.meetingPass || null,
+              oldValue: selectedAppointment.meetingPass || null,
               newValue: meetingPass,
             },
           }),
@@ -337,165 +353,175 @@ function ApptsLawyer() {
       return;
     }
 
-    // Get the contents of the appointment details section
-    const printContents = document.getElementById(
-      "appointment-details-section"
-    ).innerHTML;
+    const printWindow = window.open("", "", "width=900,height=1200");
 
-    // Create a temporary div to modify the contents for printing
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = printContents;
+    const images = [
+      {
+        label: "Barangay Certificate",
+        url: selectedAppointment.barangayImageUrl,
+      },
+      { label: "DSWD Certificate", url: selectedAppointment.dswdImageUrl },
+      {
+        label: "PAO Disqualification Letter",
+        url: selectedAppointment.paoImageUrl,
+      },
+      {
+        label: "Consultation Attachment",
+        url: selectedAppointment.proceedingFileUrl,
+      },
+      { label: "New Request File", url: selectedAppointment.newRequestUrl },
+    ].filter((img) => img.url);
 
-    // Remove any elements you don't want to print (with class 'no-print')
-    const noPrintSection = tempDiv.querySelectorAll(".no-print");
-    noPrintSection.forEach((section) => section.remove());
+    const qr = selectedAppointment.appointmentDetails.qrCode || "";
+    const appointmentDate = selectedAppointment.appointmentDate?.toDate
+      ? selectedAppointment.appointmentDate.toDate().toLocaleString("en-US")
+      : "N/A";
 
-    const modifiedPrintContents = tempDiv.innerHTML;
+    const dob = selectedAppointment.dob?.toDate
+      ? selectedAppointment.dob.toDate().toLocaleDateString("en-US")
+      : "N/A";
 
-    // Open a new window for printing
-    const printWindow = window.open("", "", "height=500, width=500");
-    printWindow.document.write(
-      "<html><head><title>Appointment Details</title></head><body>"
-    );
-
-    // Add modern, professional styles for printing
-    printWindow.document.write("<style>");
     printWindow.document.write(`
-      @media print {
+    <html>
+    <head>
+      <title>Appointment Summary</title>
+      <style>
         @page {
-          size: 8.5in 13in;
-          margin: 0.8in;
+          size: A4;
+          margin: 0.2in 0.3in;
         }
         body {
-          font-family: 'Arial', sans-serif;
+          font-family: Arial, sans-serif;
           font-size: 12px;
-          line-height: 1.6;
-          color: #333;
+          color: #000;
+          margin: 0;
+        }
+        .section {
+          page-break-after: always;
+          padding: 0.3in;
+        }
+        .section:last-of-type {
+          page-break-after: auto;
         }
         .header {
-          text-align: center;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           margin-bottom: 20px;
         }
-        .header h2 {
-          font-size: 18px;
-          font-weight: normal;
-          color: #333;
-          margin-bottom: 5px;
+        .header .logo {
+          width: 80px;
         }
-        .header img {
-          width: 60px;
-          display: block;
-          margin: 0 auto;
+        .header .qr {
+          width: 100px;
         }
-        .section-title {
-          font-size: 14px;
-          font-weight: bold;
-          margin-top: 30px;
-          margin-bottom: 10px;
-          color: #555;
-          border-bottom: 1px solid #ddd;
-          padding-bottom: 5px;
+        h2 {
+          text-align: center;
+          margin-top: 0;
         }
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 20px;
-          font-size: 12px;
-          color: #333;
+          margin-top: 10px;
         }
         table, th, td {
-          border: 1px solid #ddd;
+          border: 1px solid #444;
         }
         th, td {
-          padding: 10px;
+          padding: 8px;
           text-align: left;
         }
-        th {
-          background-color: #f7f7f7;
-          font-weight: normal;
-          font-size: 12px;
-          text-transform: uppercase;
-          color: #555;
+        .image-page {
+          page-break-before: always;
+          margin: 0;
+          padding: 0;
+          width: 100vw;
+          height: 100vh;
+          display: flex;
+          justify-content: center;
+          align-items: center;
         }
-        td {
-          font-size: 12px;
-          color: #333;
-        }
-        .form-label {
-          font-size: 12px;
-          font-weight: bold;
-          margin-top: 15px;
-          color: #333;
-        }
-        .form-field {
-          font-size: 12px;
-          padding: 5px 0;
-          border-bottom: 1px solid #ddd;
-          color: #555;
-        }
-        .print-image {
+        .image-page img {
           width: 100%;
-          height: auto;
-          max-height: 10in;
+          height: 100%;
           object-fit: contain;
           display: block;
-          margin-bottom: 10px;
+          margin: 0;
+          padding: 0;
         }
-        .no-print {
-          display: none;
-        }
-        /* Modern table style */
-        table thead {
-          background-color: #f9f9f9;
-        }
-        table th {
-          letter-spacing: 1px;
-        }
-        table tbody tr:nth-child(even) {
-          background-color: #f5f5f5;
-        }
-        /* Add a page break before Employment Profile section */
-        .employment-profile {
-          page-break-before: always; /* Forces a page break before this section */
-        }
-      }
-    `);
-    printWindow.document.write("</style>");
-
-    // Add the IBP logo and QR code to the print layout
-    printWindow.document.write(`
-      <div class="header">
-        <img src="${ibpLogo}" alt="IBP Logo" />
-        <h2>Integrated Bar of the Philippines - Malolos</h2>
-        ${
-          selectedAppointment.appointmentDetails.qrCode
-            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 60px; margin: 0 auto;" />`
-            : ""
-        }
+      </style>
+    </head>
+    <body>
+      <div class="section">
+        <div class="header">
+          <img src="${ibpLogo}" class="logo" alt="IBP Logo" />
+          ${
+            qr ? `<img src="${qr}" class="qr" alt="Appointment QR Code" />` : ""
+          }
+        </div>
+        <h2>Integrated Bar of the Philippines – Malolos Chapter</h2>
+        <table>
+          <tr><th>Control Number</th><td>${
+            selectedAppointment.controlNumber
+          }</td></tr>
+          <tr><th>Status</th><td>${
+            selectedAppointment.appointmentStatus
+          }</td></tr>
+          <tr><th>Type</th><td>${selectedAppointment.apptType}</td></tr>
+          <tr><th>Appointment Date</th><td>${appointmentDate}</td></tr>
+          <tr><th>Full Name</th><td>${selectedAppointment.display_name} ${
+      selectedAppointment.middle_name
+    } ${selectedAppointment.last_name}</td></tr>
+          <tr><th>Birthdate</th><td>${dob}</td></tr>
+          <tr><th>Phone</th><td>${selectedAppointment.phone}</td></tr>
+          <tr><th>Gender</th><td>${selectedAppointment.gender}</td></tr>
+          <tr><th>Address</th><td>${selectedAppointment.address}</td></tr>
+          <tr><th>Spouse</th><td>${selectedAppointment.spouse}</td></tr>
+          <tr><th>Spouse Occupation</th><td>${
+            selectedAppointment.spouseOccupation
+          }</td></tr>
+          <tr><th>Children Names and Ages</th><td>${
+            selectedAppointment.childrenNamesAges
+          }</td></tr>
+          <tr><th>Occupation</th><td>${selectedAppointment.occupation}</td></tr>
+          <tr><th>Employment Type</th><td>${
+            selectedAppointment.employmentType
+          }</td></tr>
+          <tr><th>Employer</th><td>${selectedAppointment.employerName}</td></tr>
+          <tr><th>Employer Address</th><td>${
+            selectedAppointment.employerAddress
+          }</td></tr>
+          <tr><th>Monthly Income</th><td>${
+            selectedAppointment.monthlyIncome
+          }</td></tr>
+          <tr><th>Legal Assistance Type</th><td>${
+            selectedAppointment.selectedAssistanceType
+          }</td></tr>
+          <tr><th>Problem</th><td>${selectedAppointment.problems}</td></tr>
+          <tr><th>Problem Reason</th><td>${
+            selectedAppointment.problemReason
+          }</td></tr>
+          <tr><th>Desired Solutions</th><td>${
+            selectedAppointment.desiredSolutions
+          }</td></tr>
+        </table>
       </div>
-    `);
 
-    // Insert the modified contents
-    printWindow.document.write(modifiedPrintContents);
+      ${images
+        .map(
+          (img) => `
+        <div class="image-page">
+          <img src="${img.url}" />
+        </div>`
+        )
+        .join("")}
+    </body>
+    </html>
+  `);
 
-    // Handle image printing with modern margins and scaling
-    const images = document.querySelectorAll(".img-thumbnail");
-    images.forEach((image) => {
-      if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div class='page-break'></div>");
-        printWindow.document.write(
-          `<img src='${image.src}' class='print-image' />`
-        );
-      }
-    });
-
-    // Close and trigger the print dialog
-    printWindow.document.write("</body></html>");
     printWindow.document.close();
-    printWindow.focus(); // Focus the window to ensure it shows up
-    printWindow.print(); // Trigger print
-
-    // Close the print window after printing
+    printWindow.focus();
+    printWindow.print();
     printWindow.onafterprint = () => printWindow.close();
   };
 
@@ -523,6 +549,7 @@ function ApptsLawyer() {
         setAppointments(data);
         setTotalPages(Math.ceil(total / pageSize));
         setTotalFilteredItems(total);
+        setIsLoading(false);
       }
     );
 
@@ -560,7 +587,7 @@ function ApptsLawyer() {
       }
     };
 
-    if (selectedAppointment?.appointmentDetails?.reviewefsy) {
+    if (selectedAppointment?.reviewefsy) {
       fetchReviewerDetails(selectedAppointment.appointmentDetails.reviewefsy);
     }
   }, [selectedAppointment]);
@@ -573,7 +600,7 @@ function ApptsLawyer() {
       }
     };
 
-    if (selectedAppointment?.appointmentDetails?.assignedLawyer) {
+    if (selectedAppointment?.assignedLawyer) {
       fetchAssignedLawyerDetails(
         selectedAppointment.appointmentDetails.assignedLawyer
       );
@@ -860,8 +887,7 @@ function ApptsLawyer() {
                 }
               : null,
           appointmentStatus:
-            selectedAppointment.appointmentDetails?.appointmentStatus !==
-            undefined
+            selectedAppointment.appointmentStatus !== undefined
               ? {
                   oldValue:
                     selectedAppointment.appointmentDetails.appointmentStatus,
@@ -879,7 +905,7 @@ function ApptsLawyer() {
                 }
               : null,
           updatedTime:
-            selectedAppointment.appointmentDetails?.updatedTime !== undefined
+            selectedAppointment.updatedTime !== undefined
               ? {
                   oldValue: selectedAppointment.appointmentDetails.updatedTime,
                   newValue: Timestamp.fromDate(new Date()),
@@ -960,8 +986,7 @@ function ApptsLawyer() {
       const appointmentSnapshot = await getDoc(appointmentRef);
 
       const existingData = appointmentSnapshot.data();
-      const currentRefusalHistory =
-        existingData?.appointmentDetails?.refusalHistory || [];
+      const currentRefusalHistory = existingData?.refusalHistory || [];
 
       const updatedData = {
         "appointmentDetails.appointmentStatus": "refused",
@@ -988,12 +1013,12 @@ function ApptsLawyer() {
 
   const isSlotTakenForLawyer = (date, lawyerUid, appointments) => {
     return appointments.some((appt) => {
-      const apptLawyer = appt?.appointmentDetails?.assignedLawyer;
-      const apptDate = appt?.appointmentDetails?.appointmentDate?.toDate();
+      const apptLawyer = appt?.assignedLawyer;
+      const apptDate = appt?.appointmentDate?.toDate();
       return (
         apptLawyer === lawyerUid &&
         apptDate?.getTime() === date?.getTime() &&
-        appt?.appointmentDetails?.appointmentStatus !== "done"
+        appt?.appointmentStatus !== "done"
       );
     });
   };
@@ -1099,7 +1124,7 @@ function ApptsLawyer() {
                 newValue: appointmentStatus,
               }
             : null,
-          clientAttend: selectedAppointment.appointmentDetails?.clientAttend
+          clientAttend: selectedAppointment.clientAttend
             ? {
                 oldValue: selectedAppointment.appointmentDetails.clientAttend,
                 newValue: clientAttend,
@@ -1113,7 +1138,7 @@ function ApptsLawyer() {
                 newValue: fileUrl,
               }
             : null,
-          updatedTime: selectedAppointment.appointmentDetails?.updatedTime
+          updatedTime: selectedAppointment.updatedTime
             ? {
                 oldValue: selectedAppointment.appointmentDetails.updatedTime,
                 newValue: Timestamp.fromDate(new Date()),
@@ -1233,10 +1258,8 @@ function ApptsLawyer() {
       return;
     }
 
-    let meetingLink =
-      selectedAppointment.appointmentDetails?.meetingLink || null;
-    let meetingPass =
-      selectedAppointment.appointmentDetails?.meetingPass || null;
+    let meetingLink = selectedAppointment.meetingLink || null;
+    let meetingPass = selectedAppointment.meetingPass || null;
 
     if (
       !["Online", "In-person", "Face-to-Face"].includes(
@@ -1254,9 +1277,7 @@ function ApptsLawyer() {
       );
       meetingLink = link;
       meetingPass = password;
-    } else if (
-      ["In-person", "Face-to-Face"].includes(rescheduleAppointmentType)
-    ) {
+    } else {
       meetingLink = null;
       meetingPass = null;
     }
@@ -1266,9 +1287,9 @@ function ApptsLawyer() {
     const appointmentData = appointmentSnapshot.data();
 
     const rescheduleEntry = {
-      rescheduleDate: selectedAppointment.appointmentDetails?.appointmentDate,
+      rescheduleDate: selectedAppointment.appointmentDetails.appointmentDate,
       rescheduleAppointmentType:
-        selectedAppointment.appointmentDetails?.apptType,
+        selectedAppointment.appointmentDetails.apptType,
       rescheduleReason: rescheduleReason,
       rescheduleTimestamp: Timestamp.fromDate(new Date()),
     };
@@ -1289,8 +1310,37 @@ function ApptsLawyer() {
     if (rescheduleAmPm === "AM" && h === 12) h = 0;
     fullDate.setHours(h, parseInt(rescheduleMinute), 0, 0);
 
-    if (isSlotTakenForLawyer(fullDate, selectedLawyerUid, appointments)) {
-      setSnackbarMessage("That time is already taken for this lawyer.");
+    const isSlotTakenForLawyer = async (
+      date,
+      lawyerUid,
+      currentAppointmentId
+    ) => {
+      const start = Timestamp.fromDate(
+        new Date(date.getTime() - 30 * 60 * 1000)
+      );
+      const end = Timestamp.fromDate(new Date(date.getTime() + 30 * 60 * 1000));
+
+      const q = query(
+        collection(fs, "appointments"),
+        where("appointmentDetails.assignedLawyer", "==", lawyerUid),
+        where("appointmentDetails.appointmentDate", ">=", start),
+        where("appointmentDetails.appointmentDate", "<=", end)
+      );
+
+      const snapshot = await getDocs(q);
+      return snapshot.docs.some((doc) => doc.id !== currentAppointmentId);
+    };
+
+    const slotTaken = await isSlotTakenForLawyer(
+      fullDate,
+      selectedAppointment.appointmentDetails.assignedLawyer,
+      selectedAppointment.id
+    );
+
+    if (slotTaken) {
+      setSnackbarMessage(
+        "The selected schedule is already taken. Please choose a different time."
+      );
       setShowSnackbar(true);
       return;
     }
@@ -1308,120 +1358,44 @@ function ApptsLawyer() {
 
       await updateDoc(appointmentRef, updatedData);
 
-      const clientFullName = selectedAppointment.fullName;
       const appointmentId = selectedAppointment.id;
-      const appointmentDateFormatted = getFormattedDate(appointmentDate, true);
-      const lawyerFullName = assignedLawyerDetails
-        ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
-        : "Assigned Lawyer Not Available";
+      const clientFullName = selectedAppointment.fullName;
+      const appointmentDateFormatted = getFormattedDate(fullDate, true);
 
-      // Send notifications after successfully updating Firestore
-      if (selectedAppointment.uid && selectedAppointment.controlNumber) {
-        await sendNotification(
-          `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
-          selectedAppointment.uid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
+      try {
+        if (selectedAppointment.uid && selectedAppointment.controlNumber) {
+          await sendNotification(
+            `Your appointment (ID: ${appointmentId}) has been rescheduled for ${appointmentDateFormatted} as a ${rescheduleAppointmentType} appointment.`,
+            selectedAppointment.uid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
+
+        if (assignedLawyerDetails?.uid) {
+          await sendNotification(
+            `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to ${appointmentDateFormatted} as a ${rescheduleAppointmentType} appointment.`,
+            assignedLawyerDetails.uid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
+
+        const headLawyerUid = await getHeadLawyerUid();
+        if (headLawyerUid) {
+          await sendNotification(
+            `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to ${appointmentDateFormatted} as a ${rescheduleAppointmentType} appointment.`,
+            headLawyerUid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
+      } catch (notifError) {
+        console.error("Notification error:", notifError);
       }
 
-      if (assignedLawyerDetails?.uid) {
-        await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
-          assignedLawyerDetails.uid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
-
-      const headLawyerUid = await getHeadLawyerUid();
-      if (headLawyerUid) {
-        await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
-          headLawyerUid,
-          "appointment",
-          selectedAppointment.controlNumber
-        );
-      }
-
-      // Fetch latest login activity for metadata
-      const loginActivitySnapshot = await getDocs(
-        query(
-          collection(fs, "users", currentUser.uid, "loginActivity"),
-          orderBy("loginTime", "desc"),
-          limit(1)
-        )
-      );
-
-      let ipAddress = "Unknown";
-      let deviceName = "Unknown";
-
-      if (!loginActivitySnapshot.empty) {
-        const loginData = loginActivitySnapshot.docs[0].data();
-        ipAddress = loginData.ipAddress || "Unknown";
-        deviceName = loginData.deviceName || "Unknown";
-      }
-      const auditLogEntry = {
-        actionType: "UPDATE",
-        timestamp: new Date(),
-        uid: currentUser.uid,
-        changes: {
-          appointmentDate: selectedAppointment.appointmentDetails
-            ?.appointmentDate
-            ? {
-                oldValue:
-                  selectedAppointment.appointmentDetails.appointmentDate,
-                newValue: rescheduleDate,
-              }
-            : null,
-          apptType: selectedAppointment.appointmentDetails?.apptType
-            ? {
-                oldValue: selectedAppointment.appointmentDetails.apptType,
-                newValue: rescheduleAppointmentType,
-              }
-            : null,
-          rescheduleReason: {
-            oldValue: null,
-            newValue: rescheduleReason,
-          },
-          meetingLink: selectedAppointment.appointmentDetails?.meetingLink
-            ? {
-                oldValue: selectedAppointment.appointmentDetails.meetingLink,
-                newValue: meetingLink,
-              }
-            : null,
-          meetingPass: selectedAppointment.appointmentDetails?.meetingPass
-            ? {
-                oldValue: selectedAppointment.appointmentDetails.meetingPass,
-                newValue: meetingPass,
-              }
-            : null,
-          updatedTime: selectedAppointment.appointmentDetails?.updatedTime
-            ? {
-                oldValue: selectedAppointment.appointmentDetails.updatedTime,
-                newValue: Timestamp.fromDate(new Date()),
-              }
-            : null,
-        },
-        affectedData: {
-          appointmentId: appointmentId,
-          clientFullName: clientFullName,
-        },
-        metadata: {
-          ipAddress: ipAddress,
-          userAgent: deviceName,
-        },
-      };
-
-      // Remove any null entries in the `changes` map
-      Object.keys(auditLogEntry.changes).forEach(
-        (key) =>
-          auditLogEntry.changes[key] === null &&
-          delete auditLogEntry.changes[key]
-      );
-
-      // Add audit log entry to Firestore
-      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
+      setSnackbarMessage("Appointment successfully rescheduled.");
+      setShowSnackbar(true);
 
       setAppointments((prevAppointments) =>
         prevAppointments.map((appt) =>
@@ -1435,26 +1409,19 @@ function ApptsLawyer() {
       setRescheduleReason("");
       setRescheduleAppointmentType("");
 
-      setSnackbarMessage("Appointment successfully rescheduled.");
-      setShowSnackbar(true);
       setTimeout(() => {
         setShowSnackbar(false);
         setSelectedAppointment(null);
         clearFormFields();
+        setShowRescheduleForm(false);
       }, 3000);
     } catch (error) {
       console.error("Error rescheduling appointment:", error);
-      setSnackbarMessage(
-        "The selected schedule is already taken. Please choose a different time."
-      );
+      setSnackbarMessage("An error occurred during rescheduling.");
       setShowSnackbar(true);
-      setTimeout(() => {
-        setShowSnackbar(false);
-        setSelectedAppointment(null);
-        clearFormFields();
-      }, 3000);
     }
   };
+
   const clearFormFields = () => {
     setAppointmentDate(null);
     setAppointmentHour("");
@@ -1499,7 +1466,7 @@ function ApptsLawyer() {
 
     const isAssignedToCurrentLawyer = appointments.some(
       (appointment) =>
-        appointment.assignedLawyer === currentUser.uid &&
+        appointment.appointmentDetails?.assignedLawyer === currentUser.uid &&
         appointment.appointmentDate.toDate().toDateString() ===
           date.toDateString()
     );
@@ -1544,12 +1511,11 @@ function ApptsLawyer() {
 
   const isSlotBookefsyAssignedLawyer = (dateTime) => {
     return appointments.some((appointment) => {
-      const appointmentDate = appointment.appointmentDetails?.appointmentDate;
+      const appointmentDate = appointment.appointmentDate;
       const assignedLawyer = appointment.appointmentDetails?.assignedLawyer;
 
       return (
-        assignedLawyer ===
-          selectedAppointment?.appointmentDetails?.assignedLawyer &&
+        assignedLawyer === selectedAppointment?.assignedLawyer &&
         appointmentDate?.toDate().getTime() === dateTime.getTime()
       );
     });
@@ -1619,7 +1585,7 @@ function ApptsLawyer() {
         />
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
-        <option value="all">All Status</option>
+          <option value="all">All Status</option>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="accepted">Accepted</option>
@@ -1666,24 +1632,20 @@ function ApptsLawyer() {
               appointments.map((appointment, index) => (
                 <tr key={appointment.id}>
                   <td>{(currentPage - 1) * pageSize + index + 1}.</td>
-                  <td>{appointment.controlNumber}</td>
-                  <td>{appointment.fullName}</td>
-                  <td>{appointment.selectedAssistanceType}</td>
+                  <td>{appointment.controlNumber || "N/A"}</td>
+                  <td>{`${appointment.display_name} ${appointment.middle_name} ${appointment.last_name}`}</td>
+                  <td>{appointment.selectedAssistanceType || "N/A"}</td>
                   <td>{getFormattedDate(appointment.appointmentDate, true)}</td>
                   <td>
-                    {capitalizeFirstLetter(
-                      appointment.appointmentDetails?.apptType || "N/A"
-                    )}
+                    {capitalizeFirstLetter(appointment.apptType || "N/A")}
                   </td>
                   <td>
-                    {capitalizeFirstLetter(
-                      appointment.appointmentDetails?.appointmentStatus
-                    )}
+                    {capitalizeFirstLetter(appointment.appointmentStatus)}
                   </td>
                   {userData?.member_type !== "secretary" && (
                     <td>
-                      {appointment.appointmentDetails?.apptType === "Online" &&
-                      appointment.appointmentDetails?.meetingLink ? (
+                      {appointment.apptType === "Online" &&
+                      appointment.meetingLink ? (
                         <button
                           onClick={() =>
                             window.open(
@@ -1753,8 +1715,7 @@ function ApptsLawyer() {
                       </button>
                     </OverlayTrigger>
                     &nbsp; &nbsp;
-                    {appointment.appointmentDetails?.appointmentStatus ===
-                      "approved" && (
+                    {appointment.appointmentStatus === "approved" && (
                       <>
                         <OverlayTrigger
                           placement="top"
@@ -1802,8 +1763,7 @@ function ApptsLawyer() {
                         </OverlayTrigger>
                       </>
                     )}
-                    {appointment.appointmentDetails?.appointmentStatus ===
-                      "refused" && (
+                    {appointment.appointmentStatus === "refused" && (
                       <>
                         {/* Accept/Refuse button */}
                         <OverlayTrigger
@@ -1854,8 +1814,7 @@ function ApptsLawyer() {
                         </OverlayTrigger>
                       </>
                     )}
-                    {appointment.appointmentDetails?.appointmentStatus ===
-                      "accepted" && (
+                    {appointment.appointmentStatus === "accepted" && (
                       <>
                         <OverlayTrigger
                           placement="top"
@@ -2068,7 +2027,7 @@ function ApptsLawyer() {
                     <tbody>
                       <tr>
                         <th>Full Name:</th>
-                        <td>{selectedAppointment.fullName}</td>
+                        <td>{`${selectedAppointment.display_name} ${selectedAppointment.middle_name} ${selectedAppointment.last_name}`}</td>
                       </tr>
                       <tr>
                         <th>Date of Birth:</th>
@@ -2087,7 +2046,7 @@ function ApptsLawyer() {
                       <tr>
                         <th>Contact Number:</th>
                         <td>
-                          {selectedAppointment?.contactNumber ||
+                          {selectedAppointment?.phone ||
                             "Not Available"}
                         </td>
                       </tr>
@@ -2101,14 +2060,13 @@ function ApptsLawyer() {
                         <tr>
                           <th>Gender:</th>
                           <td>
-                            {selectedAppointment?.selectedGender ||
-                              "Not Specified"}
+                            {selectedAppointment?.gender || "Not Specified"}
                           </td>
                         </tr>
                         <tr>
                           <th>Spouse Name:</th>
                           <td>
-                            {selectedAppointment.spouseName || "Not Available"}
+                            {selectedAppointment.spouse || "Not Available"}
                           </td>
                         </tr>
                         <tr>
@@ -2131,8 +2089,8 @@ function ApptsLawyer() {
                 </section>
                 <br />
                 <section className="mb-4 print-section">
-                  {(selectedAppointment.appointmentDetails?.newRequest ||
-                    selectedAppointment.appointmentDetails?.requestReason) && (
+                  {(selectedAppointment.newRequest ||
+                    selectedAppointment.requestReason) && (
                     <section className="mb-4 print-section no-print">
                       <h2>
                         <em style={{ color: "#a34bc9", fontSize: "16px" }}>
@@ -2142,7 +2100,7 @@ function ApptsLawyer() {
                       <table className="table table-striped table-bordered">
                         <tbody>
                           {/* Only show the control number if newRequest is true */}
-                          {selectedAppointment.appointmentDetails?.newRequest &&
+                          {selectedAppointment.newRequest &&
                             !selectedAppointment.appointmentDetails
                               ?.requestReason && (
                               <tr>
@@ -2218,8 +2176,7 @@ function ApptsLawyer() {
                           )}
                         </td>
                       </tr>
-                      {selectedAppointment.appointmentDetails?.apptType ===
-                        "Online" && (
+                      {selectedAppointment.apptType === "Online" && (
                         <tr className="no-print">
                           <th>Meeting Link:</th>
                           <td>
@@ -2303,22 +2260,20 @@ function ApptsLawyer() {
                       </tr>
                       <tr>
                         <th>Appointment Type:</th>
-                        <td>
-                          {selectedAppointment.appointmentDetails?.apptType ||
-                            "N/A"}
-                        </td>
+                        <td>{selectedAppointment.apptType || "N/A"}</td>
                       </tr>
                       <tr>
                         <th>Appointment Status:</th>
                         <td>
                           {capitalizeFirstLetter(
-                            selectedAppointment.appointmentStatus
+                            selectedAppointment.appointmentDetails
+                              ?.appointmentStatus
                           )}
                         </td>
                       </tr>
                       <>
-                        {selectedAppointment.appointmentStatus ===
-                          "scheduled" && (
+                        {selectedAppointment.appointmentDetails
+                          ?.appointmentStatus === "scheduled" && (
                           <>
                             <tr>
                               <th>Eligibility:</th>
@@ -2348,7 +2303,8 @@ function ApptsLawyer() {
                               <th>Appointment Date:</th>
                               <td>
                                 {getFormattedDate(
-                                  selectedAppointment.appointmentDate,
+                                  selectedAppointment.appointmentDetails
+                                    ?.appointmentDate,
                                   true
                                 )}
                               </td>
@@ -2356,7 +2312,8 @@ function ApptsLawyer() {
                           </>
                         )}
 
-                        {selectedAppointment.appointmentStatus === "denied" && (
+                        {selectedAppointment.appointmentDetails
+                          ?.appointmentStatus === "denied" && (
                           <>
                             <tr>
                               <th>Assigned Lawyer:</th>
@@ -2382,13 +2339,15 @@ function ApptsLawyer() {
                             </tr>
                           </>
                         )}
-                        {selectedAppointment.appointmentStatus === "done" && (
+                        {selectedAppointment.appointmentDetails
+                          ?.appointmentStatus === "done" && (
                           <>
                             <tr>
                               <th>Appointment Date:</th>
                               <td>
                                 {getFormattedDate(
-                                  selectedAppointment.appointmentDate,
+                                  selectedAppointment.appointmentDetails
+                                    ?.appointmentDate,
                                   true
                                 )}
                               </td>
@@ -2440,8 +2399,8 @@ function ApptsLawyer() {
                             </tr>
                           </>
                         )}
-                        {selectedAppointment.appointmentStatus ===
-                          "approved" && (
+                        {selectedAppointment.appointmentDetails
+                          ?.appointmentStatus === "approved" && (
                           <>
                             <tr>
                               <th>Eligibility:</th>
@@ -2552,7 +2511,7 @@ function ApptsLawyer() {
                       <tr>
                         <th>Type of Employment:</th>
                         <td>
-                          {selectedAppointment?.kindOfEmployment ||
+                          {selectedAppointment?.employmentType ||
                             "Not Specified"}
                         </td>
                       </tr>
@@ -2636,7 +2595,11 @@ function ApptsLawyer() {
                       <tr>
                         <th>Barangay Certificate of Indigency:</th>
                         <td>
-                          {selectedAppointment.barangayImageUrl ? (
+                          {selectedAppointment.barangayImageUrl &&
+                          selectedAppointment.barangayImageUrlDateUploaded &&
+                          new Date(
+                            selectedAppointment.barangayImageUrlDateUploaded.toDate?.()
+                          ) > new Date(Date.now() - 15552000000) ? (
                             <a
                               href="#"
                               onClick={(e) => {
@@ -2648,20 +2611,33 @@ function ApptsLawyer() {
                             >
                               <img
                                 src={selectedAppointment.barangayImageUrl}
-                                alt="Barangay Certificate of Indigency"
-                                className="img-thumbnail"
+                                alt="Barangay Certificate"
+                                className="img-thumbnail qr-code-image"
                                 style={{ width: "100px", cursor: "pointer" }}
                               />
                             </a>
                           ) : (
-                            "Not Available"
+                            <span style={{ color: "red", fontWeight: "bold" }}>
+                              ✗ Expired or Missing (
+                              {selectedAppointment.barangayImageUrlDateUploaded
+                                ? `Uploaded: ${new Date(
+                                    selectedAppointment.barangayImageUrlDateUploaded.toDate?.()
+                                  ).toLocaleDateString()}`
+                                : "N/A"}
+                              )
+                            </span>
                           )}
                         </td>
                       </tr>
+
                       <tr>
                         <th>DSWD Certificate of Indigency:</th>
                         <td>
-                          {selectedAppointment.dswdImageUrl ? (
+                          {selectedAppointment.dswdImageUrl &&
+                          selectedAppointment.dswdImageUrlDateUploaded &&
+                          new Date(
+                            selectedAppointment.dswdImageUrlDateUploaded.toDate?.()
+                          ) > new Date(Date.now() - 15552000000) ? (
                             <a
                               href="#"
                               onClick={(e) => {
@@ -2673,20 +2649,33 @@ function ApptsLawyer() {
                             >
                               <img
                                 src={selectedAppointment.dswdImageUrl}
-                                alt="DSWD Certificate of Indigency"
-                                className="img-thumbnail"
+                                alt="DSWD Certificate"
+                                className="img-thumbnail qr-code-image"
                                 style={{ width: "100px", cursor: "pointer" }}
                               />
                             </a>
                           ) : (
-                            "Not Available"
+                            <span style={{ color: "red", fontWeight: "bold" }}>
+                              ✗ Expired or Missing (
+                              {selectedAppointment.dswdImageUrlDateUploaded
+                                ? `Uploaded: ${new Date(
+                                    selectedAppointment.dswdImageUrlDateUploaded.toDate?.()
+                                  ).toLocaleDateString()}`
+                                : "N/A"}
+                              )
+                            </span>
                           )}
                         </td>
                       </tr>
+
                       <tr>
                         <th>Disqualification Letter from PAO:</th>
                         <td>
-                          {selectedAppointment.paoImageUrl ? (
+                          {selectedAppointment.paoImageUrl &&
+                          selectedAppointment.paoImageUrlDateUploaded &&
+                          new Date(
+                            selectedAppointment.paoImageUrlDateUploaded.toDate?.()
+                          ) > new Date(Date.now() - 15552000000) ? (
                             <a
                               href="#"
                               onClick={(e) => {
@@ -2696,16 +2685,25 @@ function ApptsLawyer() {
                             >
                               <img
                                 src={selectedAppointment.paoImageUrl}
-                                alt="Disqualification Letter from PAO"
-                                className="img-thumbnail"
+                                alt="PAO Letter"
+                                className="img-thumbnail qr-code-image"
                                 style={{ width: "100px", cursor: "pointer" }}
                               />
                             </a>
                           ) : (
-                            "Not Available"
+                            <span style={{ color: "red", fontWeight: "bold" }}>
+                              ✗ Expired or Missing (
+                              {selectedAppointment.paoImageUrlDateUploaded
+                                ? `Uploaded: ${new Date(
+                                    selectedAppointment.paoImageUrlDateUploaded.toDate?.()
+                                  ).toLocaleDateString()}`
+                                : "N/A"}
+                              )
+                            </span>
                           )}
                         </td>
                       </tr>
+
                       <tr>
                         <th>Consultation Remarks Attached File:</th>
                         <td>
@@ -2731,6 +2729,7 @@ function ApptsLawyer() {
                           )}
                         </td>
                       </tr>
+
                       <tr>
                         <th>New Appointment Request File:</th>
                         <td>
@@ -2759,6 +2758,7 @@ function ApptsLawyer() {
                     </tbody>
                   </table>
                 </section>
+
                 <br />
                 {isModalOpen && (
                   <ImageModal
@@ -2878,7 +2878,19 @@ function ApptsLawyer() {
                     required
                   ></textarea>
                 </div>
-                <button disabled={isSubmitting}>Submit</button>
+                <button disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <div
+                      className="spinner-border text-light"
+                      role="status"
+                      style={{ width: "1rem", height: "1rem" }}
+                    >
+                      <span className="sr-only">Loading...</span>
+                    </div>
+                  ) : (
+                    "Submit"
+                  )}
+                </button>
               </form>
             </div>
           )}
@@ -2902,7 +2914,7 @@ function ApptsLawyer() {
                 </tr>
                 <tr>
                   <th>Full Name:</th>
-                  <td>{selectedAppointment.fullName}</td>
+                  <td>{`${selectedAppointment.display_name} ${selectedAppointment.middle_name} ${selectedAppointment.last_name}`}</td>
                 </tr>
               </tbody>
             </table>
@@ -2989,7 +3001,19 @@ function ApptsLawyer() {
                 </>
               )}
 
-              <button disabled={isSubmitting}>Submit</button>
+              <button disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <div
+                    className="spinner-border text-light"
+                    role="status"
+                    style={{ width: "1rem", height: "1rem" }}
+                  >
+                    <span className="sr-only">Loading...</span>
+                  </div>
+                ) : (
+                  "Submit"
+                )}
+              </button>
             </form>
           </div>
         )}
@@ -3013,7 +3037,7 @@ function ApptsLawyer() {
                 </tr>
                 <tr>
                   <th>Full Name:</th>
-                  <td>{selectedAppointment.fullName}</td>
+                  <td>{`${selectedAppointment.display_name} ${selectedAppointment.middle_name} ${selectedAppointment.last_name}`}</td>
                 </tr>
               </tbody>
             </table>
@@ -3139,7 +3163,19 @@ function ApptsLawyer() {
                 </select>
               </div>
               <br />
-              <button disabled={isSubmitting}>Submit</button>
+              <button disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <div
+                    className="spinner-border text-light"
+                    role="status"
+                    style={{ width: "1.2rem", height: "1.2rem" }}
+                  >
+                    <span className="sr-only">Loading...</span>
+                  </div>
+                ) : (
+                  "Submit"
+                )}
+              </button>
             </form>
           </div>
         )}
@@ -3163,7 +3199,7 @@ function ApptsLawyer() {
                 </tr>
                 <tr>
                   <th>Full Name:</th>
-                  <td>{selectedAppointment.fullName}</td>
+                  <td>{`${selectedAppointment.display_name} ${selectedAppointment.middle_name} ${selectedAppointment.last_name}`}</td>
                 </tr>
               </tbody>
             </table>
@@ -3269,7 +3305,19 @@ function ApptsLawyer() {
               </div>
               <br />
               <br />
-              <button disabled={isSubmitting}>Submit</button>
+              <button disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <div
+                    className="spinner-border text-light"
+                    role="status"
+                    style={{ width: "1.2rem", height: "1.2rem" }}
+                  >
+                    <span className="sr-only">Loading...</span>
+                  </div>
+                ) : (
+                  "Submit"
+                )}
+              </button>
             </form>
           </div>
         )}

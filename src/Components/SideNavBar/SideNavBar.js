@@ -402,9 +402,6 @@ function SideNavBar() {
           onClick={() => (window.location.href = "/settings")}
         >
           settings
-          {unreadCount > 0 && (
-            <span className="settings">{unreadCount}</span> // Show the badge only if unreadCount > 0
-          )}
         </span>
 
         <span
@@ -551,9 +548,16 @@ function SideNavBar() {
             )}
           </ul>
         </nav>
-        <footer className="footer">
-          <p>Copyright © 2024. All Rights Reserved</p>
-        </footer>
+<footer className="footer">
+  <img
+    src="https://firebasestorage.googleapis.com/v0/b/lawyer-app-ed056.appspot.com/o/signin-footer.png?alt=media&token=1668da39-f37a-4620-ae55-d19386631dfe"
+    alt="Footer"
+    style={{ width: "100%", maxWidth: "1000px", marginBottom: "10px" }}
+  />
+  <p>Copyright © 2025. All Rights Reserved</p>
+</footer>
+
+
       </div>
 
       {showNotifications && (

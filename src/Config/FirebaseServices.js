@@ -23,7 +23,7 @@ import { fs, storage, signOut } from "./Firebase"; // Import fs from your Fireba
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
- const getAppointments = async (
+const getAppointments = async (
   statusFilter,
   lastVisible = null,
   pageSize = 7,
@@ -63,7 +63,11 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
     if (lastVisible) {
       if (isPrevious) {
-        queryRef = query(queryRef, endBefore(lastVisible), limitToLast(pageSize));
+        queryRef = query(
+          queryRef,
+          endBefore(lastVisible),
+          limitToLast(pageSize)
+        );
       } else {
         queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
       }
@@ -96,7 +100,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
         ...data.appointmentDetails,
         ...data.legalAssistanceRequested,
         ...data.employmentProfile,
-        ...data.applicantProfile,
+
         ...data.uploadedImages,
         ...userData, // ✅ this includes display_name, gender, dob, address, etc.
         clientEligibility: data.clientEligibility,
@@ -136,7 +140,6 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
     return { data: [], total: 0, firstDoc: null, lastDoc: null };
   }
 };
-
 
 const countTotalFilteredItems = async (
   statusFilter,
@@ -207,7 +210,7 @@ const getLawyerCalendar = async (assignedLawyer) => {
       bookedSlots.push({
         appointmentDate: data.appointmentDetails.appointmentDate.toDate(),
         fullName: data.applicantProfile?.fullName,
-        contactNumber: data.applicantProfile?.contactNumber,
+        phone: data.applicantProfile?.phone,
       });
     }
   });
@@ -275,7 +278,7 @@ const aptsLawyerCalendar = async (
           .data()
           .applicantProfile?.address?.toLowerCase()
           .includes(searchText.toLowerCase()) ||
-        doc.data().applicantProfile?.contactNumber?.includes(searchText) ||
+        doc.data().applicantProfile?.phone?.includes(searchText) ||
         doc.data().appointmentDetails?.controlNumber?.includes(searchText) ||
         doc
           .data()
@@ -300,7 +303,7 @@ const aptsLawyerCalendar = async (
         const data = doc.data();
         return {
           id: doc.id,
-          ...data.applicantProfile,
+
           ...data.employmentProfile,
           ...data.legalAssistanceRequested,
           ...data.uploadedImages,
@@ -333,7 +336,6 @@ const aptsCalendar = async (
   try {
     let queryRef = collection(fs, "appointments");
 
-    // Ensure statusFilters include "done" and "scheduled"
     const updatedStatusFilters = ["done", "scheduled"];
     queryRef = query(
       queryRef,
@@ -359,73 +361,105 @@ const aptsCalendar = async (
 
     if (lastVisible) {
       queryRef = isPrevious
-        ? query(
-            queryRef,
-            startAt(lastVisible?.appointmentDetails?.controlNumber || "")
-          )
-        : query(
-            queryRef,
-            startAfter(lastVisible?.appointmentDetails?.controlNumber || "")
-          );
+        ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize))
+        : query(queryRef, startAfter(lastVisible), limit(pageSize));
     }
 
     const querySnapshot = await getDocs(queryRef);
+    const appointmentsRaw = [];
+    const userFetchTasks = [];
 
-    const filtered = querySnapshot.docs.filter(
-      (doc) =>
-        doc
-          .data()
-          .applicantProfile?.fullName?.toLowerCase()
-          .includes(searchText.toLowerCase()) ||
-        doc
-          .data()
-          .applicantProfile?.address?.toLowerCase()
-          .includes(searchText.toLowerCase()) ||
-        doc.data().applicantProfile?.contactNumber?.includes(searchText) ||
-        doc.data().appointmentDetails?.controlNumber?.includes(searchText) ||
-        doc
-          .data()
-          .legalAssistanceRequested?.selectedAssistanceType?.toLowerCase()
-          .includes(searchText.toLowerCase())
-    );
+    querySnapshot.docs.forEach((docSnap) => {
+      const data = docSnap.data();
+      const userUid = data.appointmentDetails?.uid;
 
-    const totalQuery = await getDocs(
-      query(
-        collection(fs, "appointments"),
-        where(
-          "appointmentDetails.appointmentStatus",
-          "in",
-          updatedStatusFilters
-        )
-      )
-    );
+      appointmentsRaw.push({ id: docSnap.id, ...data, userUid });
+
+      if (userUid) {
+        userFetchTasks.push({
+          uid: userUid,
+          promise: getDoc(doc(fs, "users", userUid)),
+        });
+      }
+    });
+
+    const userResults = await Promise.all(userFetchTasks.map((t) => t.promise));
+    const usersMap = {};
+    userResults.forEach((res, index) => {
+      const uid = userFetchTasks[index].uid;
+      if (res.exists()) {
+        usersMap[uid] = res.data();
+      }
+    });
+
+    const appointmentsData = appointmentsRaw.map((appointment) => {
+      const userData = usersMap[appointment.userUid] || {};
+
+      return {
+        id: appointment.id,
+        uid: appointment.userUid,
+        fullName: `${userData.display_name || ""} ${
+          userData.middle_name || ""
+        } ${userData.last_name || ""}`.trim(),
+        display_name: userData.display_name || "",
+        middle_name: userData.middle_name || "",
+        last_name: userData.last_name || "",
+        dob: userData.dob || null,
+        phone: userData.phone || "",
+        gender: userData.gender || "",
+        address: userData.address || "",
+        spouse: userData.spouse || "",
+        spouseOccupation: userData.spouseOccupation || "",
+        childrenNamesAges: userData.childrenNamesAges || "",
+        email: userData.email || "",
+        city: userData.city || "",
+        occupation: userData.occupation || "",
+        employerName: userData.employerName || "",
+        employerAddress: userData.employerAddress || "",
+        employmentType: userData.employmentType || "",
+        monthlyIncome: userData.monthlyIncome || "",
+
+        // Uploaded images from users collection
+        barangayImageUrl: userData.uploadedImages?.barangayImageUrl || null,
+        barangayImageUrlDateUploaded:
+          userData.uploadedImages?.barangayImageUrlDateUploaded || null,
+        dswdImageUrl: userData.uploadedImages?.dswdImageUrl || null,
+        dswdImageUrlDateUploaded:
+          userData.uploadedImages?.dswdImageUrlDateUploaded || null,
+        paoImageUrl: userData.uploadedImages?.paoImageUrl || null,
+        paoImageUrlDateUploaded:
+          userData.uploadedImages?.paoImageUrlDateUploaded || null,
+
+        // Appointment details
+        appointmentStatus: appointment.appointmentDetails?.appointmentStatus,
+        controlNumber: appointment.appointmentDetails?.controlNumber,
+        appointmentDate: appointment.appointmentDetails?.appointmentDate,
+        appointmentDetails: appointment.appointmentDetails,
+        createdDate: appointment.appointmentDetails?.createdDate || null,
+        reviewerDetails: appointment.reviewerDetails,
+        proceedingNotes: appointment.proceedingNotes,
+        rescheduleHistory: appointment.rescheduleHistory || [],
+        clientEligibility: appointment.clientEligibility,
+
+        // Additional appointment-related data
+        ...appointment.legalAssistanceRequested,
+        ...appointment.employmentProfile,
+        ...appointment.uploadedImages, // includes newRequestUrl, proceedingFileUrl
+      };
+    });
 
     return {
-      data: filtered.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data.applicantProfile,
-          ...data.employmentProfile,
-          ...data.legalAssistanceRequested,
-          ...data.uploadedImages,
-          createdDate: data.appointmentDetails?.createdDate,
-          appointmentStatus: data.appointmentDetails?.appointmentStatus,
-          controlNumber: data.appointmentDetails?.controlNumber,
-          appointmentDate: data.appointmentDetails?.appointmentDate,
-          clientEligibility: data.clientEligibility,
-          appointmentDetails: data.appointmentDetails,
-        };
-      }),
-      total: totalQuery.size,
+      data: appointmentsData,
+      total: appointmentsData.length,
       firstDoc: querySnapshot.docs[0],
       lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
     };
   } catch (error) {
     console.error("Failed to fetch appointments:", error);
-    throw error;
+    return { data: [], total: 0, firstDoc: null, lastDoc: null };
   }
 };
+
 
 const getLawyerAppointments = (
   filter,
@@ -493,7 +527,7 @@ const getLawyerAppointments = (
     }
 
     // Use onSnapshot for real-time updates
-    return onSnapshot(queryRef, (querySnapshot) => {
+    return onSnapshot(queryRef, async (querySnapshot) => {
       const filtered = querySnapshot.docs.filter((doc) => {
         const data = doc.data();
         return (
@@ -503,7 +537,7 @@ const getLawyerAppointments = (
           data.applicantProfile?.address
             ?.toLowerCase()
             .includes(searchText.toLowerCase()) ||
-          data.applicantProfile?.contactNumber?.includes(searchText) ||
+          data.applicantProfile?.phone?.includes(searchText) ||
           data.appointmentDetails?.controlNumber?.includes(searchText) ||
           data.legalAssistanceRequested?.selectedAssistanceType
             ?.toLowerCase()
@@ -512,23 +546,89 @@ const getLawyerAppointments = (
       });
 
       // Map the filtered data and trigger callback
-      const appointments = filtered.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data.applicantProfile,
-          ...data.employmentProfile,
-          ...data.legalAssistanceRequested,
-          ...data.uploadedImages,
-          createdDate: data.appointmentDetails?.createdDate,
-          appointmentStatus: data.appointmentDetails?.appointmentStatus,
-          controlNumber: data.appointmentDetails?.controlNumber,
-          appointmentDate: data.appointmentDetails?.appointmentDate,
-          clientEligibility: data.clientEligibility,
-          appointmentDetails: data.appointmentDetails,
-          rescheduleHistory: data.rescheduleHistory || [], // Ensure rescheduleHistory is included
-        };
-      });
+      const appointments = await Promise.all(
+        filtered.map(async (docSnap) => {
+          const data = docSnap.data();
+          const uid = data.appointmentDetails?.uid;
+
+          let userData = {};
+          if (uid) {
+            const userDoc = await getDoc(doc(fs, "users", uid)); // ✅ Now `doc` refers to the Firebase function
+
+            if (userDoc.exists()) {
+              userData = userDoc.data();
+            }
+          }
+
+          return {
+            id: docSnap.id,
+
+            // Flattened appointmentDetails
+            appointmentDetails: data.appointmentDetails,
+            appointmentStatus:
+              data.appointmentDetails?.appointmentStatus || null,
+            controlNumber: data.appointmentDetails?.controlNumber || null,
+            appointmentDate: data.appointmentDetails?.appointmentDate || null,
+            apptType: data.appointmentDetails?.apptType || null,
+            meetingLink: data.appointmentDetails?.meetingLink || null,
+            assignedLawyer: data.appointmentDetails?.assignedLawyer || null,
+            newRequest: data.appointmentDetails?.newRequest || false,
+            requestReason: data.appointmentDetails?.requestReason || null,
+            newControlNumber: data.appointmentDetails?.newControlNumber || null,
+
+            // Flattened legal assistance data
+            selectedAssistanceType:
+              data.legalAssistanceRequested?.selectedAssistanceType || null,
+            problemReason: data.legalAssistanceRequested?.problemReason || null,
+            problems: data.legalAssistanceRequested?.problems || null,
+            desiredSolutions:
+              data.legalAssistanceRequested?.desiredSolutions || null,
+
+            // Employment
+            ...data.employmentProfile,
+
+            // Images from users collection (barangay, dswd, pao)
+            barangayImageUrl: userData.uploadedImages?.barangayImageUrl || null,
+            barangayImageUrlDateUploaded:
+              userData.uploadedImages?.barangayImageUrlDateUploaded || null,
+            dswdImageUrl: userData.uploadedImages?.dswdImageUrl || null,
+            dswdImageUrlDateUploaded:
+              userData.uploadedImages?.dswdImageUrlDateUploaded || null,
+            paoImageUrl: userData.uploadedImages?.paoImageUrl || null,
+            paoImageUrlDateUploaded:
+              userData.uploadedImages?.paoImageUrlDateUploaded || null,
+
+            // Images from appointments (for newRequest/proceedingNotes)
+            ...data.uploadedImages,
+
+            // User info (from users collection)
+            display_name: userData.display_name || "",
+            middle_name: userData.middle_name || "",
+            last_name: userData.last_name || "",
+            gender: userData.gender || "",
+            dob: userData.dob || null,
+            address: userData.address || "",
+            city: userData.city || "",
+            phone: userData.phone || "",
+            email: userData.email || "",
+            occupation: userData.occupation || "",
+            employerName: userData.employerName || "",
+            employerAddress: userData.employerAddress || "",
+            employmentType: userData.employmentType || "",
+            monthlyIncome: userData.monthlyIncome || "",
+            spouse: userData.spouse || "",
+            spouseOccupation: userData.spouseOccupation || "",
+            childrenNamesAges: userData.childrenNamesAges || "",
+
+            // Meta
+            reviewerDetails: data.reviewerDetails || null,
+            proceedingNotes: data.proceedingNotes || null,
+            clientEligibility: data.clientEligibility || null,
+            rescheduleHistory: data.rescheduleHistory || [],
+            createdDate: data.appointmentDetails?.createdDate || null,
+          };
+        })
+      );
 
       callback({
         data: appointments,
@@ -630,25 +730,39 @@ export const getAllAppointments = async (
     }
 
     // Map the results into usable data
-    let appointmentsData = querySnapshot.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data.applicantProfile,
-        ...data.employmentProfile,
+    let appointmentsData = [];
+
+    for (const docSnap of querySnapshot.docs) {
+      const data = docSnap.data();
+      const uid = data.appointmentDetails?.uid;
+
+      let userData = {};
+      if (uid) {
+        const userDoc = await getDoc(doc(fs, "users", uid));
+        if (userDoc.exists()) {
+          userData = userDoc.data();
+        }
+      }
+
+      const combined = {
+        id: docSnap.id,
+        ...data.appointmentDetails,
         ...data.legalAssistanceRequested,
+        ...data.employmentProfile,
         ...data.uploadedImages,
+        ...userData, // ✅ merge user data here
+        clientEligibility: data.clientEligibility,
+        reviewerDetails: data.reviewerDetails,
+        proceedingNotes: data.proceedingNotes,
+        rescheduleHistory: data.rescheduleHistory || [],
         createdDate: data.appointmentDetails?.createdDate,
         appointmentStatus: data.appointmentDetails?.appointmentStatus,
         controlNumber: data.appointmentDetails?.controlNumber,
         appointmentDate: data.appointmentDetails?.appointmentDate,
-        clientEligibility: data.clientEligibility,
-        appointmentDetails: data.appointmentDetails,
-        reviewerDetails: data.reviewerDetails,
-        proceedingNotes: data.proceedingNotes,
-        rescheduleHistory: data.rescheduleHistory || [],
       };
-    });
+
+      appointmentsData.push(combined);
+    }
 
     // If searchText exists, filter by fullName in the results
     if (searchText) {
@@ -681,22 +795,19 @@ const getAdminAppointments = async (
   pageSize = 7,
   searchText = "",
   assistanceFilter = "all",
-  isPrevious = false // Boolean to control direction for pagination
+  isPrevious = false
 ) => {
   try {
     let queryRef = collection(fs, "appointments");
-
-    // Apply filters
     const conditions = [];
 
-    // Apply status filter
+    // Filters
     if (statusFilter && statusFilter !== "all") {
       conditions.push(
         where("appointmentDetails.appointmentStatus", "==", statusFilter)
       );
     }
 
-    // Apply assistance type filter
     if (assistanceFilter && assistanceFilter !== "all") {
       conditions.push(
         where(
@@ -707,78 +818,145 @@ const getAdminAppointments = async (
       );
     }
 
-    // Apply conditions to the query
     if (conditions.length > 0) {
       queryRef = query(queryRef, ...conditions);
     }
 
-    // Order by created date for pagination
     queryRef = query(
       queryRef,
       orderBy("appointmentDetails.createdDate", "desc")
     );
 
-    // Handle pagination logic
     if (lastVisible) {
-      if (isPrevious) {
-        queryRef = query(
-          queryRef,
-          endBefore(lastVisible),
-          limitToLast(pageSize)
-        );
-      } else {
-        queryRef = query(queryRef, startAfter(lastVisible), limit(pageSize));
-      }
+      queryRef = isPrevious
+        ? query(queryRef, endBefore(lastVisible), limitToLast(pageSize))
+        : query(queryRef, startAfter(lastVisible), limit(pageSize));
     } else {
-      queryRef = query(queryRef, limit(pageSize)); // Initial load
+      queryRef = query(queryRef, limit(pageSize));
     }
 
-    // Fetch the data
     const querySnapshot = await getDocs(queryRef);
-
     if (querySnapshot.empty) {
       return { data: [], total: 0, firstDoc: null, lastDoc: null };
     }
 
-    // Map the results into usable data
-    let appointmentsData = querySnapshot.docs.map((doc) => {
-      const data = doc.data();
+    // Fetch user data
+    const appointmentsRaw = [];
+    const userFetchTasks = [];
+
+    querySnapshot.docs.forEach((docSnap) => {
+      const data = docSnap.data();
+    const userUid = data.appointmentDetails?.uid;
+      appointmentsRaw.push({ id: docSnap.id, ...data, userUid });
+
+      if (userUid) {
+        userFetchTasks.push({
+          uid: userUid,
+          promise: getDoc(doc(fs, "users", userUid)),
+        });
+      }
+    });
+
+    const userResults = await Promise.all(userFetchTasks.map((t) => t.promise));
+    const usersMap = {};
+    userResults.forEach((res, index) => {
+      const uid = userFetchTasks[index].uid;
+      if (res.exists()) {
+        usersMap[uid] = res.data();
+      }
+    });
+
+    // Merge user + appointment data
+    const appointmentsData = appointmentsRaw.map((appointment) => {
+      const userData = usersMap[appointment.userUid] || {};
+
       return {
-        id: doc.id,
-        ...data.applicantProfile,
-        ...data.employmentProfile,
-        ...data.legalAssistanceRequested,
-        ...data.uploadedImages,
-        createdDate: data.appointmentDetails?.createdDate,
-        appointmentStatus: data.appointmentDetails?.appointmentStatus,
-        controlNumber: data.appointmentDetails?.controlNumber,
-        appointmentDate: data.appointmentDetails?.appointmentDate,
-        clientEligibility: data.clientEligibility,
-        appointmentDetails: data.appointmentDetails,
-        reviewerDetails: data.reviewerDetails,
-        proceedingNotes: data.proceedingNotes,
-        rescheduleHistory: data.rescheduleHistory || [],
+        id: appointment.id,
+        uid: appointment.userUid,
+        fullName: `${userData.display_name || ""} ${
+          userData.middle_name || ""
+        } ${userData.last_name || ""}`.trim(),
+        display_name: userData.display_name || "",
+        middle_name: userData.middle_name || "",
+        last_name: userData.last_name || "",
+        dob: userData.dob || null,
+        phone: userData.phone || "",
+        gender: userData.gender || "",
+        address: userData.address || "",
+        spouse: userData.spouse || "",
+        spouseOccupation: userData.spouseOccupation || "",
+        childrenNamesAges: userData.childrenNamesAges || "",
+        email: userData.email || "",
+        city: userData.city || "",
+        occupation: userData.occupation || "",
+        employerName: userData.employerName || "",
+        employerAddress: userData.employerAddress || "",
+        employmentType: userData.employmentType || "",
+        monthlyIncome: userData.monthlyIncome || "",
+
+        // ✅ uploadedImages from users
+        barangayImageUrl: userData.uploadedImages?.barangayImageUrl || null,
+        barangayImageUrlDateUploaded:
+          userData.uploadedImages?.barangayImageUrlDateUploaded || null,
+        dswdImageUrl: userData.uploadedImages?.dswdImageUrl || null,
+        dswdImageUrlDateUploaded:
+          userData.uploadedImages?.dswdImageUrlDateUploaded || null,
+        paoImageUrl: userData.uploadedImages?.paoImageUrl || null,
+        paoImageUrlDateUploaded:
+          userData.uploadedImages?.paoImageUrlDateUploaded || null,
+
+        // appointment data
+        appointmentStatus: appointment.appointmentDetails?.appointmentStatus,
+        controlNumber: appointment.appointmentDetails?.controlNumber,
+        appointmentDate: appointment.appointmentDetails?.appointmentDate,
+        appointmentDetails: appointment.appointmentDetails,
+        reviewerDetails: appointment.reviewerDetails,
+        proceedingNotes: appointment.proceedingNotes,
+        rescheduleHistory: appointment.rescheduleHistory || [],
+        clientEligibility: appointment.clientEligibility,
+        createdDate: appointment.appointmentDetails?.createdDate || null,
+
+        // additional data
+        ...appointment.legalAssistanceRequested,
+        ...appointment.employmentProfile,
+        ...appointment.uploadedImages, // from appointment doc (like proceedingFileUrl, etc.)
       };
     });
 
-    // If searchText exists, filter by fullName in the results
+    // Filter by name if searchText is present
+    // Filter BEFORE paginating
+    let filteredAppointments = appointmentsData;
+
     if (searchText) {
       const searchLower = searchText.toLowerCase();
-      appointmentsData = appointmentsData.filter((appointment) =>
-        appointment.fullName.toLowerCase().includes(searchLower)
-      );
+      filteredAppointments = appointmentsData.filter((a) => {
+        const name = `${a.display_name || ""} ${a.middle_name || ""} ${
+          a.last_name || ""
+        }`.toLowerCase();
+        const controlNumber = a.controlNumber?.toLowerCase() || "";
+        const email = a.email?.toLowerCase() || "";
+        const phone = a.phone || "";
+        const city = a.city?.toLowerCase() || "";
+
+        return (
+          name.includes(searchLower) ||
+          controlNumber.includes(searchLower) ||
+          email.includes(searchLower) ||
+          phone.includes(searchText) ||
+          city.includes(searchLower)
+        );
+      });
     }
 
-    // Get the total count for pagination
     const countSnapshot = await getCountFromServer(
       query(collection(fs, "appointments"), ...conditions)
     );
 
     return {
-      data: appointmentsData, // Return the filtered and paginated data
-      total: countSnapshot.data().count, // Return the total count
-      firstDoc: querySnapshot.docs[0], // Store the first document for previous pages
-      lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1], // Store the last document for next pages
+      data: filteredAppointments,
+      total: filteredAppointments.length,
+      firstDoc: querySnapshot.docs[0],
+      lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
     };
   } catch (error) {
     console.error("Error fetching appointments:", error);
@@ -845,7 +1023,7 @@ export const getCalendar = async () => {
       bookedSlots.push({
         appointmentDate: data.appointmentDetails.appointmentDate.toDate(), // Convert Firestore Timestamp to JavaScript Date
         fullName: data.applicantProfile?.fullName, // Fetch fullName from applicantProfile
-        contactNumber: data.applicantProfile?.contactNumber, // Fetch contactNumber from applicantProfile
+        phone: data.applicantProfile?.phone, // Fetch phone from applicantProfile
       });
     }
   });

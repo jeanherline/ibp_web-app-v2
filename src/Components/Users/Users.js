@@ -39,6 +39,7 @@ import {
   signOut,
   createUserWithEmailAndPassword,
 } from "firebase/auth"; // Import Firebase Auth
+import { arrayUnion, arrayRemove } from "firebase/firestore";
 
 function Users() {
   const [users, setUsers] = useState([]);
@@ -424,24 +425,36 @@ function Users() {
   const handleSave = async (user) => {
     try {
       const previousMemberType = user.member_type;
+      const previousAssociate = user.associate; // original lawyer UID
 
-      // Update the secretary
+      // Update the secretary's own profile
       await updateUser(user.uid, {
         ...user,
         member_type: selectedUser.member_type,
         associate:
-          selectedUser.member_type === "secretary"
-            ? selectedUser.associate
-            : "",
+          selectedUser.member_type === "secretary" ? selectedUser.associate : "",
       });
 
-      // If assigned as secretary and has a lawyer selected
-      if (selectedUser.member_type === "secretary" && selectedUser.associate) {
-        // 1. Update lawyer's document to link secretary
-        await updateUser(selectedUser.associate, {
-          associate: user.uid, // Lawyer's 'associate' field = secretary's UID
+      // If secretary reassigned to a new lawyer
+      if (
+        selectedUser.member_type === "secretary" &&
+        selectedUser.associate &&
+        previousAssociate &&
+        previousAssociate !== selectedUser.associate
+      ) {
+        // Remove secretary from old lawyer's associate array
+        await updateUser(previousAssociate, {
+          associate: arrayRemove(user.uid),
         });
       }
+
+      // If assigned to a new or existing lawyer, add to their associate array
+      if (selectedUser.member_type === "secretary" && selectedUser.associate) {
+        await updateUser(selectedUser.associate, {
+          associate: arrayUnion(user.uid),
+        });
+      }
+
       await refreshLawyersList();
 
       setEditingUserId(null);
@@ -451,7 +464,7 @@ function Users() {
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
 
-      // (Optional) You still have the audit logging here
+      // Fetch latest login activity for metadata
       const loginActivitySnapshot = await fs
         .collection("users")
         .doc(currentUser.uid)
@@ -494,6 +507,7 @@ function Users() {
       console.error("Failed to update user member type:", error);
     }
   };
+
 
   const handleArchive = async (user) => {
     if (userData.member_type === "admin") {
@@ -604,10 +618,10 @@ function Users() {
   const confirmArchive = async () => {
     try {
       if (selectedUser.member_type === "secretary" && selectedUser.associate) {
-        // 1. Clear the lawyer's associate field (the lawyer linked to this secretary)
         await updateUser(selectedUser.associate, {
-          associate: "",
+          associate: arrayRemove(selectedUser.uid),
         });
+
         await refreshLawyersList();
 
         // 2. Then clear the secretary's associate field too
@@ -808,12 +822,21 @@ function Users() {
     setNewUser({ ...newUser, [name]: value });
 
     if (name === "password") {
-      const passwordScore = zxcvbn(value).score;
-      setPasswordStrength(passwordScore);
-
       const score = zxcvbn(value).score;
       setPasswordStrength(score);
+
+      const strongPasswordRegex =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
+
+      if (!strongPasswordRegex.test(value)) {
+        setPasswordError(
+          "Password must be at least 8 characters and include uppercase, lowercase, number, and special character."
+        );
+      } else {
+        setPasswordError(""); // ✅ Clear error if valid
+      }
     }
+
   };
   const formatDate = (timestamp) =>
     timestamp?.seconds
@@ -870,16 +893,10 @@ function Users() {
         created_time: new Date(), // Add a timestamp if desired
       });
 
-      // ✅ If secretary, update the lawyer's document with associate field
+      // ✅ If secretary, set their associate AND update the lawyer's associate array
       if (newUser.member_type === "secretary" && newUser.assigned_lawyer) {
-        // 1. Update the lawyer's associate field to the secretary's UID
         await updateUser(newUser.assigned_lawyer, {
-          associate: uid,
-        });
-
-        // 2. Also add the lawyer's ID to the secretary's user document
-        await updateUser(uid, {
-          associate: newUser.assigned_lawyer,
+          associate: arrayUnion(uid),
         });
       }
 
@@ -1067,18 +1084,10 @@ function Users() {
                             <option
                               key={lawyer.uid}
                               value={lawyer.uid}
-                              disabled={
-                                lawyer.hasAssociate &&
-                                lawyer.uid !== selectedUser.associate
-                              }
                             >
-                              {lawyer.display_name} {lawyer.middle_name}{" "}
-                              {lawyer.last_name}
-                              {lawyer.hasAssociate &&
-                              lawyer.uid !== selectedUser.associate
-                                ? " (Already has Secretary)"
-                                : ""}
+                              {lawyer.display_name} {lawyer.middle_name} {lawyer.last_name}
                             </option>
+
                           ))}
                         </select>
                       )}
@@ -1568,15 +1577,11 @@ function Users() {
                         <option
                           key={lawyer.uid}
                           value={lawyer.uid}
-                          disabled={lawyer.hasAssociate} // ✅ disable if already has associate
                         >
-                          {lawyer.display_name} {lawyer.middle_name}{" "}
-                          {lawyer.last_name}
-                          {lawyer.hasAssociate
-                            ? " (Already has Secretary)"
-                            : ""}
+                          {lawyer.display_name} {lawyer.middle_name} {lawyer.last_name}
                         </option>
                       ))}
+
                     </select>
                   </div>
                 )}

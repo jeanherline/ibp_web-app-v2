@@ -895,7 +895,7 @@ function CalendarLawyer() {
                     <tr>
                       <th>Contact Number:</th>
                       <td>
-                        {selectedAppointment?.contactNumber || "Not Available"}
+                        {selectedAppointment?.phone || "Not Available"}
                       </td>
                     </tr>
                     <>
@@ -908,14 +908,14 @@ function CalendarLawyer() {
                       <tr>
                         <th>Gender:</th>
                         <td>
-                          {selectedAppointment?.selectedGender ||
+                          {selectedAppointment?.gender ||
                             "Not Specified"}
                         </td>
                       </tr>
                       <tr>
                         <th>Spouse Name:</th>
                         <td>
-                          {selectedAppointment.spouseName || "Not Available"}
+                          {selectedAppointment.spouse || "Not Available"}
                         </td>
                       </tr>
                       <tr>
@@ -959,7 +959,7 @@ function CalendarLawyer() {
                     <tr>
                       <th>Type of Employment:</th>
                       <td>
-                        {selectedAppointment?.kindOfEmployment ||
+                        {selectedAppointment?.employmentType ||
                           "Not Specified"}
                       </td>
                     </tr>

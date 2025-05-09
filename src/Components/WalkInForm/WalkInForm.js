@@ -79,7 +79,7 @@ const initialUserData = {
   city: "",
   phone: "",
   gender: "",
-  spouseName: "",
+  spouse: "",
   spouseOccupation: "",
   childrenNamesAges: "",
   employment: "",
@@ -212,7 +212,7 @@ function WalkInForm() {
             city: user.city || "",
             phone: user.phone || "+63",
             gender: user.gender || "",
-            spouseName: user.spouse || "",
+            spouse: user.spouse || "",
             spouseOccupation: user.spouseOccupation || "",
             childrenNamesAges: user.childrenNamesAges || "",
             employment: user.occupation || "",
@@ -301,7 +301,7 @@ function WalkInForm() {
             city: user.city || "",
             phone: user.phone || "+63",
             gender: user.gender || "",
-            spouseName: user.spouse || "",
+            spouse: user.spouse || "",
             spouseOccupation: user.spouseOccupation || "",
             childrenNamesAges: user.childrenNamesAges || "",
             employment: user.occupation || "",
@@ -556,7 +556,7 @@ function WalkInForm() {
           dob: userData.dob,
           phone: userData.phone,
           gender: userData.gender,
-          spouse: userData.spouseName,
+          spouse: userData.spouse,
           spouseOccupation: userData.spouseOccupation,
           email: email,
           city: userData.city,
@@ -565,7 +565,7 @@ function WalkInForm() {
           created_time: now,
           userQrCode: userQrCodeUrl,
           occupation: userData.occupation,
-          kindOfEmployment: userData.employmentType,
+          employmentType: userData.employmentType,
           employerName: userData.employerName,
           employerAddress: userData.employerAddress,
           monthlyIncome: userData.monthlyIncome,
@@ -877,15 +877,15 @@ function WalkInForm() {
                 </select>
               </div>
               <div className="form-group">
-                <label htmlFor="spouseName">
+                <label htmlFor="spouse">
                   Pangalan ng Asawa{" "}
                   <span className="subtitle">(Name of Spouse)</span>
                 </label>
                 <input
                   type="text"
-                  id="spouseName"
-                  name="spouseName"
-                  value={userData.spouseName}
+                  id="spouse"
+                  name="spouse"
+                  value={userData.spouse}
                   placeholder="Name of Spouse"
                   onChange={handleChange}
                   disabled={isFromAppointment || credentialsOmitted}
@@ -1728,7 +1728,7 @@ const ReviewModal = ({
               </tr>
               <tr>
                 <td>Spouse Name</td>
-                <td>{userData.spouseName || "N/A"}</td>
+                <td>{userData.spouse || "N/A"}</td>
               </tr>
               <tr>
                 <td>Spouse Occupation</td>

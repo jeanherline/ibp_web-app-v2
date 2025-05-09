@@ -47,15 +47,18 @@ select {
 table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed; /* Ensures each column has a fixed width */
+  table-layout: auto; /* Ensures each column has a fixed width */
 }
 
-th, td {
-  padding: 12px;
+th,
+td {
+  padding: 18px 12px; /* ⬅️ Increased vertical padding */
   text-align: left;
   border-bottom: 1px solid #ddd;
-  word-wrap: break-word; /* Ensures text wraps if it exceeds the column width */
-  overflow: hidden; /* Prevents content overflow */
+  word-wrap: break-word;
+  overflow: hidden;
+  vertical-align: middle;
+  font-size: 18px; /* Optional: slightly larger text */
 }
 
 th {
@@ -78,39 +81,6 @@ tr:hover {
   text-align: left;
   background-color: #f2f2f2;
   border-bottom: 2px solid #ddd;
-}
-
-/* Unique width settings for each header column */
-.table table-striped table-bordered thead th:nth-child(1) {
-  width: 5%; /* Control number column */
-}
-
-.table table-striped table-bordered thead th:nth-child(2) {
-  width: 20%; /* Full Name column */
-}
-
-.table table-striped table-bordered thead th:nth-child(3) {
-  width: 25%; /* Legal Assistance column */
-}
-
-.table table-striped table-bordered thead th:nth-child(4) {
-  width: 20%; /* Scheduled Date column */
-}
-
-.table table-striped table-bordered thead th:nth-child(5) {
-  width: 10%; /* Type column */
-}
-
-.table table-striped table-bordered thead th:nth-child(6) {
-  width: 10%; /* Status column */
-}
-
-.table table-striped table-bordered thead th:nth-child(7) {
-  width: 5%; /* Link column */
-}
-
-.table table-striped table-bordered thead th:nth-child(8) {
-  width: 15%; /* Action column */
 }
 
 /* Make rows dependent on content, not aligned */
@@ -164,7 +134,7 @@ button:disabled {
   width: 100%;
   max-width: 800px;
   margin: 20px auto;
-  font-family: 'Arial', sans-serif;
+  font-family: "Arial", sans-serif;
   font-size: 18px; /* Increased font size */
 }
 
@@ -316,12 +286,17 @@ button:disabled {
   color: #ccc;
 }
 
-.react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list {
+.react-datepicker__time-container
+  .react-datepicker__time
+  .react-datepicker__time-box
+  ul.react-datepicker__time-list {
   padding-left: 0;
   padding-right: 0;
 }
 
-.react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box.react-datepicker__time-list-item--disabled {
+.react-datepicker__time-container
+  .react-datepicker__time
+  .react-datepicker__time-box.react-datepicker__time-list-item--disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -340,7 +315,6 @@ button:disabled {
 .hidden-time {
   display: none !important; /* Hide the disabled time slots */
 }
-
 
 .fully-booked-day {
   background-color: red !important;
@@ -464,7 +438,7 @@ button:disabled {
   width: 100%;
   max-width: 1000px; /* Updated from 800px */
   margin: 20px auto;
-  font-family: 'Arial', sans-serif;
+  font-family: "Arial", sans-serif;
   font-size: 18px;
 }
 
@@ -474,7 +448,8 @@ button:disabled {
   margin-top: 30px;
 }
 
-.client-eligibility th, .client-eligibility td {
+.client-eligibility th,
+.client-eligibility td {
   padding: 12px;
   text-align: left;
   border-bottom: 1px solid #ddd;
@@ -594,12 +569,17 @@ button:disabled {
   color: #ccc;
 }
 
-.react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list {
+.react-datepicker__time-container
+  .react-datepicker__time
+  .react-datepicker__time-box
+  ul.react-datepicker__time-list {
   padding-left: 0;
   padding-right: 0;
 }
 
-.react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box.react-datepicker__time-list-item--disabled {
+.react-datepicker__time-container
+  .react-datepicker__time
+  .react-datepicker__time-box.react-datepicker__time-list-item--disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -619,7 +599,6 @@ button:disabled {
   background-color: red !important;
   pointer-events: none;
 }
-
 
 /* Modal Overlay */
 .modal-overlay {
@@ -664,7 +643,6 @@ button:disabled {
   width: auto;
   display: block;
 }
-
 
 .custom-bordered-table {
   border: 2px solid #000; /* Change the color and width as needed */
@@ -739,11 +717,14 @@ button:disabled {
     border-collapse: collapse;
   }
 
-  table, th, td {
+  table,
+  th,
+  td {
     border: 1px solid black;
   }
 
-  th, td {
+  th,
+  td {
     padding: 8px;
     text-align: left;
   }
@@ -758,7 +739,7 @@ button:disabled {
   }
 }
 
-.disabled-day{
+.disabled-day {
   background-color: rgb(157, 157, 157) !important;
   pointer-events: none;
   cursor: not-allowed;
@@ -796,3 +777,33 @@ button:disabled {
   display: block;
 }
 
+.spinner-border {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 0.2em solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-border 0.75s linear infinite;
+  vertical-align: middle;
+}
+
+.spinner {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid white;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  margin-left: 8px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

@@ -249,10 +249,17 @@ function Login() {
           {isForgotPassword ? (
             <>
               <h2>Reset Your Password</h2>
-              <p>
+              <p
+                style={{
+                  fontSize: "16px",
+                  color: "#666666",
+                  marginBottom: "16px",
+                }}
+              >
                 Enter your email address, and we'll send you a link to reset
                 your password.
               </p>
+
               {message && <p className="success">{message}</p>}
               {error && <p className="error">{error}</p>}
               <form onSubmit={handleForgotPassword}>
@@ -269,20 +276,42 @@ function Login() {
                 <button type="submit">Send Reset Link</button>
               </form>
               <br />
-              <p className="back-to-login">
+              <p
+                style={{
+                  marginTop: "20px",
+                  color: "#666666",
+                  fontSize: "16px",
+                }}
+              >
                 Remember your password?{" "}
                 <span
                   onClick={toggleForgotPassword}
-                  style={{ cursor: "pointer", color: "#407ce2" }}
+                  style={{
+                    cursor: "pointer",
+                    color: "#407ce2",
+                    textDecoration: "none",
+                  }}
                 >
                   Back to Login
                 </span>
               </p>
+
             </>
           ) : (
             <>
+
               <h2>Welcome!</h2>
-              <p>Input your login credentials to start</p>
+              <p
+                style={{
+                  fontSize: "16px",
+                  color: "#666666",
+                  marginBottom: "16px",
+                }}
+              >
+                Input your login credentials to start
+              </p>
+
+
               {error && <p className="error">{error}</p>}
               <form onSubmit={handleLogin}>
                 <label htmlFor="email">Email</label>
@@ -313,11 +342,12 @@ function Login() {
                   />
                 </div>
                 <div className="forgot-password">
+                  Having trouble signing in? <br></br>
                   <span
                     onClick={toggleForgotPassword}
                     style={{ cursor: "pointer", color: "#407ce2" }}
                   >
-                    Forgot Password?
+                    Reset my password
                   </span>
                 </div>
                 <button type="submit" disabled={loading}>
@@ -334,12 +364,26 @@ function Login() {
                   )}
                 </button>
 
-                <p className="signup-link">
+                <p
+                  style={{
+                    marginTop: "20px",
+                    color: "#666666",
+                    fontSize: "16px",
+                  }}
+                >
                   Need tech support?{" "}
-                  <a href="mailto:nubcapstone@gmail.com" target="_blank">
+                  <a
+                    href="mailto:nubcapstone@gmail.com"
+                    target="_blank"
+                    style={{
+                      color: "#407ce2",
+                      textDecoration: "none",
+                    }}
+                  >
                     Contact here
                   </a>
                 </p>
+
               </form>
             </>
           )}

@@ -90,11 +90,17 @@ function ApptsHead() {
   const [clientAttend, setClientAttend] = useState(null);
   const navigate = useNavigate();
   const auth = getAuth();
-const currentUser = auth.currentUser;
+  const currentUser = auth.currentUser;
   const [showReassignForm, setShowReassignForm] = useState(false);
   const [reassignLawyerId, setReassignLawyerId] = useState("");
   const [reassignNotes, setReassignNotes] = useState("");
   const [showEligibilityForm, setShowEligibilityForm] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const refreshAppointments = () => {
+    setCurrentPage(1);
+    setLastVisible(null);
+  };
 
   const refusedLawyers = new Set(
     (selectedAppointment?.appointmentDetails?.refusalHistory || []).map(
@@ -128,7 +134,6 @@ const currentUser = auth.currentUser;
     fetchCurrentUserData();
   }, [currentUser]);
 
-  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!user) {
@@ -159,6 +164,8 @@ const currentUser = auth.currentUser;
 
     const fetchAppointments = async () => {
       try {
+        setLoading(true);
+
         const result = await getAdminAppointments(
           filter,
           null,
@@ -169,38 +176,39 @@ const currentUser = auth.currentUser;
         );
 
         if (result && result.data && result.total !== undefined) {
-          const { data, total } = result;
+          const { data } = result;
 
-          // Sort appointments to have pending first
-          const statusPriority = {
-            refused: 0,
-            pending: 1,
-            approved: 2,
-            scheduled: 3,
-            denied: 4,
-            done: 5,
-          };
-          const sortedAppointments = data.sort((a, b) => {
+          const filteredAppointments = data.filter(
+            (appt) =>
+              appt.appointmentStatus === "pending" ||
+              appt.appointmentStatus === "approved" ||
+              appt.appointmentStatus === "denied" ||
+              appt.appointmentStatus === "refused"
+          );
+
+          const statusPriority = { pending: 0, refused: 1 };
+          const sortedAppointments = filteredAppointments.sort((a, b) => {
             return (
               (statusPriority[a.appointmentStatus] ?? 99) -
               (statusPriority[b.appointmentStatus] ?? 99)
             );
           });
 
-          // Set total pages based on sorted data and pageSize
           const paginatedAppointments = sortedAppointments.slice(
             (currentPage - 1) * pageSize,
             currentPage * pageSize
           );
 
           setAppointments(paginatedAppointments);
-          setTotalPages(Math.ceil(total / pageSize));
-          setTotalFilteredItems(total);
+          setTotalPages(Math.ceil(sortedAppointments.length / pageSize));
+          setTotalFilteredItems(sortedAppointments.length);
         } else {
           console.error("Failed to fetch valid appointments data.");
         }
       } catch (error) {
         console.error("Error fetching appointments:", error);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -242,168 +250,177 @@ const currentUser = auth.currentUser;
       return;
     }
 
-    // Get the contents of the appointment details section
-    const printContents = document.getElementById(
-      "appointment-details-section"
-    ).innerHTML;
+    const printWindow = window.open("", "", "width=900,height=1200");
 
-    // Create a temporary div to modify the contents for printing
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = printContents;
+    const images = [
+      {
+        label: "Barangay Certificate",
+        url: selectedAppointment.barangayImageUrl,
+      },
+      { label: "DSWD Certificate", url: selectedAppointment.dswdImageUrl },
+      {
+        label: "PAO Disqualification Letter",
+        url: selectedAppointment.paoImageUrl,
+      },
+      {
+        label: "Consultation Attachment",
+        url: selectedAppointment.proceedingFileUrl,
+      },
+      { label: "New Request File", url: selectedAppointment.newRequestUrl },
+    ].filter((img) => img.url);
 
-    // Remove any elements you don't want to print (with class 'no-print')
-    const noPrintSection = tempDiv.querySelectorAll(".no-print");
-    noPrintSection.forEach((section) => section.remove());
+    const qr = selectedAppointment.appointmentDetails.qrCode || "";
+    const appointmentDate = selectedAppointment.appointmentDate?.toDate
+      ? selectedAppointment.appointmentDate.toDate().toLocaleString("en-US")
+      : "N/A";
 
-    const modifiedPrintContents = tempDiv.innerHTML;
+    const dob = selectedAppointment.dob?.toDate
+      ? selectedAppointment.dob.toDate().toLocaleDateString("en-US")
+      : "N/A";
 
-    // Open a new window for printing
-    const printWindow = window.open("", "", "height=500, width=500");
-    printWindow.document.write(
-      "<html><head><title>Appointment Details</title></head><body>"
-    );
-
-    // Add modern, professional styles for printing
-    printWindow.document.write("<style>");
     printWindow.document.write(`
-      @media print {
+    <html>
+    <head>
+      <title>Appointment Summary</title>
+      <style>
         @page {
-          size: 8.5in 13in;
-          margin: 0.8in;
+          size: A4;
+          margin: 0.2in 0.3in;
         }
         body {
-          font-family: 'Arial', sans-serif;
+          font-family: Arial, sans-serif;
           font-size: 12px;
-          line-height: 1.6;
-          color: #333;
+          color: #000;
+          margin: 0;
+        }
+        .section {
+          page-break-after: always;
+          padding: 0.3in;
+        }
+        .section:last-of-type {
+          page-break-after: auto;
         }
         .header {
-          text-align: center;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           margin-bottom: 20px;
         }
-        .header h2 {
-          font-size: 18px;
-          font-weight: normal;
-          color: #333;
-          margin-bottom: 5px;
+        .header .logo {
+          width: 80px;
         }
-        .header img {
-          width: 60px;
-          display: block;
-          margin: 0 auto;
+        .header .qr {
+          width: 100px;
         }
-        .section-title {
-          font-size: 14px;
-          font-weight: bold;
-          margin-top: 30px;
-          margin-bottom: 10px;
-          color: #555;
-          border-bottom: 1px solid #ddd;
-          padding-bottom: 5px;
+        h2 {
+          text-align: center;
+          margin-top: 0;
         }
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 20px;
-          font-size: 12px;
-          color: #333;
+          margin-top: 10px;
         }
         table, th, td {
-          border: 1px solid #ddd;
+          border: 1px solid #444;
         }
         th, td {
-          padding: 10px;
+          padding: 8px;
           text-align: left;
         }
-        th {
-          background-color: #f7f7f7;
-          font-weight: normal;
-          font-size: 12px;
-          text-transform: uppercase;
-          color: #555;
+        .image-page {
+          page-break-before: always;
+          margin: 0;
+          padding: 0;
+          width: 100vw;
+          height: 100vh;
+          display: flex;
+          justify-content: center;
+          align-items: center;
         }
-        td {
-          font-size: 12px;
-          color: #333;
-        }
-        .form-label {
-          font-size: 12px;
-          font-weight: bold;
-          margin-top: 15px;
-          color: #333;
-        }
-        .form-field {
-          font-size: 12px;
-          padding: 5px 0;
-          border-bottom: 1px solid #ddd;
-          color: #555;
-        }
-        .print-image {
+        .image-page img {
           width: 100%;
-          height: auto;
-          max-height: 10in;
+          height: 100%;
           object-fit: contain;
           display: block;
-          margin-bottom: 10px;
+          margin: 0;
+          padding: 0;
         }
-        .no-print {
-          display: none;
-        }
-        /* Modern table style */
-        table thead {
-          background-color: #f9f9f9;
-        }
-        table th {
-          letter-spacing: 1px;
-        }
-        table tbody tr:nth-child(even) {
-          background-color: #f5f5f5;
-        }
-        /* Add a page break before Employment Profile section */
-        .employment-profile {
-          page-break-before: always; /* Forces a page break before this section */
-        }
-      }
-    `);
-    printWindow.document.write("</style>");
-
-    // Add the IBP logo and QR code to the print layout
-    printWindow.document.write(`
-      <div class="header">
-        <img src="${ibpLogo}" alt="IBP Logo" />
-        <h2>Integrated Bar of the Philippines - Malolos</h2>
-        ${
-          selectedAppointment.appointmentDetails.qrCode
-            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 60px; margin: 0 auto;" />`
-            : ""
-        }
+      </style>
+    </head>
+    <body>
+      <div class="section">
+        <div class="header">
+          <img src="${ibpLogo}" class="logo" alt="IBP Logo" />
+          ${
+            qr ? `<img src="${qr}" class="qr" alt="Appointment QR Code" />` : ""
+          }
+        </div>
+        <h2>Integrated Bar of the Philippines – Malolos Chapter</h2>
+        <table>
+          <tr><th>Control Number</th><td>${
+            selectedAppointment.controlNumber
+          }</td></tr>
+          <tr><th>Status</th><td>${
+            selectedAppointment.appointmentStatus
+          }</td></tr>
+          <tr><th>Type</th><td>${selectedAppointment.apptType}</td></tr>
+          <tr><th>Appointment Date</th><td>${appointmentDate}</td></tr>
+          <tr><th>Full Name</th><td>${selectedAppointment.display_name} ${
+      selectedAppointment.middle_name
+    } ${selectedAppointment.last_name}</td></tr>
+          <tr><th>Birthdate</th><td>${dob}</td></tr>
+          <tr><th>Phone</th><td>${selectedAppointment.phone}</td></tr>
+          <tr><th>Gender</th><td>${selectedAppointment.gender}</td></tr>
+          <tr><th>Address</th><td>${selectedAppointment.address}</td></tr>
+          <tr><th>Spouse</th><td>${selectedAppointment.spouse}</td></tr>
+          <tr><th>Spouse Occupation</th><td>${
+            selectedAppointment.spouseOccupation
+          }</td></tr>
+          <tr><th>Children Names and Ages</th><td>${
+            selectedAppointment.childrenNamesAges
+          }</td></tr>
+          <tr><th>Occupation</th><td>${selectedAppointment.occupation}</td></tr>
+          <tr><th>Employment Type</th><td>${
+            selectedAppointment.employmentType
+          }</td></tr>
+          <tr><th>Employer</th><td>${selectedAppointment.employerName}</td></tr>
+          <tr><th>Employer Address</th><td>${
+            selectedAppointment.employerAddress
+          }</td></tr>
+          <tr><th>Monthly Income</th><td>${
+            selectedAppointment.monthlyIncome
+          }</td></tr>
+          <tr><th>Legal Assistance Type</th><td>${
+            selectedAppointment.selectedAssistanceType
+          }</td></tr>
+          <tr><th>Problem</th><td>${selectedAppointment.problems}</td></tr>
+          <tr><th>Problem Reason</th><td>${
+            selectedAppointment.problemReason
+          }</td></tr>
+          <tr><th>Desired Solutions</th><td>${
+            selectedAppointment.desiredSolutions
+          }</td></tr>
+        </table>
       </div>
-    `);
 
-    // Insert the modified contents
-    printWindow.document.write(modifiedPrintContents);
+      ${images
+        .map(
+          (img) => `
+        <div class="image-page">
+          <img src="${img.url}" />
+        </div>`
+        )
+        .join("")}
+    </body>
+    </html>
+  `);
 
-    // Handle image printing with modern margins and scaling
-    const images = document.querySelectorAll(".img-thumbnail");
-    images.forEach((image) => {
-      if (!image.classList.contains("qr-code-image")) {
-        printWindow.document.write("<div class='page-break'></div>");
-        printWindow.document.write(
-          `<img src='${image.src}' class='print-image' />`
-        );
-      }
-    });
-
-    // Close and trigger the print dialog
-    printWindow.document.write("</body></html>");
     printWindow.document.close();
-    printWindow.focus(); // Focus the window to ensure it shows up
-    printWindow.print(); // Trigger print
-
-    // Close the print window after printing
+    printWindow.focus();
+    printWindow.print();
     printWindow.onafterprint = () => printWindow.close();
   };
-
   useEffect(() => {
     const unsubscribe = getBookedSlots((slots) => {
       setBookedSlots(slots);
@@ -537,21 +554,12 @@ const currentUser = auth.currentUser;
     );
   };
 
-  const handleNext = async () => {
-    if (currentPage < totalPages) {
-      const { data, lastDoc } = await getAdminAppointments(
-        filter,
-        lastVisible,
-        pageSize,
-        searchText,
-        natureOfLegalAssistanceFilter,
-        currentUser
-      );
-      setAppointments(data);
-      setLastVisible(lastDoc);
-      setCurrentPage((prevPage) => prevPage + 1);
-    }
-  };
+const handleNext = () => {
+  if (currentPage < totalPages) {
+    setCurrentPage((prevPage) => prevPage + 1);
+  }
+};
+
 
   const handlePrevious = async () => {
     if (currentPage > 1) {
@@ -757,6 +765,7 @@ const currentUser = auth.currentUser;
       await addDoc(collection(fs, "audit_logs"), auditLogEntry);
 
       setSnackbarMessage("Form has been successfully submitted.");
+      refreshAppointments();
       setSelectedAppointment(null);
     } catch (error) {
       console.error("Error submitting form:", error);
@@ -921,6 +930,7 @@ const currentUser = auth.currentUser;
 
       // Notify success and reset form values
       setSnackbarMessage("Remarks have been successfully submitted.");
+      refreshAppointments();
       setProceedingNotes("");
       setProceedingFile(null);
       setClientAttend(null);
@@ -1165,6 +1175,7 @@ const currentUser = auth.currentUser;
       setAppointmentType("");
 
       setSnackbarMessage("Appointment successfully scheduled.");
+      refreshAppointments();
       setShowSnackbar(true);
       setTimeout(() => {
         setShowSnackbar(false);
@@ -1361,6 +1372,7 @@ const currentUser = auth.currentUser;
       setRescheduleAppointmentType("");
 
       setSnackbarMessage("Appointment successfully rescheduled.");
+      refreshAppointments();
       setShowSnackbar(true);
       setTimeout(() => {
         setShowSnackbar(false);
@@ -1521,10 +1533,10 @@ const currentUser = auth.currentUser;
         &nbsp;&nbsp;
         <select onChange={(e) => setFilter(e.target.value)} value={filter}>
           <option value="all">All Status</option>
-          <option value="approved">Approved</option>
           <option value="pending">Pending</option>
-          <option value="refused">Refused</option>
+          <option value="approved">Approved</option>
           <option value="denied">Denied</option>
+          <option value="refused">Refused</option>
         </select>
         &nbsp;&nbsp;
         <select
@@ -1546,157 +1558,198 @@ const currentUser = auth.currentUser;
         <button onClick={resetFilters}>Reset Filters</button>
         <br />
         <p>Total Filtered Items: {totalFilteredItems}</p>
-        <table className="table table-striped table-bordered">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Control Number</th>
-              <th>Full Name</th>
-              <th>Nature of Legal Assistance Requested</th>
-              <th>Scheduled Date</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {appointments.length > 0 ? (
-              appointments.map((appointment, index) => (
-                <tr key={appointment.id}>
-                  <td>{(currentPage - 1) * pageSize + index + 1}.</td>
-                  <td>{appointment.controlNumber}</td>
-                  <td>{appointment.fullName}</td>
-                  <td>{appointment.selectedAssistanceType}</td>
-                  <td>{getFormattedDate(appointment.appointmentDate, true)}</td>
-                  <td>
-                    {capitalizeFirstLetter(
-                      appointment.appointmentDetails?.apptType || "N/A"
-                    )}
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        color:
-                          appointment.appointmentStatus === "pending"
-                            ? "blue"
-                            : "black",
-                        fontWeight:
-                          appointment.appointmentStatus === "pending"
-                            ? "bold"
-                            : "normal",
-                      }}
-                    >
-                      {capitalizeFirstLetter(appointment.appointmentStatus)}
-                    </span>
-                    {appointment.appointmentStatus === "refused" && (
-                      <div
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "20px" }}>
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        ) : (
+          <table className="table table-striped table-bordered">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Control Number</th>
+                <th>Full Name</th>
+                <th>Nature of Legal Assistance Requested</th>
+                <th>Scheduled Date</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {appointments.length > 0 ? (
+                appointments.map((appointment, index) => (
+                  <tr key={appointment.id}>
+                    <td>{(currentPage - 1) * pageSize + index + 1}.</td>
+                    <td>{appointment.controlNumber}</td>
+                    <td>{appointment.fullName}</td>
+                    <td>{appointment.selectedAssistanceType}</td>
+                    <td>
+                      {getFormattedDate(appointment.appointmentDate, true)}
+                    </td>
+                    <td>
+                      {capitalizeFirstLetter(
+                        appointment.appointmentDetails?.apptType || "N/A"
+                      )}
+                    </td>
+                    <td>
+                      <span
                         style={{
-                          fontSize: "14px",
-                          color: "red",
-                          marginTop: "4px",
+                          color:
+                            appointment.appointmentStatus === "pending"
+                              ? "blue"
+                              : "black",
+                          fontWeight:
+                            appointment.appointmentStatus === "pending"
+                              ? "bold"
+                              : "normal",
                         }}
                       >
-                        Please reassign a lawyer
-                      </div>
-                    )}
-                  </td>
+                        {capitalizeFirstLetter(appointment.appointmentStatus)}
+                      </span>
+                      {appointment.appointmentStatus === "refused" && (
+                        <div
+                          style={{
+                            fontSize: "14px",
+                            color: "red",
+                            marginTop: "4px",
+                          }}
+                        >
+                          Please reassign a lawyer
+                        </div>
+                      )}
+                    </td>
 
-                  <td>
-                    <button
-                      onClick={() => {
-                        toggleDetails(appointment);
-                        setShowEligibilityForm(false);
-                        setShowReassignForm(false);
-                      }}
-                      style={{
-                        backgroundColor: "#4267B2",
-                        color: "white",
-                        border: "none",
-                        padding: "5px 10px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faEye} />
-                    </button>
-                    &nbsp; &nbsp;
-                    {appointment.appointmentStatus === "pending" && (
-                      <>
-                        <button
-                          onClick={() => {
-                            setSelectedAppointment(appointment);
-                            setShowEligibilityForm(true);
-                            setShowReassignForm(false);
-                          }}
-                          style={{
-                            backgroundColor: "#17a2b8",
-                            color: "white",
-                            border: "none",
-                            padding: "5px 10px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faFileSignature} />
-                        </button>
-                        &nbsp; &nbsp;
-                        <button
-                          disabled
-                          style={{
-                            backgroundColor: "gray",
-                            color: "white",
-                            border: "none",
-                            padding: "5px 10px",
-                            cursor: "not-allowed",
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faUserEdit} />
-                        </button>
-                      </>
-                    )}
-                    {appointment.appointmentStatus === "refused" && (
-                      <>
-                        <button
-                          disabled
-                          style={{
-                            backgroundColor: "gray",
-                            color: "white",
-                            border: "none",
-                            padding: "5px 10px",
-                            cursor: "not-allowed",
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faFileSignature} />
-                        </button>
-                        &nbsp; &nbsp;
-                        <button
-                          onClick={() => {
-                            setSelectedAppointment(appointment);
-                            setShowReassignForm(true);
-                            setShowEligibilityForm(false);
-                          }}
-                          style={{
-                            backgroundColor: "#28a745",
-                            color: "white",
-                            border: "none",
-                            padding: "5px 10px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faUserEdit} />
-                        </button>
-                      </>
-                    )}
+                    <td>
+                      <button
+                        onClick={() => {
+                          toggleDetails(appointment);
+                          setShowEligibilityForm(false);
+                          setShowReassignForm(false);
+                        }}
+                        style={{
+                          backgroundColor: "#4267B2",
+                          color: "white",
+                          border: "none",
+                          padding: "5px 10px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faEye} />
+                      </button>
+                      &nbsp; &nbsp;
+                      {appointment.appointmentStatus === "pending" && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setSelectedAppointment(appointment);
+                              setShowEligibilityForm(true);
+                              setShowReassignForm(false);
+                            }}
+                            style={{
+                              backgroundColor: "#17a2b8",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faFileSignature} />
+                          </button>
+                          &nbsp; &nbsp;
+                          <button
+                            disabled
+                            style={{
+                              backgroundColor: "gray",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "not-allowed",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faUserEdit} />
+                          </button>
+                        </>
+                      )}
+                      {appointment.appointmentStatus === "refused" && (
+                        <>
+                          <button
+                            disabled
+                            style={{
+                              backgroundColor: "gray",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "not-allowed",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faFileSignature} />
+                          </button>
+                          &nbsp; &nbsp;
+                          <button
+                            onClick={() => {
+                              setSelectedAppointment(appointment);
+                              setShowReassignForm(true);
+                              setShowEligibilityForm(false);
+                            }}
+                            style={{
+                              backgroundColor: "#28a745",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faUserEdit} />
+                          </button>
+                        </>
+                      )}
+                      {["approved", "denied"].includes(
+                        appointment.appointmentStatus
+                      ) && (
+                        <>
+                          <button
+                            disabled
+                            style={{
+                              backgroundColor: "gray",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "not-allowed",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faFileSignature} />
+                          </button>
+                          &nbsp;&nbsp;
+                          <button
+                            disabled
+                            style={{
+                              backgroundColor: "gray",
+                              color: "white",
+                              border: "none",
+                              padding: "5px 10px",
+                              cursor: "not-allowed",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faUserEdit} />
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: "center" }}>
+                    No results found.
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="7" style={{ textAlign: "center" }}>
-                  No results found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        )}
         <Pagination>
           <Pagination.First
             onClick={handleFirst}
@@ -1770,14 +1823,19 @@ const currentUser = auth.currentUser;
                     <tbody>
                       <tr>
                         <th>Full Name:</th>
-                        <td>{selectedAppointment.fullName}</td>
+                        <td>
+                          {selectedAppointment.display_name || ""}{" "}
+                          {selectedAppointment.middle_name || ""}{" "}
+                          {selectedAppointment.last_name || ""}
+                        </td>
                       </tr>
                       <tr>
                         <th>Date of Birth:</th>
                         <td>
-                          {selectedAppointment.dob
+                          {selectedAppointment.dob &&
+                          selectedAppointment.dob.seconds
                             ? new Date(
-                                selectedAppointment.dob
+                                selectedAppointment.dob.seconds * 1000
                               ).toLocaleDateString("en-US", {
                                 year: "numeric",
                                 month: "long",
@@ -1788,10 +1846,7 @@ const currentUser = auth.currentUser;
                       </tr>
                       <tr>
                         <th>Contact Number:</th>
-                        <td>
-                          {selectedAppointment?.contactNumber ||
-                            "Not Available"}
-                        </td>
+                        <td>{selectedAppointment?.phone || "Not Available"}</td>
                       </tr>
                       <>
                         <tr>
@@ -1803,14 +1858,13 @@ const currentUser = auth.currentUser;
                         <tr>
                           <th>Gender:</th>
                           <td>
-                            {selectedAppointment?.selectedGender ||
-                              "Not Specified"}
+                            {selectedAppointment?.gender || "Not Specified"}
                           </td>
                         </tr>
                         <tr>
                           <th>Spouse Name:</th>
                           <td>
-                            {selectedAppointment.spouseName || "Not Available"}
+                            {selectedAppointment.spouse || "Not Available"}
                           </td>
                         </tr>
                         <tr>
@@ -2019,72 +2073,76 @@ const currentUser = auth.currentUser;
                         </td>
                       </tr>
                       <>
-                      {selectedAppointment.appointmentDetails?.appointmentStatus === "scheduled" && (
-  <>
-    {/* Reschedule Button */}
-    <OverlayTrigger
-      placement="top"
-      overlay={renderTooltip({ title: "Reschedule" })}
-    >
-      <button
-        onClick={() => {
-          setSelectedAppointment(selectedAppointment);
-          setShowProceedingNotesForm(false);
-          setShowRescheduleForm(true);
-          setShowScheduleForm(false);
-        }}
-        style={{
-          backgroundColor: "#ff8b61",
-          color: "white",
-          border: "none",
-          padding: "5px 10px",
-          cursor: "pointer",
-        }}
-      >
-        <FontAwesomeIcon icon={faCalendarAlt} />
-      </button>
-    </OverlayTrigger>
-    &nbsp;&nbsp;
-
-    {/* Done Button */}
-    <OverlayTrigger
-      placement="top"
-      overlay={renderTooltip({ title: "Done" })}
-    >
-      <button
-        onClick={() => {
-          setSelectedAppointment(selectedAppointment);
-          setShowProceedingNotesForm(true);
-          setShowRescheduleForm(false);
-          setShowScheduleForm(false);
-        }}
-        disabled={
-          new Date() <
-          new Date(
-            selectedAppointment.appointmentDetails.appointmentDate.toDate()
-          )
-        }
-        style={{
-          backgroundColor:
-            new Date() >=
-            new Date(selectedAppointment.appointmentDetails.appointmentDate.toDate())
-              ? "#28a745"
-              : "gray",
-          color: "white",
-          border: "none",
-          padding: "5px 10px",
-          cursor:
-            new Date() >=
-            new Date(selectedAppointment.appointmentDetails.appointmentDate.toDate())
-              ? "pointer"
-              : "not-allowed",
-        }}
-      >
-        <FontAwesomeIcon icon={faCheck} />
-      </button>
-    </OverlayTrigger>
-  </>
-)}
+                        {selectedAppointment.appointmentDetails
+                          ?.appointmentStatus === "scheduled" && (
+                          <>
+                            {/* Reschedule Button */}
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={renderTooltip({ title: "Reschedule" })}
+                            >
+                              <button
+                                onClick={() => {
+                                  setSelectedAppointment(selectedAppointment);
+                                  setShowProceedingNotesForm(false);
+                                  setShowRescheduleForm(true);
+                                  setShowScheduleForm(false);
+                                }}
+                                style={{
+                                  backgroundColor: "#ff8b61",
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 10px",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faCalendarAlt} />
+                              </button>
+                            </OverlayTrigger>
+                            &nbsp;&nbsp;
+                            {/* Done Button */}
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={renderTooltip({ title: "Done" })}
+                            >
+                              <button
+                                onClick={() => {
+                                  setSelectedAppointment(selectedAppointment);
+                                  setShowProceedingNotesForm(true);
+                                  setShowRescheduleForm(false);
+                                  setShowScheduleForm(false);
+                                }}
+                                disabled={
+                                  new Date() <
+                                  new Date(
+                                    selectedAppointment.appointmentDetails.appointmentDate.toDate()
+                                  )
+                                }
+                                style={{
+                                  backgroundColor:
+                                    new Date() >=
+                                    new Date(
+                                      selectedAppointment.appointmentDetails.appointmentDate.toDate()
+                                    )
+                                      ? "#28a745"
+                                      : "gray",
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 10px",
+                                  cursor:
+                                    new Date() >=
+                                    new Date(
+                                      selectedAppointment.appointmentDetails.appointmentDate.toDate()
+                                    )
+                                      ? "pointer"
+                                      : "not-allowed",
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faCheck} />
+                              </button>
+                            </OverlayTrigger>
+                          </>
+                        )}
 
                         {selectedAppointment.appointmentStatus === "denied" && (
                           <>
@@ -2282,7 +2340,7 @@ const currentUser = auth.currentUser;
                       <tr>
                         <th>Type of Employment:</th>
                         <td>
-                          {selectedAppointment?.kindOfEmployment ||
+                          {selectedAppointment?.employmentType ||
                             "Not Specified"}
                         </td>
                       </tr>
@@ -2512,38 +2570,49 @@ const currentUser = auth.currentUser;
           showReassignForm && (
             <div className="client-eligibility">
               <h2>Reassign Lawyer</h2>
-              {selectedAppointment?.appointmentDetails?.refusalHistory?.length > 0 && (
-  <div style={{ marginBottom: "1rem" }}>
-    <strong>Refusal History:</strong>
-    <ul style={{ marginTop: "0.5rem", paddingLeft: "1.2rem" }}>
-      {selectedAppointment.appointmentDetails.refusalHistory.map((entry, index) => {
-        const lawyer = lawyers.find((l) => l.uid === entry.lawyerUid);
-        const lawyerName = lawyer
-          ? `${lawyer.display_name} ${lawyer.middle_name} ${lawyer.last_name}`
-          : "Unknown Lawyer";
-        const timestamp = new Date(entry.timestamp.seconds * 1000).toLocaleString("en-US", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        });
+              {selectedAppointment?.appointmentDetails?.refusalHistory?.length >
+                0 && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <strong>Refusal History:</strong>
+                  <ul style={{ marginTop: "0.5rem", paddingLeft: "1.2rem" }}>
+                    {selectedAppointment.appointmentDetails.refusalHistory.map(
+                      (entry, index) => {
+                        const lawyer = lawyers.find(
+                          (l) => l.uid === entry.lawyerUid
+                        );
+                        const lawyerName = lawyer
+                          ? `${lawyer.display_name} ${lawyer.middle_name} ${lawyer.last_name}`
+                          : "Unknown Lawyer";
+                        const timestamp = new Date(
+                          entry.timestamp.seconds * 1000
+                        ).toLocaleString("en-US", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true,
+                        });
 
-        return (
-          <li key={index} style={{ marginBottom: "8px" }}>
-            <div>
-              <strong>{lawyerName}</strong>{" "}
-              <span style={{ fontStyle: "italic", color: "#555" }}>{timestamp}</span>
-            </div>
-            <div >Reason: {entry.reason}</div>
-            <br />
-          </li>
-        );
-      })}
-    </ul>
-  </div>
-)}
+                        return (
+                          <li key={index} style={{ marginBottom: "8px" }}>
+                            <div>
+                              <strong>{lawyerName}</strong>{" "}
+                              <span
+                                style={{ fontStyle: "italic", color: "#555" }}
+                              >
+                                {timestamp}
+                              </span>
+                            </div>
+                            <div>Reason: {entry.reason}</div>
+                            <br />
+                          </li>
+                        );
+                      }
+                    )}
+                  </ul>
+                </div>
+              )}
 
               <form onSubmit={handleReassignSubmit}>
                 <label>Select a new Lawyer:</label>
@@ -2597,7 +2666,8 @@ const currentUser = auth.currentUser;
             </div>
           )}
         {selectedAppointment &&
-          selectedAppointment.appointmentStatus === "pending" && (
+          selectedAppointment.appointmentStatus === "pending" &&
+          showEligibilityForm && (
             <div className="client-eligibility">
               <h2>Client's Eligibility</h2>
               <form onSubmit={handleSubmit}>
@@ -2721,7 +2791,11 @@ const currentUser = auth.currentUser;
                 </tr>
                 <tr>
                   <th>Full Name:</th>
-                  <td>{selectedAppointment.fullName}</td>
+                  <td>
+                    {selectedAppointment.display_name || ""}{" "}
+                    {selectedAppointment.middle_name || ""}{" "}
+                    {selectedAppointment.last_name || ""}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -2832,7 +2906,11 @@ const currentUser = auth.currentUser;
                 </tr>
                 <tr>
                   <th>Full Name:</th>
-                  <td>{selectedAppointment.fullName}</td>
+                  <td>
+                    {selectedAppointment.display_name || ""}{" "}
+                    {selectedAppointment.middle_name || ""}{" "}
+                    {selectedAppointment.last_name || ""}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -2898,7 +2976,11 @@ const currentUser = auth.currentUser;
                 </tr>
                 <tr>
                   <th>Full Name:</th>
-                  <td>{selectedAppointment.fullName}</td>
+                  <td>
+                    {selectedAppointment.display_name || ""}{" "}
+                    {selectedAppointment.middle_name || ""}{" "}
+                    {selectedAppointment.last_name || ""}
+                  </td>
                 </tr>
               </tbody>
             </table>
