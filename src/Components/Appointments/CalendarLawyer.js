@@ -601,7 +601,7 @@ function CalendarLawyer() {
                                   )
                                 }
                                 style={{
-                                  backgroundColor: "#28a745", // Green background for active join meeting
+                                  backgroundColor: "#28a745", // Green background for active Join
                                   color: "white",
                                   border: "none",
                                   padding: "5px 8px",
@@ -614,7 +614,7 @@ function CalendarLawyer() {
                                   icon={faVideo}
                                   style={{ marginRight: "8px" }}
                                 />
-                                Join Meeting
+                                Join
                               </button>
                             )
                           ) : (

@@ -34,7 +34,7 @@ import {
   orderBy,
   limit,
 } from "../../Config/Firebase";
-import { addDoc, getDocs, setDoc, onSnapshot } from "firebase/firestore";
+import { addDoc, getDocs, setDoc, onSnapshot, arrayUnion, arrayRemove } from "firebase/firestore";
 import {
   getAuth,
   signOut,
@@ -80,6 +80,10 @@ function Secretary() {
   const [passwordVisible, setPasswordVisible] = useState(false); // State to toggle password visibility
   const [currentUser, setCurrentUser] = useState(null);
   const [lawyersList, setLawyersList] = useState([]);
+  const totalUsers = users.length;
+  const newTotalPages = Math.ceil(totalUsers / pageSize);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
     const date = new Date(dateString);
@@ -101,62 +105,114 @@ function Secretary() {
     });
   };
   const handleNewUserSubmit = async (e) => {
+    if (isSubmitting) return; // prevent double submission
+    setIsSubmitting(true);
+
     e.preventDefault();
+
+    // Validate password strength before proceeding
+    if (passwordError) {
+      alert("Please fix password issues.");
+      return;
+    }
+
+    let userCredential = null; // Initialize userCredential
+
     try {
-      const {
-        display_name,
-        middle_name,
-        last_name,
-        dob,
-        email,
-        password,
-        city,
-        member_type,
-        assigned_lawyer,
-      } = newUser;
-
-      const auth = getAuth();
-
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
+      // Step 1: Get the current user's login activity data for metadata logging
+      const loginActivitySnapshot = await getDocs(
+        collection(fs, "users", auth.currentUser.uid, "loginActivity")
       );
 
-      const newUserId = userCredential.user.uid;
+      // Set default metadata values
+      let ipAddress = "Unknown";
+      let deviceName = "Unknown";
 
-      const userData = {
-        uid: newUserId,
-        display_name,
-        middle_name,
-        last_name,
-        dob,
-        email,
-        city,
-        member_type,
-        user_status: "active",
-        created_time: new Date(),
-      };
-
-      if (member_type === "secretary") {
-        userData.associate = assigned_lawyer || currentUser?.uid;
+      // Extract IP and device info if login activity is available
+      if (!loginActivitySnapshot.empty) {
+        const loginData = loginActivitySnapshot.docs[0].data();
+        ipAddress = loginData.ipAddress || "Unknown";
+        deviceName = loginData.deviceName || "Unknown";
       }
 
-      await setDoc(doc(fs, "users", newUserId), userData);
+      // Step 2: Create the new user in Firebase Authentication
+      userCredential = await createUserWithEmailAndPassword(
+        auth,
+        newUser.email,
+        newUser.password
+      );
+      const { uid } = userCredential.user;
 
-      setSnackbarMessage("New user account created.");
-      setShowSnackbar(true);
-      setTimeout(() => setShowSnackbar(false), 3000);
+      // Step 3: Add the new user to Firestore directly within the users collection
+      const {
+        password, // omit password from being saved
+        ...userWithoutPassword
+      } = newUser;
 
-      fetchUsers(currentPage);
-      clearForm();
+      await setDoc(doc(fs, "users", uid), {
+        ...userWithoutPassword,
+        uid,
+        user_status: "active",
+        member_type: "secretary",
+        associate: userData?.uid, // ✅ Link to current logged-in lawyer
+        created_time: new Date(),
+      });
+      await updateUser(userData?.uid, {
+        associate: arrayUnion(uid),
+      });
+
+      // ✅ If secretary, set their associate AND update the lawyer's associate array
+      await updateUser(userData?.uid, {
+        associate: arrayUnion(uid),
+      });
+
+      // Step 4: Log the creation in the audit logs
+      const auditLogEntry = {
+        actionType: "CREATE",
+        timestamp: new Date(),
+        uid: auth.currentUser.uid,
+        changes: {
+          action: "New User Created",
+          targetUserId: uid,
+          targetEmail: newUser.email,
+        },
+        affectedData: {
+          adminUserId: auth.currentUser.uid,
+          adminUserName: auth.currentUser.displayName || "Unknown",
+          newUserId: uid,
+        },
+        metadata: {
+          ipAddress,
+          userAgent: deviceName,
+        },
+      };
+
+      await addDoc(collection(fs, "audit_logs"), auditLogEntry);
+
+      // Step 5: Close modal, reset the form, and navigate back to the root URL
       setShowSignUpModal(false);
-      refreshLawyersList();
-    } catch (error) {
-      console.error("Failed to create user:", error);
-      setSnackbarMessage("Failed to create user.");
+      clearForm();
+      alert("User added successfully.");
+
+      // Optional: sign out the current user and redirect to login
+      setIsSubmitting(false);
+
+      await signOut(auth);
+      window.location.href = "/";
+
+      setSnackbarMessage("New user added successfully.");
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
+    } catch (error) {
+      setIsSubmitting(false);
+
+      console.error("Failed to add new user:", error);
+      alert("Failed to add new user: " + error.message);
+
+      // If user creation failed mid-process, delete the orphaned user from Firebase Auth
+      if (userCredential?.user) {
+        await userCredential.user.delete();
+      }
     }
   };
 
@@ -262,8 +318,10 @@ function Secretary() {
   }, []);
 
   useEffect(() => {
-    fetchUsers(1); // Fetch users when component mounts or filters change
-  }, [filterStatus, filterType, cityFilter, searchText]);
+    if (userData) {
+      fetchUsers(1);
+    }
+  }, [filterStatus, filterType, cityFilter, searchText, userData]);
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -298,37 +356,42 @@ function Secretary() {
     };
   }, []);
 
-  const fetchUsers = async (page, lastVisibleDoc = null) => {
-    try {
-      const totalUsers = await getUsersCount(
-        filterStatus,
-        filterType,
-        cityFilter,
-        searchText
-      );
-      const newTotalPages = Math.ceil(totalUsers / pageSize);
+  const fetchUsers = async (page = 1) => {
+    if (!userData) return; // Make sure userData is loaded
 
-      let { users, lastVisibleDoc: newLastVisibleDoc } = await getUsers(
+    try {
+      const { users: allUsers } = await getUsers(
         filterStatus,
-        "secretary", // Only get secretaries
+        "secretary",
         cityFilter,
         searchText,
-        lastVisibleDoc,
-        pageSize
+        null,
+        1000
       );
 
-      // Filter secretaries to only those associated with the logged-in lawyer
-      if (userData?.member_type === "lawyer") {
-        await updateUser(userData.uid, {
-          associate: selectedUser.uid,
-        });
+      let filteredUsers = allUsers;
+
+      if (userData.member_type === "lawyer") {
+        filteredUsers = allUsers.filter(
+          (user) => user.associate === userData.uid
+        );
       }
 
-      setUsers(users);
+      const totalFiltered = filteredUsers.length;
+      const newTotalPages = Math.ceil(totalFiltered / pageSize);
+
+      // ✅ Fix: Don't slice if page exceeds total
+      const currentPageValid = Math.min(page, newTotalPages || 1);
+      const startIndex = (currentPageValid - 1) * pageSize;
+      const paginatedUsers = filteredUsers.slice(
+        startIndex,
+        startIndex + pageSize
+      );
+
+      setUsers(paginatedUsers);
       setTotalPages(newTotalPages);
-      setLastVisible(newLastVisibleDoc);
-      setCurrentPage(page);
-      setTotalFilteredItems(totalUsers);
+      setCurrentPage(currentPageValid);
+      setTotalFilteredItems(totalFiltered);
     } catch (error) {
       console.error("Failed to fetch users:", error);
     }
@@ -518,9 +581,10 @@ function Secretary() {
             ? user.associate
             : userData?.uid,
       });
-  
+
       await refreshLawyersList();
-  
+      await fetchUsers(currentPage); // ✅ Add this to refresh the table
+
       setSnackbarMessage("User has been successfully activated.");
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
@@ -528,8 +592,6 @@ function Secretary() {
       console.error("Failed to activate user:", error);
     }
   };
-  
-  
 
   const handleSave = async (user) => {
     try {
@@ -549,7 +611,7 @@ function Secretary() {
       if (selectedUser.member_type === "secretary" && selectedUser.associate) {
         // 1. Update lawyer's document to link secretary
         await updateUser(selectedUser.associate, {
-          associate: user.uid, // Lawyer's 'associate' field = secretary's UID
+          associate: arrayRemove(selectedUser.uid), // remove the secretary from lawyer's array
         });
       }
       await refreshLawyersList();
@@ -606,20 +668,19 @@ function Secretary() {
   };
 
   const handleArchive = async (user) => {
-    if (userData.member_type === "lawyer") {
+    if (["admin", "lawyer"].includes(userData?.member_type)) {
       setShowArchiveModal(true);
-      setSelectedUser(user); // Set user to selectedUser for archiving
-      setShowUserDetails(false); // Hide user details when archiving
+      setSelectedUser(user);
+      setShowUserDetails(false);
 
       try {
-        // Fetch latest login activity for metadata
-        const loginActivitySnapshot = await fs
-          .collection("users")
-          .doc(currentUser.uid)
-          .collection("loginActivity")
-          .orderBy("loginTime", "desc")
-          .limit(1)
-          .get();
+        const loginActivitySnapshot = await getDocs(
+          query(
+            collection(fs, "users", currentUser.uid, "loginActivity"),
+            orderBy("loginTime", "desc"),
+            limit(1)
+          )
+        );
 
         let ipAddress = "Unknown";
         let deviceName = "Unknown";
@@ -630,7 +691,6 @@ function Secretary() {
           deviceName = loginData.deviceName || "Unknown";
         }
 
-        // Add audit log entry with "UPDATE" as the action type
         const auditLogEntry = {
           actionType: "UPDATE",
           timestamp: new Date(),
@@ -646,7 +706,7 @@ function Secretary() {
             targetUserId: user.uid,
           },
           metadata: {
-            ipAddress: ipAddress,
+            ipAddress,
             userAgent: deviceName,
           },
         };
@@ -658,11 +718,10 @@ function Secretary() {
     }
   };
 
+
+
   const handleActivate = async (user) => {
-    if (
-      userData.member_type === "admin" ||
-      (userData.member_type === "lawyer" && user.associate === userData.uid)
-    ) {
+    if (userData.member_type === "admin") {
       setShowActivateModal(true);
       setSelectedUser(user); // Set user to selectedUser for activating
       setShowUserDetails(false); // Hide user details when activating
@@ -716,29 +775,20 @@ function Secretary() {
 
   const confirmArchive = async () => {
     try {
-      if (selectedUser.member_type === "secretary" && selectedUser.associate) {
-        // 1. Clear the lawyer's associate field (the lawyer linked to this secretary)
-        await updateUser(selectedUser.associate, {
-          associate: "",
-        });
-        await refreshLawyersList();
+      const updates = {
+        user_status: "inactive",
+      };
 
-        // 2. Then clear the secretary's associate field too
-        await updateUser(selectedUser.uid, {
-          ...selectedUser,
-          associate: "",
-          user_status: "inactive", // also set user to inactive
+      await updateUser(selectedUser.uid, updates);
+
+      // Optional: remove secretary from lawyer's list, if needed
+      if (selectedUser.member_type === "secretary" && selectedUser.associate) {
+        await updateUser(selectedUser.associate, {
+          associate: arrayRemove(selectedUser.uid),
         });
-        await refreshLawyersList();
-      } else {
-        // If not secretary or no associate, just archive
-        await updateUser(selectedUser.uid, {
-          ...selectedUser,
-          user_status: "inactive",
-        });
-        await refreshLawyersList();
       }
 
+      await refreshLawyersList();
       setSelectedUser(null);
       setShowArchiveModal(false);
       fetchUsers(currentPage);
@@ -749,23 +799,23 @@ function Secretary() {
       console.error("Failed to archive user:", error);
     }
   };
+
+
   const confirmActivate = async () => {
     try {
       await updateUser(selectedUser.uid, {
         ...selectedUser,
         user_status: "active",
-        associate:
-          selectedUser.associate && selectedUser.associate !== ""
-            ? selectedUser.associate
-            : userData?.uid,
       });
 
+      if (selectedUser.member_type === "secretary" && selectedUser.associate) {
+        await updateUser(selectedUser.associate, {
+          associate: arrayUnion(selectedUser.uid),
+        });
+      }
       setSelectedUser(null);
       setShowActivateModal(false);
-
-      await fetchUsers(currentPage, lastVisible);
-      // ✅ refresh list with current filters
-
+      fetchUsers(currentPage);
       setSnackbarMessage("User has been successfully activated.");
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
@@ -1070,11 +1120,14 @@ function Secretary() {
                     <FontAwesomeIcon icon={faEye} />
                   </button>
                   &nbsp;&nbsp;
-                  {userData?.member_type === "lawyer" && (
+                  {["lawyer", "admin"].includes(userData?.member_type) && (
                     <>
                       {user.user_status === "inactive" ? (
                         <button
-                          onClick={() => confirmActivateDirect(user)}
+                          onClick={() => {
+                            setShowActivateModal(true);
+                            setSelectedUser(user);
+                          }}
                           style={{
                             backgroundColor: "#4CAF50",
                             color: "white",
@@ -1453,9 +1506,8 @@ function Secretary() {
                   <label>Assigned to Lawyer</label>
                   <input
                     className="form-control"
-                    value={`${userData?.display_name || ""} ${
-                      userData?.middle_name || ""
-                    } ${userData?.last_name || ""}`}
+                    value={`${userData?.display_name || ""} ${userData?.middle_name || ""
+                      } ${userData?.last_name || ""}`}
                     disabled
                   />
                 </div>
@@ -1472,8 +1524,12 @@ function Secretary() {
                     Cancel
                   </button>
                   &nbsp;&nbsp;
-                  <button type="submit" className="custom-confirm-button">
-                    Add User
+                  <button
+                    type="submit"
+                    className="custom-confirm-button"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Processing..." : "Add User"}
                   </button>
                 </div>
               </form>

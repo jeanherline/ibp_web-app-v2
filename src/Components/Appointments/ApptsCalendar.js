@@ -748,7 +748,7 @@ function ApptsCalendar() {
                               }}
                             >
                               <FontAwesomeIcon icon={faVideo} style={{ marginRight: "8px" }} />
-                              Join Meeting
+                              Join
                             </button>
                           )}
                         </td>

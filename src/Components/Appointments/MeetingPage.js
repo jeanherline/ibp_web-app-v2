@@ -109,7 +109,6 @@ const MeetingPage = () => {
     }
 
     const roomName = meetingData?.appointmentDetails?.controlNumber;
-    const meetingPassword = meetingData?.appointmentDetails?.meetingPass;
 
     if (!roomName || !jwtToken) {
       console.error("Room name or JWT token is missing");
@@ -141,20 +140,9 @@ const MeetingPage = () => {
     // Set the room password and enable lobby when the moderator joins
     api.addEventListener("participantRoleChanged", (event) => {
       if (event.role === "moderator") {
-        if (meetingPassword) {
-          api.executeCommand("password", meetingPassword); // Set the password from Firestore
-          console.log("Password set for the meeting:", meetingPassword);
-        } else {
-          console.log("No password available for this meeting.");
-        }
         api.executeCommand("toggleLobby", true); // This enables the lobby automatically
         console.log("Lobby has been enabled.");
       }
-    });
-
-    // Handle password-protected meeting
-    api.on("passwordRequired", () => {
-      api.executeCommand("password", meetingPassword); // Join the meeting with the password
     });
 
     // Add this event listener to handle redirection when the meeting is closed

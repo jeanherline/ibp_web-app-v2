@@ -154,14 +154,12 @@ function Appointments() {
     }
 
     let meetingLink = null;
-    let meetingPass = null;
 
     if (appointmentType === "Online") {
       const { link, password } = generateJitsiLink(
         selectedAppointment.controlNumber
       );
       meetingLink = link;
-      meetingPass = password;
     }
     const fullDate = new Date(appointmentDate);
     let h = parseInt(appointmentHour);
@@ -182,14 +180,13 @@ function Appointments() {
       "appointmentDetails.scheduleType": appointmentType,
       ...(meetingLink && {
         "appointmentDetails.meetingLink": meetingLink,
-        "appointmentDetails.meetingPass": meetingPass, // Save the password
       }),
     };
 
     try {
       await updateAppointment(selectedAppointment.id, updatedData);
 
-      const clientFullName = `${selectedAppointment.display_name} ${selectedAppointment.middle_name} ${selectedAppointment.last_name}`;
+     
       const appointmentId = selectedAppointment.id;
       const appointmentDateFormatted = getFormattedDate(appointmentDate, true);
 
@@ -200,7 +197,7 @@ function Appointments() {
       // Send notifications to the client, assigned lawyer, and head lawyer
       if (selectedAppointment.uid && selectedAppointment.controlNumber) {
         await sendNotification(
-          `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
+          `Your request (ID: ${appointmentId}) has been scheduled for an appointment.`,
           selectedAppointment.uid,
           "appointment",
           selectedAppointment.controlNumber
@@ -209,7 +206,7 @@ function Appointments() {
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
-          `You have scheduled the appointment (ID: ${appointmentId}) for ${clientFullName} in the date provided as an ${appointmentType} appointment.`,
+          `You have chosen a type of appointment for request (ID: ${appointmentId}).`,
           assignedLawyerDetails.uid,
           "appointment"
         );
@@ -219,7 +216,7 @@ function Appointments() {
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
         await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been scheduled a date and as an ${appointmentType} appointment.`,
+          `The request (ID: ${appointmentId}) has been scheduled a date for an appointment.`,
           headLawyerUid,
           "appointment"
         );
@@ -277,16 +274,11 @@ function Appointments() {
                 selectedAppointment.appointmentDetails?.meetingLink || null,
               newValue: meetingLink,
             },
-            meetingPass: {
-              oldValue:
-                selectedAppointment.appointmentDetails?.meetingPass || null,
-              newValue: meetingPass,
-            },
           }),
         },
         affectedData: {
           appointmentId: appointmentId,
-          clientFullName: clientFullName,
+          
         },
         metadata: {
           ipAddress: ipAddress,
@@ -1145,7 +1137,7 @@ function Appointments() {
         },
         affectedData: {
           appointmentId: selectedAppointment.id,
-          clientFullName: `${selectedAppointment.display_name} ${selectedAppointment.middle_name} ${selectedAppointment.last_name}`,
+          
         },
         metadata: {
           ipAddress: ipAddress,
@@ -1175,66 +1167,97 @@ function Appointments() {
       });
 
       // Send notifications based on appointment status
-      const clientFullName = `${selectedAppointment.display_name} ${selectedAppointment.middle_name} ${selectedAppointment.last_name}`;
+     
       const appointmentId = selectedAppointment.id;
       const appointmentDateFormatted = getFormattedDate(appointmentDate, true);
-      if (appointmentStatus === "done") {
-        if (selectedAppointment.uid && selectedAppointment.controlNumber) {
+      if (
+        selectedAppointment.uid &&
+        selectedAppointment.controlNumber &&
+        appointmentStatus
+      ) {
+        let clientMessage = "";
+        let lawyerMessage = "";
+        let headMessage = "";
+
+        switch (appointmentStatus) {
+          case "pending":
+            clientMessage = `Your request (ID: ${appointmentId}) is pending review.`;
+            lawyerMessage = `A new appointment (ID: ${appointmentId}) is pending.`;
+            headMessage = `New appointment (ID: ${appointmentId}) is awaiting review.`;
+            break;
+          case "approved":
+            clientMessage = `Your request (ID: ${appointmentId}) has been approved.`;
+            lawyerMessage = `An appointment (ID: ${appointmentId}) has been approved and needs lawyer assignment.`;
+            headMessage = `Appointment (ID: ${appointmentId}) has been approved.`;
+            break;
+          case "accepted":
+            clientMessage = `A lawyer has accepted your appointment (ID: ${appointmentId}).`;
+            lawyerMessage = `You accepted the appointment (ID: ${appointmentId}).`;
+            headMessage = `Appointment (ID: ${appointmentId}) has been accepted by a lawyer.`;
+            break;
+          case "denied":
+            clientMessage = `Your request (ID: ${appointmentId}) has been denied.`;
+            lawyerMessage = `An appointment (ID: ${appointmentId}) has been marked as denied.`;
+            headMessage = `Appointment (ID: ${appointmentId}) has been denied.`;
+            break;
+          case "scheduled":
+            clientMessage = `Your appointment (ID: ${appointmentId}) has been scheduled.`;
+            lawyerMessage = `You have a scheduled appointment (ID: ${appointmentId}).`;
+            headMessage = `Appointment (ID: ${appointmentId}) has been scheduled.`;
+            break;
+          case "rescheduled":
+          case "pending_reschedule":
+            clientMessage = `Your appointment (ID: ${appointmentId}) has been rescheduled.`;
+            lawyerMessage = `Appointment (ID: ${appointmentId}) has been rescheduled.`;
+            headMessage = `Appointment (ID: ${appointmentId}) has been rescheduled.`;
+            break;
+          case "missed":
+            clientMessage = `You missed your appointment (ID: ${appointmentId}). Please reschedule.`;
+            lawyerMessage = `The appointment (ID: ${appointmentId}) was marked as missed.`;
+            headMessage = `Appointment (ID: ${appointmentId}) has been marked as missed.`;
+            break;
+          case "done":
+            clientMessage = `Your appointment (ID: ${appointmentId}) has been marked as done.`;
+            lawyerMessage = `You have successfully marked the appointment (ID: ${appointmentId}) as done.`;
+            headMessage = `Appointment (ID: ${appointmentId}) has been marked as done.`;
+            break;
+          default:
+            clientMessage = `There is an update to your appointment (ID: ${appointmentId}).`;
+            lawyerMessage = `An appointment (ID: ${appointmentId}) was updated.`;
+            headMessage = `Appointment (ID: ${appointmentId}) has been updated.`;
+        }
+
+        // Send to client
+        await sendNotification(
+          clientMessage,
+          selectedAppointment.uid,
+          "appointment",
+          selectedAppointment.controlNumber
+        );
+
+        // Send to lawyer (if assigned)
+        const lawyerUid = selectedAppointment.appointmentDetails?.assignedLawyer;
+        if (lawyerUid) {
           await sendNotification(
-            `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
-            selectedAppointment.uid,
+            lawyerMessage,
+            lawyerUid,
             "appointment",
             selectedAppointment.controlNumber
           );
         }
 
-        if (assignedLawyerDetails?.uid) {
-          await sendNotification(
-            `You have successfully marked the appointment (ID: ${appointmentId}) for ${clientFullName} as done.`,
-            assignedLawyerDetails.uid,
-            "appointment",
-            selectedAppointment.controlNumber
-          );
-        }
-
+        // Send to head lawyer
         const headLawyerUid = await getHeadLawyerUid();
         if (headLawyerUid) {
           await sendNotification(
-            `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as done.`,
-            headLawyerUid,
-            "appointment",
-            selectedAppointment.controlNumber
-          );
-        }
-      } else {
-        if (selectedAppointment.uid && selectedAppointment.controlNumber) {
-          await sendNotification(
-            `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
-            selectedAppointment.uid,
-            "appointment",
-            selectedAppointment.controlNumber
-          );
-        }
-
-        if (assignedLawyerDetails?.uid) {
-          await sendNotification(
-            `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as missed.`,
-            assignedLawyerDetails.uid,
-            "appointment",
-            selectedAppointment.controlNumber
-          );
-        }
-
-        const headLawyerUid = await getHeadLawyerUid();
-        if (headLawyerUid) {
-          await sendNotification(
-            `The appointment (ID: ${appointmentId}) for ${clientFullName} has been marked as missed.`,
+            headMessage,
             headLawyerUid,
             "appointment",
             selectedAppointment.controlNumber
           );
         }
       }
+
 
       // Optionally close the form/modal after successful submission
       setShowProceedingNotesForm(false);
@@ -1258,8 +1281,6 @@ function Appointments() {
 
     let meetingLink =
       selectedAppointment.appointmentDetails?.meetingLink || null;
-    let meetingPass =
-      selectedAppointment.appointmentDetails?.meetingPass || null;
 
     if (
       !["Online", "In-person", "Face-to-Face"].includes(
@@ -1276,12 +1297,10 @@ function Appointments() {
         selectedAppointment.controlNumber
       );
       meetingLink = link;
-      meetingPass = password;
     } else if (
       ["In-person", "Face-to-Face"].includes(rescheduleAppointmentType)
     ) {
       meetingLink = null;
-      meetingPass = null;
     }
 
     const appointmentRef = doc(fs, "appointments", selectedAppointment.id);
@@ -1323,7 +1342,6 @@ function Appointments() {
         "appointmentDetails.appointmentDate": Timestamp.fromDate(fullDate),
         "appointmentDetails.scheduleType": rescheduleAppointmentType,
         "appointmentDetails.meetingLink": meetingLink,
-        "appointmentDetails.meetingPass": meetingPass,
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.rescheduleReason": rescheduleReason,
         rescheduleHistory: updatedRescheduleHistory,
@@ -1331,7 +1349,7 @@ function Appointments() {
 
       await updateDoc(appointmentRef, updatedData);
 
-      const clientFullName = `${selectedAppointment.display_name} ${selectedAppointment.middle_name} ${selectedAppointment.last_name}`;
+     
       const appointmentId = selectedAppointment.id;
       const appointmentDateFormatted = getFormattedDate(appointmentDate, true);
       const lawyerFullName = assignedLawyerDetails
@@ -1341,7 +1359,7 @@ function Appointments() {
       // Send notifications after successfully updating Firestore
       if (selectedAppointment.uid && selectedAppointment.controlNumber) {
         await sendNotification(
-          `Your appointment (ID: ${appointmentId}) has been scheduled for ${appointmentDateFormatted} as an ${appointmentType} appointment.`,
+          `Your request (ID: ${appointmentId}) has been scheduled for an appointment.`,
           selectedAppointment.uid,
           "appointment",
           selectedAppointment.controlNumber
@@ -1350,7 +1368,7 @@ function Appointments() {
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
+          `The appointment (ID: ${appointmentId}) has been rescheduled to a different time and date.`,
           assignedLawyerDetails.uid,
           "appointment",
           selectedAppointment.controlNumber
@@ -1360,7 +1378,7 @@ function Appointments() {
       const headLawyerUid = await getHeadLawyerUid();
       if (headLawyerUid) {
         await sendNotification(
-          `The appointment (ID: ${appointmentId}) for ${clientFullName} has been rescheduled to a different date and as an ${rescheduleAppointmentType} appointment.`,
+          `The appointment (ID: ${appointmentId}) has been rescheduled to a different time and date.`,
           headLawyerUid,
           "appointment",
           selectedAppointment.controlNumber
@@ -1413,12 +1431,6 @@ function Appointments() {
               newValue: meetingLink,
             }
             : null,
-          meetingPass: selectedAppointment.appointmentDetails?.meetingPass
-            ? {
-              oldValue: selectedAppointment.appointmentDetails.meetingPass,
-              newValue: meetingPass,
-            }
-            : null,
           updatedTime: selectedAppointment.appointmentDetails?.updatedTime
             ? {
               oldValue: selectedAppointment.appointmentDetails.updatedTime,
@@ -1428,7 +1440,7 @@ function Appointments() {
         },
         affectedData: {
           appointmentId: appointmentId,
-          clientFullName: clientFullName,
+          
         },
         metadata: {
           ipAddress: ipAddress,
@@ -1710,7 +1722,7 @@ function Appointments() {
                   </td>
                   {userData?.member_type !== "secretary" && (
                     <td>
-                      {appointment.appointmentDetails?.apptType === "Online" &&
+                      {appointment.appointmentDetails?.scheduleType === "Online" &&
                         appointment.appointmentDetails?.meetingLink ? (
                         <button
                           onClick={() =>
@@ -1745,7 +1757,7 @@ function Appointments() {
                             icon={faVideo}
                             style={{ marginRight: "8px" }}
                           />
-                          Join Meeting
+                          Join
                         </button>
                       ) : (
                         "N/A"
@@ -2318,7 +2330,7 @@ function Appointments() {
                                       )
                                     }
                                     style={{
-                                      backgroundColor: "#28a745", // Green background for active join meeting
+                                      backgroundColor: "#28a745", // Green background for active Join
                                       color: "white",
                                       border: "none",
                                       padding: "5px 8px",
@@ -2331,7 +2343,7 @@ function Appointments() {
                                       icon={faVideo}
                                       style={{ marginRight: "8px" }}
                                     />
-                                    Join Meeting
+                                    Join
                                   </button>
                                 )
                               ) : (

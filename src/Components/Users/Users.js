@@ -80,6 +80,7 @@ function Users() {
   const [passwordVisible, setPasswordVisible] = useState(false); // State to toggle password visibility
   const [currentUser, setCurrentUser] = useState(null);
   const [lawyersList, setLawyersList] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchLawyers = async () => {
@@ -650,6 +651,7 @@ function Users() {
       console.error("Failed to archive user:", error);
     }
   };
+
   const confirmActivate = async () => {
     try {
       await updateUser(selectedUser.uid, {
@@ -850,6 +852,9 @@ function Users() {
 
   // Updated handleNewUserSubmit function
   const handleNewUserSubmit = async (e) => {
+    if (isSubmitting) return; // Prevent multiple clicks
+    setIsSubmitting(true);
+
     e.preventDefault();
 
     // Validate password strength before proceeding
@@ -886,12 +891,15 @@ function Users() {
       const { uid } = userCredential.user;
 
       // Step 3: Add the new user to Firestore directly within the users collection
+      const { password, ...userWithoutPassword } = newUser;
+
       await setDoc(doc(fs, "users", uid), {
-        ...newUser,
+        ...userWithoutPassword,
         uid,
-        user_status: "active", // Set new user to active by default
-        created_time: new Date(), // Add a timestamp if desired
+        user_status: "active",
+        created_time: new Date(),
       });
+
 
       // ✅ If secretary, set their associate AND update the lawyer's associate array
       if (newUser.member_type === "secretary" && newUser.assigned_lawyer) {
@@ -928,7 +936,8 @@ function Users() {
       clearForm();
       alert("User added successfully.");
 
-      // Optional: sign out the current user and redirect to login
+      setIsSubmitting(false);
+
       // Optional: sign out the current user and redirect to login
       await signOut(auth);
       window.location.href = "/";
@@ -1598,9 +1607,14 @@ function Users() {
                     Cancel
                   </button>
                   &nbsp;&nbsp;
-                  <button type="submit" className="custom-confirm-button">
-                    Add User
+                  <button
+                    type="submit"
+                    className="custom-confirm-button"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Processing..." : "Add User"}
                   </button>
+
                 </div>
               </form>
             </div>

@@ -638,7 +638,6 @@ function ApptsFrontDesk() {
         "clientEligibility.denialReason": clientEligibility.denialReason,
         "clientEligibility.notes": clientEligibility.notes,
         "appointmentDetails.assignedLawyer": clientEligibility.assistingCounsel,
-        "appointmentDetails.assignedLawyerFullName": lawyerFullName,
         "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
       };
 
@@ -872,9 +871,10 @@ function ApptsFrontDesk() {
           <option value="all">All Status</option>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
+          <option value="refused">Refused</option>
           <option value="accepted">Accepted</option>
           <option value="scheduled">Scheduled</option>
-          <option value="refused">Refused</option>
+          <option value="missed">Missed</option>
           <option value="done">Done</option>
         </select>
         &nbsp;&nbsp;
@@ -1215,7 +1215,7 @@ function ApptsFrontDesk() {
                                     )
                                   }
                                   style={{
-                                    backgroundColor: "#28a745", // Green background for active join meeting
+                                    backgroundColor: "#28a745", // Green background for active Join
                                     color: "white",
                                     border: "none",
                                     padding: "5px 8px",
@@ -1228,7 +1228,7 @@ function ApptsFrontDesk() {
                                     icon={faVideo}
                                     style={{ marginRight: "8px" }}
                                   />
-                                  Join Meeting
+                                  Join
                                 </button>
                               )
                             ) : (

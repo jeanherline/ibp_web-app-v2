@@ -239,33 +239,69 @@ function Dashboard() {
         (app) => app.appointmentDetails?.assignedLawyer === currentUser?.uid
       );
 
-      const appointmentStatusData = {
-        labels: [
-          "Pending", "Approved", "Accepted", "Denied", "Scheduled", "Successful", "Missed", "Rescheduled"
-        ],
-        datasets: [
-          {
-            label: "Appointments",
-            data: [
-              lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "pending").length,
-              lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "approved").length,
-              lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "accepted").length,
-              lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "denied").length,
-              lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "scheduled").length,
-              lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "done").length,
-              lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "missed").length,
-              lawyerAppointments.filter(app => !!app.rescheduleHistory?.rescheduleDate).length,
-            ],
-            borderColor: "#8e24aa",
-            backgroundColor: "rgba(142, 36, 170, 0.1)",
-            fill: true,
-            tension: 0.3,
-          },
-        ],
-      };
+      // Compute average rating
+      const rated = lawyerAppointments.filter(app => app.rating !== undefined);
+      const totalRating = rated.reduce((sum, app) => sum + app.rating, 0);
+      const avgRating = rated.length ? (totalRating / rated.length).toFixed(2) : "0";
 
+      // Compute average time to case resolution
+      const caseResolutionTimes = lawyerAppointments
+        .filter(app =>
+          app.appointmentDetails?.appointmentStatus === "done" &&
+          app.appointmentDetails?.createdDate &&
+          app.appointmentDetails?.appointmentDate
+        )
+        .map(app => {
+          const start = app.appointmentDetails.createdDate.toDate?.() || new Date(app.appointmentDetails.createdDate);
+          const end = app.appointmentDetails.appointmentDate.toDate?.() || new Date(app.appointmentDetails.appointmentDate);
+          return (end - start) / (1000 * 60 * 60 * 24); // in days
+        });
+
+      const avgResolutionTime = caseResolutionTimes.length
+        ? (caseResolutionTimes.reduce((a, b) => a + b, 0) / caseResolutionTimes.length).toFixed(1)
+        : "0";
+
+      summaryData.push(
+        ["LAWYER DASHBOARD SUMMARY"],
+        [],
+        ["Appointments Summary"],
+        ["Metric", "Value"],
+        ["Total Appointments", lawyerAppointments.length],
+        ["Accepted Appointments", lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "accepted").length],
+        ["Refused Appointments", lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "refused").length],
+        ["Scheduled Appointments", lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "scheduled").length],
+        ["Completed Appointments", lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "done").length],
+        ["Missed Appointments", lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "missed").length],
+        ["Rescheduled Appointments", lawyerAppointments.filter(app => !!app.rescheduleHistory?.rescheduleDate).length],
+        ["Average Appointment Rating", avgRating],
+        ["Average Time to Case Resolution (days)", avgResolutionTime]
+      );
+    } else if (currentUser?.member_type === "frontdesk") {
+      const today = new Date().toDateString();
+      const todayAppointments = filteredAppointments.filter(app => {
+        const date = app.appointmentDetails?.appointmentDate?.toDate?.() || new Date(app.appointmentDetails?.appointmentDate);
+        return date?.toDateString() === today;
+      }).length;
+
+      summaryData.push(
+        ["FRONT DESK DASHBOARD SUMMARY"],
+        [],
+        ["Appointments Summary"],
+        ["Metric", "Value"],
+        ["Total Appointments", filteredAppointments.length],
+        ["Today's Appointments", todayAppointments],
+        ["Pending Appointments", filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "pending").length],
+        ["Approved Appointments", filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "approved").length],
+        ["Scheduled Appointments", filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "scheduled").length],
+        ["Missed Appointments", filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "missed").length],
+        ["Successful Appointments (Done)", filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "done").length],
+        ["Rescheduled Appointments", filteredAppointments.filter(app => !!app.rescheduleHistory?.rescheduleDate).length],
+        ["Walk-In Bookings", filteredAppointments.filter(app => app.appointmentDetails?.apptType === "Walk-in").length],
+        ["Via App Bookings", filteredAppointments.filter(app => app.appointmentDetails?.apptType === "Via App").length],
+        ["Online Appointments", filteredAppointments.filter(app => (app.appointmentDetails?.scheduleType || "").toLowerCase() === "online").length],
+        ["In-Person Appointments", filteredAppointments.filter(app => (app.appointmentDetails?.scheduleType || "").toLowerCase() === "in-person").length]
+      );
     }
-
     const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
 
     summarySheet['!cols'] = [{ wch: 30 }, { wch: 35 }];
@@ -463,7 +499,47 @@ function Dashboard() {
     return grouped;
   };
 
+  const generateDayOfWeekVolumeData = () => {
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const dayCounts = days.map((_, i) =>
+      filteredAppointments.filter(app => {
+        const date = app.appointmentDetails?.appointmentDate?.toDate?.() || new Date(app.appointmentDetails?.appointmentDate);
+        return date.getDay() === i;
+      }).length
+    );
 
+    return {
+      labels: days,
+      datasets: [{
+        label: "Appointments",
+        data: dayCounts,
+        borderColor: "#03a9f4",
+        backgroundColor: "rgba(3, 169, 244, 0.1)",
+        fill: true,
+        tension: 0.3,
+      }],
+    };
+  };
+
+  const generateNewWalkInUsersData = () => {
+    const groupedWalkIns = groupDataByTimeRange(
+      filteredAppointments.filter(app => app.appointmentDetails?.apptType === "Walk-in"),
+      (app) => app.appointmentDetails?.createdDate,
+      "day"
+    );
+
+    return {
+      labels: Object.keys(groupedWalkIns),
+      datasets: [{
+        label: "New Walk-In Registrations",
+        data: Object.values(groupedWalkIns).map(apps => apps.length),
+        borderColor: "#4caf50",
+        backgroundColor: "rgba(76, 175, 80, 0.1)",
+        fill: true,
+        tension: 0.3,
+      }],
+    };
+  };
 
   const appointmentVolumeByTimeData = {
     labels: timeSlots,
@@ -668,6 +744,9 @@ function Dashboard() {
     setAppointmentsPerLawyerData(appointmentsPerLawyer);
 
     // Lawyer Acceptance vs Refusal Rate
+    const lawyerUid = currentUser?.uid || associatedLawyerUid;
+    const lawyerAppointments = filteredAppointments.filter(app => app.appointmentDetails?.assignedLawyer === lawyerUid);
+
     const appointmentStatusBreakdownData = {
       labels: [
         "Pending", "Approved", "Accepted", "Denied", "Scheduled", "Successful", "Missed", "Rescheduled"
@@ -676,14 +755,14 @@ function Dashboard() {
         {
           label: "Appointments",
           data: [
-            filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "pending").length,
-            filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "approved").length,
-            filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "accepted").length,
-            filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "denied").length,
-            filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "scheduled").length,
-            filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "done").length,
-            filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "missed").length,
-            filteredAppointments.filter(app => !!app.rescheduleHistory?.rescheduleDate).length,
+            lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "pending").length,
+            lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "approved").length,
+            lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "accepted").length,
+            lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "denied").length,
+            lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "scheduled").length,
+            lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "done").length,
+            lawyerAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "missed").length,
+            lawyerAppointments.filter(app => !!app.rescheduleHistory?.rescheduleDate).length,
           ],
           borderColor: "#8e24aa",
           backgroundColor: "rgba(142, 36, 170, 0.1)",
@@ -694,7 +773,6 @@ function Dashboard() {
     };
     setAcceptanceVsRefusalData(appointmentStatusBreakdownData); // Reuse existing state variable
 
-    // Top Cities Needing Legal Assistance
     const topCitiesData = {
       labels: cities,
       datasets: [
@@ -702,9 +780,9 @@ function Dashboard() {
           label: "Appointments",
           data: cities.map(city =>
             filteredAppointments.filter(app =>
+              app.appointmentDetails?.assignedLawyer === lawyerUid &&
               users.find(user => user.uid === app.uid)?.city === city
             ).length
-
           ),
           borderColor: "#ff9800",
           backgroundColor: "rgba(255, 152, 0, 0.1)",
@@ -713,6 +791,7 @@ function Dashboard() {
         },
       ],
     };
+
     setTopCitiesData(topCitiesData);
 
     setLoadingUsers(false);
@@ -1173,7 +1252,7 @@ function Dashboard() {
         data: cities.map((city) => {
           const cityAppointments = appointments.filter((app) => {
             const user = users.find(
-              (user) => user.id === app.applicantProfile?.uid
+              (user) => user.id === app.uid
             );
             return (
               user &&
@@ -1345,7 +1424,6 @@ function Dashboard() {
       }
     }
 
-    // Footer Section
     yOffset += 20;
     pdf.setDrawColor(200, 200, 200);
     pdf.line(10, yOffset, 200, yOffset);
@@ -1355,6 +1433,51 @@ function Dashboard() {
     pdf.text("End of Report", 10, yOffset);
 
     pdf.save("dashboard_report.pdf");
+  };
+
+  const caseResolutionTimes = filteredAppointments
+    .filter(app =>
+      app.appointmentDetails?.appointmentStatus === "done" &&
+      app.appointmentDetails?.createdDate &&
+      app.appointmentDetails?.appointmentDate
+    )
+    .map(app => {
+      const start = app.appointmentDetails.createdDate.toDate?.() || new Date(app.appointmentDetails.createdDate);
+      const end = app.appointmentDetails.appointmentDate.toDate?.() || new Date(app.appointmentDetails.appointmentDate);
+      return (end - start) / (1000 * 60 * 60 * 24); // in days
+    });
+
+  const averageResolutionTime = caseResolutionTimes.length
+    ? (caseResolutionTimes.reduce((a, b) => a + b, 0) / caseResolutionTimes.length).toFixed(1)
+    : "0";
+
+  const weeklyResolutionTimeData = {
+    labels: Object.keys(groupedAppointments),
+    datasets: [
+      {
+        label: "Avg. Case Resolution Time (days)",
+        data: Object.values(groupedAppointments).map(apps => {
+          const durations = apps
+            .filter(app =>
+              app.appointmentDetails?.appointmentStatus === "done" &&
+              app.appointmentDetails?.createdDate &&
+              app.appointmentDetails?.appointmentDate
+            )
+            .map(app => {
+              const start = app.appointmentDetails.createdDate.toDate?.() || new Date(app.appointmentDetails.createdDate);
+              const end = app.appointmentDetails.appointmentDate.toDate?.() || new Date(app.appointmentDetails.appointmentDate);
+              return (end - start) / (1000 * 60 * 60 * 24);
+            });
+          return durations.length
+            ? (durations.reduce((a, b) => a + b, 0) / durations.length).toFixed(1)
+            : 0;
+        }),
+        borderColor: "#607d8b",
+        backgroundColor: "rgba(96, 125, 139, 0.1)",
+        fill: true,
+        tension: 0.3,
+      },
+    ],
   };
 
   return (
@@ -1682,6 +1805,76 @@ function Dashboard() {
                     </>
                   );
                 })()}
+              </>
+            )}
+            {currentUser?.member_type === "frontdesk" && (
+              <>
+                <div className="stat-card">
+                  <FaCalendarAlt className="stat-icon" />
+                  <h2>Total Appointments</h2>
+                  <p>{filteredAppointments.length}</p>
+                </div>
+                <div className="stat-card">
+                  <FaCalendarCheck className="stat-icon" />
+                  <h2>Today's Appointments</h2>
+                  <p>{
+                    filteredAppointments.filter(app => {
+                      const date = app.appointmentDetails?.appointmentDate?.toDate?.() || new Date(app.appointmentDetails?.appointmentDate);
+                      const today = new Date();
+                      return date?.toDateString() === today?.toDateString();
+                    }).length
+                  }</p>
+                </div>
+                <div className="stat-card">
+                  <FaClock className="stat-icon" />
+                  <h2>Pending Appointments</h2>
+                  <p>{filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "pending").length}</p>
+                </div>
+                <div className="stat-card">
+                  <FaCalendarCheck className="stat-icon" />
+                  <h2>Approved Appointments</h2>
+                  <p>{filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "approved").length}</p>
+                </div>
+                <div className="stat-card">
+                  <FaClock className="stat-icon" />
+                  <h2>Scheduled Appointments</h2>
+                  <p>{filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "scheduled").length}</p>
+                </div>
+                <div className="stat-card">
+                  <FaTimesCircle className="stat-icon" />
+                  <h2>Missed Appointments</h2>
+                  <p>{filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "missed").length}</p>
+                </div>
+                <div className="stat-card">
+                  <FaUserCheck className="stat-icon" />
+                  <h2>Successful Appointments</h2>
+                  <p>{filteredAppointments.filter(app => app.appointmentDetails?.appointmentStatus === "done").length}</p>
+                </div>
+                <div className="stat-card">
+                  <FaClock className="stat-icon" />
+                  <h2>Rescheduled Appointments</h2>
+                  <p>{filteredAppointments.filter(app => !!app.rescheduleHistory?.rescheduleDate).length}</p>
+                </div>
+                <div className="stat-card">
+                  <FaCalendarAlt className="stat-icon" />
+                  <h2>Walk-In Bookings</h2>
+                  <p>{filteredAppointments.filter(app => app.appointmentDetails?.apptType === "Walk-in").length}</p>
+                </div>
+                <div className="stat-card">
+                  <FaCalendarAlt className="stat-icon" />
+                  <h2>Via App Bookings</h2>
+                  <p>{filteredAppointments.filter(app => app.appointmentDetails?.apptType === "Via App").length}</p>
+                </div>
+                <div className="stat-card">
+                  <FaCalendarAlt className="stat-icon" />
+                  <h2>Online Appointments</h2>
+                  <p>{filteredAppointments.filter(app => (app.appointmentDetails?.scheduleType || "").toLowerCase() === "online").length}</p>
+                </div>
+                <div className="stat-card">
+                  <FaCalendarAlt className="stat-icon" />
+                  <h2>In-Person Appointments</h2>
+                  <p>{filteredAppointments.filter(app => (app.appointmentDetails?.scheduleType || "").toLowerCase() === "in-person").length}</p>
+                </div>
               </>
             )}
 
@@ -2041,14 +2234,121 @@ function Dashboard() {
 
                   <div className="chart-container">
                     <Line
-                      data={assignedAptPerCityChartData}
+                      data={weeklyResolutionTimeData}
                       options={{
                         ...chartOptions,
                         plugins: {
                           ...chartOptions.plugins,
                           title: {
                             display: true,
-                            text: "Top Cities of Clients Handled",
+                            text: "Average Case Resolution Time per Week",
+                          },
+                        },
+                      }}
+                    />
+
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {currentUser?.member_type === "frontdesk" && (
+            <>
+              {/* Always Show These Two */}
+              <div className="chart-container">
+                <Line
+                  data={weeklyAppointmentTypeData}
+                  options={{
+                    ...chartOptions,
+                    plugins: {
+                      ...chartOptions.plugins,
+                      title: {
+                        display: true,
+                        text: "Appointment Type: Via App vs Walk-in",
+                      },
+                    },
+                  }}
+                />
+              </div>
+
+              <div className="chart-container">
+                <Line
+                  data={weeklyScheduleTypeData}
+                  options={{
+                    ...chartOptions,
+                    plugins: {
+                      ...chartOptions.plugins,
+                      title: {
+                        display: true,
+                        text: "Schedule Type: Online vs In-Person",
+                      },
+                    },
+                  }}
+                />
+              </div>
+
+              {/* Show others only when toggled */}
+              {showAllCharts && (
+                <>
+                  <div className="chart-container">
+                    <Line
+                      data={appointmentStatusData}
+                      options={{
+                        ...chartOptions,
+                        plugins: {
+                          ...chartOptions.plugins,
+                          title: {
+                            display: true,
+                            text: "Appointment Status Breakdown",
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+
+                  <div className="chart-container">
+                    <Line
+                      data={generateDayOfWeekVolumeData()}
+                      options={{
+                        ...chartOptions,
+                        plugins: {
+                          ...chartOptions.plugins,
+                          title: {
+                            display: true,
+                            text: "Volume of Appointments by Day of Week",
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+
+                  <div className="chart-container">
+                    <Line
+                      data={appointmentVolumeByTimeData}
+                      options={{
+                        ...chartOptions,
+                        plugins: {
+                          ...chartOptions.plugins,
+                          title: {
+                            display: true,
+                            text: "Appointment Volume by Time of Day",
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+
+                  <div className="chart-container">
+                    <Line
+                      data={generateNewWalkInUsersData()}
+                      options={{
+                        ...chartOptions,
+                        plugins: {
+                          ...chartOptions.plugins,
+                          title: {
+                            display: true,
+                            text: "New Walk-In Registrations Over Time",
                           },
                         },
                       }}
@@ -2058,10 +2358,7 @@ function Dashboard() {
               )}
             </>
           )}
-
         </div>
-
-
       </div>
       <div className="right-panel">
         <div className="online-users">

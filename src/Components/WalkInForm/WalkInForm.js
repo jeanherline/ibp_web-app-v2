@@ -59,12 +59,12 @@ const generateControlNumber = () => {
   return `${now.getFullYear().toString().padStart(4, "0")}${(now.getMonth() + 1)
     .toString()
     .padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}${now
-    .getHours()
-    .toString()
-    .padStart(2, "0")}${now.getMinutes().toString().padStart(2, "0")}${now
-    .getSeconds()
-    .toString()
-    .padStart(2, "0")}`;
+      .getHours()
+      .toString()
+      .padStart(2, "0")}${now.getMinutes().toString().padStart(2, "0")}${now
+        .getSeconds()
+        .toString()
+        .padStart(2, "0")}`;
 };
 
 const defaultImageUrl =
@@ -108,6 +108,7 @@ function WalkInForm() {
   const [scannedDocuments, setScannedDocuments] = useState(
     initialScannedDocuments
   );
+  const [customAssistanceType, setCustomAssistanceType] = useState("");
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -364,10 +365,9 @@ function WalkInForm() {
             setDocValidityMessage(`
               <p>Cannot proceed. The following documents are invalid:</p>
               ${expiredFormatted}
-              ${
-                validDocs.length > 0
-                  ? `<br/><br/><p>Valid Documents:</p><strong>${validFormatted}</strong>`
-                  : ""
+              ${validDocs.length > 0
+                ? `<br/><br/><p>Valid Documents:</p><strong>${validFormatted}</strong>`
+                : ""
               }
               <br/><br/>Kindly inform the client that valid documents must be uploaded in order to proceed.
             `);
@@ -519,11 +519,10 @@ function WalkInForm() {
         // Use provided email if available, otherwise generate one
         const email = userData.generatedEmail
           ? userData.generatedEmail
-          : `${userData.display_name[0].toLowerCase()}${
-              userData.middle_name ? userData.middle_name[0].toLowerCase() : ""
-            }${userData.last_name
-              .replace(/\s+/g, "")
-              .toLowerCase()}${userData.dob.replace(/-/g, "")}@gmail.com`;
+          : `${userData.display_name[0].toLowerCase()}${userData.middle_name ? userData.middle_name[0].toLowerCase() : ""
+          }${userData.last_name
+            .replace(/\s+/g, "")
+            .toLowerCase()}${userData.dob.replace(/-/g, "")}@gmail.com`;
         const password = `${userData.last_name.replace(
           /\s+/g,
           ""
@@ -582,33 +581,32 @@ function WalkInForm() {
         await setDoc(doc(fs, "users", firebaseUid), userDataToSave);
       }
 
-      const fullName = `${userData.display_name} ${
-        userData.middle_name ? userData.middle_name + " " : ""
-      }${userData.last_name}`;
+      const fullName = `${userData.display_name} ${userData.middle_name ? userData.middle_name + " " : ""
+        }${userData.last_name}`;
 
       // Upload documents if available
       const barangayImageUrl = scannedDocuments.certificateBarangay?.startsWith(
         "data:"
       )
         ? await uploadDocument(
-            dataURItoBlob(scannedDocuments.certificateBarangay),
-            `konsulta_user_uploads/${firebaseUid}/${controlNumber}/${fullName}_${controlNumber}_barangayCertificateOfIndigency`
-          )
+          dataURItoBlob(scannedDocuments.certificateBarangay),
+          `konsulta_user_uploads/${firebaseUid}/${controlNumber}/${fullName}_${controlNumber}_barangayCertificateOfIndigency`
+        )
         : scannedDocuments.certificateBarangay || null;
 
       const dswdImageUrl = scannedDocuments.certificateDSWD?.startsWith("data:")
         ? await uploadDocument(
-            dataURItoBlob(scannedDocuments.certificateDSWD),
-            `konsulta_user_uploads/${firebaseUid}/${controlNumber}/${fullName}_${controlNumber}_dswdCertificateOfIndigency`
-          )
+          dataURItoBlob(scannedDocuments.certificateDSWD),
+          `konsulta_user_uploads/${firebaseUid}/${controlNumber}/${fullName}_${controlNumber}_dswdCertificateOfIndigency`
+        )
         : scannedDocuments.certificateDSWD || null;
 
       const paoImageUrl =
         scannedDocuments.disqualificationLetterPAO?.startsWith("data:")
           ? await uploadDocument(
-              dataURItoBlob(scannedDocuments.disqualificationLetterPAO),
-              `konsulta_user_uploads/${firebaseUid}/${controlNumber}/${fullName}_${controlNumber}_paoDisqualificationLetter`
-            )
+            dataURItoBlob(scannedDocuments.disqualificationLetterPAO),
+            `konsulta_user_uploads/${firebaseUid}/${controlNumber}/${fullName}_${controlNumber}_paoDisqualificationLetter`
+          )
           : scannedDocuments.disqualificationLetterPAO || null;
 
       // Save appointment data in Firestore
@@ -625,7 +623,11 @@ function WalkInForm() {
           desiredSolutions: userData.desiredSolutions,
           problemReason: userData.problemReason,
           problems: userData.problems,
-          selectedAssistanceType: userData.selectedAssistanceType,
+          selectedAssistanceType:
+            userData.selectedAssistanceType === "Other"
+              ? customAssistanceType
+              : userData.selectedAssistanceType,
+
         },
       };
 
@@ -1047,24 +1049,44 @@ function WalkInForm() {
                 <select
                   id="selectedAssistanceType"
                   name="selectedAssistanceType"
-                  value={userData.selectedAssistanceType} // Set value here
-                  onChange={handleChange}
+                  value={userData.selectedAssistanceType}
+                  onChange={(e) => {
+                    handleChange(e);
+                    if (e.target.value !== "Other") {
+                      setCustomAssistanceType("");
+                    }
+                  }}
                   required
                 >
-                  <option value="" disabled>
-                    Nature of Legal Assistance
-                  </option>
-                  <option value="Payong Legal (Legal Advice)">
-                    Payong Legal (Legal Advice)
-                  </option>
+                  <option value="" disabled>Nature of Legal Assistance</option>
+                  <option value="Payong Legal (Legal Advice)">Payong Legal (Legal Advice)</option>
                   <option value="Legal na Representasyon (Legal Representation)">
                     Legal na Representasyon (Legal Representation)
                   </option>
                   <option value="Pag gawa ng Legal na Dokumento (Drafting of Legal Documents)">
                     Pag gawa ng Legal na Dokumento (Drafting of Legal Documents)
                   </option>
+                  <option value="Other">Iba pa (Other)</option>
                 </select>
+
               </div>
+              {userData.selectedAssistanceType === "Other" && (
+                <div className="form-group">
+                  <label htmlFor="customAssistanceType">
+                    Tukuyin ang klase ng tulong legal (Please specify)
+                    <span style={{ color: "red", marginLeft: "5px" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="customAssistanceType"
+                    name="customAssistanceType"
+                    value={customAssistanceType}
+                    placeholder="Ilagay dito ang klase ng tulong legal"
+                    onChange={(e) => setCustomAssistanceType(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
               <div className="form-group">
                 <label htmlFor="problems">
                   Ano ang iyong problema?{" "}
@@ -1205,16 +1227,15 @@ function WalkInForm() {
                           type="text"
                           id="generatedEmail"
                           name="generatedEmail"
-                          value={`${userData.display_name[0].toLowerCase()}${
-                            userData.middle_name
-                              ? userData.middle_name[0].toLowerCase()
-                              : ""
-                          }${userData.last_name
-                            .replace(/\s+/g, "")
-                            .toLowerCase()}${userData.dob.replace(
-                            /-/g,
-                            ""
-                          )}@gmail.com`}
+                          value={`${userData.display_name[0].toLowerCase()}${userData.middle_name
+                            ? userData.middle_name[0].toLowerCase()
+                            : ""
+                            }${userData.last_name
+                              .replace(/\s+/g, "")
+                              .toLowerCase()}${userData.dob.replace(
+                                /-/g,
+                                ""
+                              )}@gmail.com`}
                           readOnly
                         />
                       </div>
