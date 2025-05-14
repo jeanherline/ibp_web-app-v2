@@ -41,6 +41,7 @@ import {
   faBan,
   faFileEdit,
   faFileSignature,
+  faUndo,
 } from "@fortawesome/free-solid-svg-icons";
 import { Tooltip, OverlayTrigger } from "react-bootstrap";
 import ibpLogo from "../../Assets/img/ibp_logo.png";
@@ -54,6 +55,11 @@ function ApptsLawyer() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [lastVisible, setLastVisible] = useState(null);
+  const predefinedOptions = [
+    "Payong Legal (Legal Advice)",
+    "Legal na Representasyon (Legal Representation)",
+    "Pag gawa ng Legal na Dokumento (Drafting of Legal Document)"
+  ];
   const pageSize = 7;
   const [clientAttend, setClientAttend] = useState(null);
   const [clientEligibility, setClientEligibility] = useState({
@@ -103,6 +109,81 @@ function ApptsLawyer() {
   const [rescheduleMinute, setRescheduleMinute] = useState("");
   const [rescheduleAmPm, setRescheduleAmPm] = useState("PM");
   const [selectedLawyerUid, setSelectedLawyerUid] = useState("");
+  const [showEditLegalAssistanceForm, setShowEditLegalAssistanceForm] = useState(false);
+  const [editedLegalAssistance, setEditedLegalAssistance] = useState("");
+  const [customAssistanceText, setCustomAssistanceText] = useState("");
+  const [isEditingLegal, setIsEditingLegal] = useState(false);
+  const [showUndoConfirmModal, setShowUndoConfirmModal] = useState(false);
+  const [undoTargetAppointment, setUndoTargetAppointment] = useState(null);
+  const undoWindowMs = 12 * 60 * 60 * 1000; // 12 hours in ms
+  const decisionTimestamp =
+    selectedAppointment?.appointmentDetails?.acceptedAt?.toDate?.() ||
+    selectedAppointment?.appointmentDetails?.refusedAt?.toDate?.();
+  const [timeLeftText, setTimeLeftText] = useState("");
+
+  useEffect(() => {
+    if (!undoTargetAppointment) {
+      setTimeLeftText("");
+      return;
+    }
+
+    const timestamp =
+      undoTargetAppointment.appointmentDetails?.acceptedAt?.toDate?.() ||
+      undoTargetAppointment.appointmentDetails?.refusedAt?.toDate?.();
+
+    if (timestamp) {
+      const now = new Date();
+      const diffMs = 12 * 60 * 60 * 1000 - (now - timestamp);
+
+      if (diffMs > 0) {
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        setTimeLeftText(`${hours} hour${hours !== 1 ? "s" : ""} and ${minutes} minute${minutes !== 1 ? "s" : ""}`);
+      } else {
+        setTimeLeftText("Undo period has expired.");
+      }
+    } else {
+      setTimeLeftText("");
+    }
+  }, [undoTargetAppointment]);
+
+  const hasExceededRescheduleLimit = (appointment, currentUser) => {
+    const history = appointment.rescheduleHistory || [];
+    return history.filter((entry) => entry.rescheduledByUid === currentUser.uid).length >= 3;
+  };
+  const [reschedulerNames, setReschedulerNames] = useState({});
+  const latestReason = selectedAppointment?.rescheduleHistory
+    ?.filter(entry => entry.rescheduleReason) // ensure it has the reason
+    ?.slice(-1)[0]?.rescheduleReason || "No reason provided";
+
+  useEffect(() => {
+    const fetchReschedulerNames = async () => {
+      const names = {};
+      for (const entry of selectedAppointment?.rescheduleHistory || []) {
+        const uid = entry.rescheduledByUid;
+        if (uid && !names[uid]) {
+          const user = await getUserById(uid);
+          if (user) {
+            names[uid] = `${user.display_name} ${user.middle_name || ""} ${user.last_name}`;
+          }
+        }
+      }
+      setReschedulerNames(names);
+    };
+
+    if (selectedAppointment?.rescheduleHistory) {
+      fetchReschedulerNames();
+    }
+  }, [selectedAppointment]);
+
+  const isWithin12Hours = (timestamp) => {
+    if (!timestamp?.toDate) return false;
+    const now = new Date();
+    const actionTime = timestamp.toDate();
+    const diffMs = now - actionTime;
+    const diffHours = diffMs / (1000 * 60 * 60);
+    return diffHours <= 12;
+  };
 
   const isToday = (timestamp) => {
     const date = timestamp?.toDate?.() || new Date(timestamp);
@@ -221,8 +302,8 @@ function ApptsLawyer() {
     };
 
     const updatedData = {
+      "updatedTime": Timestamp.fromDate(new Date()),
       "appointmentDetails.appointmentDate": Timestamp.fromDate(fullDate),
-
       "appointmentDetails.appointmentStatus": "scheduled",
       "appointmentDetails.scheduleType": appointmentType,
       ...(meetingLink && {
@@ -252,10 +333,23 @@ function ApptsLawyer() {
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
-          `You have chosen a type of appointment for request (ID: ${appointmentId}).`,
+          `You have scheduled appointment for request (ID: ${appointmentId}).`,
           assignedLawyerDetails.uid,
           "appointment"
         );
+      }
+      // Notify secretary of assigned lawyer
+      if (assignedLawyerDetails?.associate) {
+        const secretarySnapshot = await getDoc(doc(fs, "users", assignedLawyerDetails.associate));
+        if (secretarySnapshot.exists()) {
+          const secretaryUid = secretarySnapshot.id;
+          await sendNotification(
+            `A new appointment (ID: ${appointmentId}) involving your assigned lawyer has been scheduled.`,
+            secretaryUid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
       }
 
       // Notify the head lawyer
@@ -365,7 +459,6 @@ function ApptsLawyer() {
       setShowSnackbar(true);
     }
   };
-
 
   const handlePrint = () => {
     if (!selectedAppointment) {
@@ -785,18 +878,61 @@ function ApptsLawyer() {
     if (!isOpen) return null;
 
     return (
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-          <div className="image-container">
-            <img
-              src={url}
-              alt="Fullscreen Image"
-              className="fullscreen-image"
-            />
-          </div>
-          <button onClick={onClose} className="close-button">
-            &times;
+      <div
+        className="modal-overlay"
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          backgroundColor: "rgba(0, 0, 0, 0.8)",
+          zIndex: 9999, // 👈 ensure this is higher than any Bootstrap/other modals
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          className="modal-content"
+          style={{
+            position: "relative",
+            maxWidth: "90%",
+            maxHeight: "90%",
+            zIndex: 10000,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <img
+            src={url}
+            alt="Preview"
+            style={{
+              width: "100%",
+              height: "auto",
+              borderRadius: "8px",
+              boxShadow: "0 0 15px rgba(0,0,0,0.5)",
+            }}
+          />
+          <button
+            onClick={onClose}
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              background: "transparent",
+              border: "none",
+              color: "#fff",
+              fontSize: "28px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              lineHeight: 1,
+            }}
+            aria-label="Close"
+          >
+            ×
           </button>
+
         </div>
       </div>
     );
@@ -864,17 +1000,37 @@ function ApptsLawyer() {
         : "Not Available";
 
       const updatedData = {
+        "updatedTime": Timestamp.fromDate(new Date()),
         "clientEligibility.eligibility": clientEligibility.eligibility,
         "appointmentDetails.appointmentStatus":
           clientEligibility.eligibility === "yes" ? "approved" : "denied",
         "clientEligibility.denialReason": clientEligibility.denialReason,
-        "clientEligibility.notes": clientEligibility.notes,
+        "clientEligibility.notes": clientEligibility.notes?.trim()
+          ? clientEligibility.notes
+          : "All Documents Verified.",
         "appointmentDetails.assignedLawyer": clientEligibility.assistingCounsel,
-        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
+        "updatedTime": Timestamp.fromDate(new Date()),
       };
 
       await updateAppointment(selectedAppointment.id, updatedData);
 
+      // 🔔 Notify client
+      if (selectedAppointment?.uid && selectedAppointment?.controlNumber) {
+        let message = "";
+
+        if (clientEligibility.eligibility === "yes") {
+          message = `Your request (ID: ${selectedAppointment.id}) has been approved.`;
+        } else {
+          message = `Your request (ID: ${selectedAppointment.id}) has been denied.`;
+        }
+
+        await sendNotification(
+          message,
+          selectedAppointment.uid,
+          "appointment",
+          selectedAppointment.controlNumber
+        );
+      }
       // Fetch latest login activity
       const { ipAddress, deviceName } = await fetchLatestLoginActivity(
         currentUser.uid
@@ -914,7 +1070,7 @@ function ApptsLawyer() {
           updatedTime:
             selectedAppointment.updatedTime !== undefined
               ? {
-                oldValue: selectedAppointment.appointmentDetails.updatedTime,
+                oldValue: selectedAppointment.updatedTime,
                 newValue: Timestamp.fromDate(new Date()),
               }
               : null,
@@ -957,12 +1113,47 @@ function ApptsLawyer() {
   };
   const handleAccept = async () => {
     if (!selectedAppointment) return;
+
     try {
-      await updateAppointment(selectedAppointment.id, {
-        "appointmentDetails.appointmentStatus": "accepted",
+      const appointmentRef = doc(fs, "appointments", selectedAppointment.id);
+      const snapshot = await getDoc(appointmentRef);
+      const data = snapshot.data();
+      const originalHistory = data?.rescheduleHistory || [];
+
+      // 🔁 Update only the LAST entry's rescheduleStatus to "approved"
+      const updatedRescheduleHistory = originalHistory.map((entry, index) => {
+        if (index === originalHistory.length - 1) {
+          return {
+            ...entry,
+            rescheduleStatus: "approved",
+          };
+        }
+        return entry;
       });
-      setSnackbarMessage("Appointment successfully accepted!");
+
+      const updatedData = {
+        "appointmentDetails.appointmentStatus": "accepted",
+        "appointmentDetails.acceptedAt": Timestamp.fromDate(new Date()), // 👈 Add this
+        rescheduleHistory: updatedRescheduleHistory,
+        updatedTime: Timestamp.fromDate(new Date()),
+      };
+
+
+      await updateDoc(appointmentRef, updatedData);
+
+      const now = new Date();
+      const timeAccepted = now.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+
+      setSnackbarMessage(`Appointment successfully accepted at ${timeAccepted}.`);
       setShowSnackbar(true);
+      setTimeout(() => {
+        setShowSnackbar(false);
+      }, 3000); // auto-hide after 3 seconds
+      ;
       setShowAcceptRefuseModal(false);
       setSelectedAppointment(null);
       clearFormFields();
@@ -972,6 +1163,46 @@ function ApptsLawyer() {
       setShowSnackbar(true);
     }
   };
+  const handleUndoDecision = async (appointment) => {
+    if (!appointment?.id) return;
+
+    try {
+      const appointmentRef = doc(fs, "appointments", appointment.id);
+      const updatedData = {
+        "appointmentDetails.appointmentStatus": "approved",
+        "updatedTime": Timestamp.fromDate(new Date()),
+      };
+
+      // Clear acceptedAt or refusedAt
+      if (appointment.appointmentDetails?.acceptedAt) {
+        updatedData["appointmentDetails.acceptedAt"] = null;
+      }
+      if (appointment.appointmentDetails?.refusedAt) {
+        updatedData["appointmentDetails.refusedAt"] = null;
+        updatedData["appointmentDetails.refusalHistory"] = []; // 👈 Clear refusal history
+      }
+
+      await updateDoc(appointmentRef, updatedData);
+
+      setSnackbarMessage("Decision successfully undone.");
+      setShowSnackbar(true);
+      setTimeout(() => {
+        setShowSnackbar(false);
+      }, 3000);
+
+      setAppointments((prev) =>
+        prev.map((a) => (a.id === appointment.id ? { ...a, ...updatedData } : a))
+      );
+    } catch (error) {
+      console.error("Error undoing decision:", error);
+      setSnackbarMessage("Failed to undo decision.");
+      setShowSnackbar(true);
+      setTimeout(() => {
+        setShowSnackbar(false);
+      }, 3000);
+    }
+  };
+
 
   const handleRefuse = async () => {
     if (!selectedAppointment) return;
@@ -985,18 +1216,21 @@ function ApptsLawyer() {
 
       const refusalEntry = {
         reason: refuseReason,
-        lawyerUid: lawyerUid, // ✅ Save the UID, not the displayName
+        lawyerUid: lawyerUid,
         timestamp: Timestamp.fromDate(new Date()),
       };
 
       const appointmentRef = doc(fs, "appointments", selectedAppointment.id);
       const appointmentSnapshot = await getDoc(appointmentRef);
-
       const existingData = appointmentSnapshot.data();
-      const currentRefusalHistory = existingData?.refusalHistory || [];
+
+      // ✅ Moved here
+      const currentRefusalHistory = existingData?.appointmentDetails?.refusalHistory || [];
 
       const updatedData = {
+        "updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.appointmentStatus": "refused",
+        "appointmentDetails.refusedAt": Timestamp.fromDate(new Date()),
         "appointmentDetails.refusalHistory": [
           ...currentRefusalHistory,
           refusalEntry,
@@ -1007,6 +1241,7 @@ function ApptsLawyer() {
 
       setSnackbarMessage("Appointment has been refused.");
       setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 3000);
       setShowAcceptRefuseModal(false);
       setRefuseReason("");
       setSelectedAppointment(null);
@@ -1015,6 +1250,7 @@ function ApptsLawyer() {
       console.error("Error refusing appointment:", error);
       setSnackbarMessage("Error refusing appointment. Please try again.");
       setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 3000);
     }
   };
 
@@ -1061,13 +1297,14 @@ function ApptsLawyer() {
 
       // Update appointment data in Firestore
       const updatedData = {
+        "updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.proceedingNotes": proceedingNotes,
         "appointmentDetails.ibpParalegalStaff":
           clientEligibility.ibpParalegalStaff,
         "appointmentDetails.assistingCounsel":
           clientEligibility.assistingCounsel,
         "appointmentDetails.appointmentStatus": appointmentStatus,
-        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
+        "updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
         "appointmentDetails.proceedingFileUrl": fileUrl,
       };
@@ -1146,7 +1383,7 @@ function ApptsLawyer() {
             : null,
           updatedTime: selectedAppointment.updatedTime
             ? {
-              oldValue: selectedAppointment.appointmentDetails.updatedTime,
+              oldValue: selectedAppointment.updatedTime,
               newValue: Timestamp.fromDate(new Date()),
             }
             : null,
@@ -1297,20 +1534,14 @@ function ApptsLawyer() {
 
     let meetingLink = selectedAppointment.meetingLink || null;
 
-    if (
-      !["Online", "In-person", "Face-to-Face"].includes(
-        rescheduleAppointmentType
-      )
-    ) {
+    if (!["Online", "In-person", "Face-to-Face"].includes(rescheduleAppointmentType)) {
       setSnackbarMessage("Invalid appointment type selected.");
       setShowSnackbar(true);
       return;
     }
 
     if (rescheduleAppointmentType === "Online") {
-      const { link, password } = generateJitsiLink(
-        selectedAppointment.controlNumber
-      );
+      const { link } = generateJitsiLink(selectedAppointment.controlNumber);
       meetingLink = link;
     } else {
       meetingLink = null;
@@ -1320,17 +1551,51 @@ function ApptsLawyer() {
     const appointmentSnapshot = await getDoc(appointmentRef);
     const appointmentData = appointmentSnapshot.data();
 
-    const rescheduleEntry = {
-      rescheduleDate: selectedAppointment.appointmentDetails.appointmentDate,
-      rescheduleAppointmentType:
-        selectedAppointment.appointmentDetails.apptType,
-      rescheduleReason: rescheduleReason,
-      rescheduleTimestamp: Timestamp.fromDate(new Date()),
-    };
+    const userRescheduleCount = appointmentData.rescheduleHistory
+      ? appointmentData.rescheduleHistory.filter((entry) => entry.rescheduledByUid === currentUser.uid).length
+      : 0;
 
-    const updatedRescheduleHistory = appointmentData.rescheduleHistory
-      ? [...appointmentData.rescheduleHistory, rescheduleEntry]
-      : [rescheduleEntry];
+    if (userRescheduleCount >= 3) {
+      setSnackbarMessage("You can only reschedule this appointment a maximum of 3 times.");
+      setShowSnackbar(true);
+      return;
+    }
+
+    let updatedRescheduleHistory = [];
+
+    const originalHistory = appointmentData.rescheduleHistory || [];
+
+    if (
+      appointmentData.appointmentDetails?.appointmentStatus === "pending_reschedule" &&
+      originalHistory.length > 0
+    ) {
+      // Create a new array with the last entry modified
+      updatedRescheduleHistory = originalHistory.map((entry, index) => {
+        if (index === originalHistory.length - 1) {
+          return {
+            ...entry,
+            rescheduleStatus: "approved", // ✅ Overwrite
+          };
+        }
+        return entry;
+      });
+    } else {
+      // Add new entry
+      const newEntry = {
+        rescheduleDate: Timestamp.fromDate(fullDate),
+        rescheduleAppointmentType: rescheduleAppointmentType,
+        rescheduleTimestamp: Timestamp.fromDate(new Date()),
+        rescheduledByUid: currentUser.uid,
+        rescheduleStatus: "approved",
+      };
+
+      if (selectedAppointment?.appointmentDetails?.appointmentStatus !== "pending_reschedule") {
+        newEntry.rescheduleReason = rescheduleReason;
+      }
+
+      updatedRescheduleHistory = [...originalHistory, newEntry];
+    }
+
 
     if (!rescheduleHour || !rescheduleMinute) {
       setSnackbarMessage("Please select hour and minute.");
@@ -1344,14 +1609,9 @@ function ApptsLawyer() {
     if (rescheduleAmPm === "AM" && h === 12) h = 0;
     fullDate.setHours(h, parseInt(rescheduleMinute), 0, 0);
 
-    const isSlotTakenForLawyer = async (
-      date,
-      lawyerUid,
-      currentAppointmentId
-    ) => {
-      const start = Timestamp.fromDate(
-        new Date(date.getTime() - 30 * 60 * 1000)
-      );
+    // Slot conflict check
+    const isSlotTakenForLawyer = async (date, lawyerUid, currentAppointmentId) => {
+      const start = Timestamp.fromDate(new Date(date.getTime() - 30 * 60 * 1000));
       const end = Timestamp.fromDate(new Date(date.getTime() + 30 * 60 * 1000));
 
       const q = query(
@@ -1372,19 +1632,17 @@ function ApptsLawyer() {
     );
 
     if (slotTaken) {
-      setSnackbarMessage(
-        "The selected schedule is already taken. Please choose a different time."
-      );
+      setSnackbarMessage("That time is already taken for this lawyer.");
       setShowSnackbar(true);
       return;
     }
 
     try {
       const updatedData = {
+        updatedTime: Timestamp.fromDate(new Date()),
         "appointmentDetails.appointmentDate": Timestamp.fromDate(fullDate),
         "appointmentDetails.scheduleType": rescheduleAppointmentType,
         "appointmentDetails.meetingLink": meetingLink,
-        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.rescheduleReason": rescheduleReason,
         rescheduleHistory: updatedRescheduleHistory,
       };
@@ -1392,8 +1650,8 @@ function ApptsLawyer() {
       await updateDoc(appointmentRef, updatedData);
 
       const appointmentId = selectedAppointment.id;
-      const appointmentDateFormatted = getFormattedDate(fullDate, true);
 
+      // Notifications
       try {
         if (selectedAppointment.uid && selectedAppointment.controlNumber) {
           await sendNotification(
@@ -1411,6 +1669,19 @@ function ApptsLawyer() {
             "appointment",
             selectedAppointment.controlNumber
           );
+        }
+        // Notify secretary of assigned lawyer
+        if (assignedLawyerDetails?.associate) {
+          const secretarySnapshot = await getDoc(doc(fs, "users", assignedLawyerDetails.associate));
+          if (secretarySnapshot.exists()) {
+            const secretaryUid = secretarySnapshot.id;
+            await sendNotification(
+              `The appointment (ID: ${appointmentId}) involving your assigned lawyer has been rescheduled.`,
+              secretaryUid,
+              "appointment",
+              selectedAppointment.controlNumber
+            );
+          }
         }
 
         const headLawyerUid = await getHeadLawyerUid();
@@ -1431,9 +1702,7 @@ function ApptsLawyer() {
 
       setAppointments((prevAppointments) =>
         prevAppointments.map((appt) =>
-          appt.id === selectedAppointment.id
-            ? { ...appt, ...updatedData }
-            : appt
+          appt.id === selectedAppointment.id ? { ...appt, ...updatedData } : appt
         )
       );
 
@@ -1453,6 +1722,8 @@ function ApptsLawyer() {
       setShowSnackbar(true);
     }
   };
+
+
 
   const clearFormFields = () => {
     setAppointmentDate(null);
@@ -1644,15 +1915,12 @@ function ApptsLawyer() {
           value={natureOfLegalAssistanceFilter}
         >
           <option value="all">Nature of Legal Assistance</option>
-          <option value="Payong Legal (Legal Advice)">
-            Payong Legal (Legal Advice)
-          </option>
-          <option value="Legal na Representasyon (Legal Representation)">
-            Legal na Representasyon (Legal Representation)
-          </option>
-          <option value="Pag gawa ng Legal na Dokumento (Drafting of Legal Document)">
-            Pag gawa ng Legal na Dokumento (Drafting of Legal Document)
-          </option>
+          {predefinedOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+          <option value="Others">Others</option>
         </select>
         &nbsp;&nbsp;
         <button onClick={resetFilters}>Reset Filters</button>
@@ -1755,6 +2023,7 @@ function ApptsLawyer() {
                             <FontAwesomeIcon icon={faVideo} style={{ marginRight: "8px" }} />
                             Join
                           </button>
+
                         ) : (
                           "N/A"
                         )}
@@ -1768,10 +2037,13 @@ function ApptsLawyer() {
                       >
                         <button
                           onClick={() => {
+                            setShowEditLegalAssistanceForm(false);
+
                             setSelectedAppointment(appointment);
                             setSelectedLawyerUid(
                               appointment.appointmentDetails?.assignedLawyer || ""
                             );
+                            setShowEditLegalAssistanceForm(false);
 
                             setShowScheduleForm(false);
                             setShowRescheduleForm(false);
@@ -1782,11 +2054,30 @@ function ApptsLawyer() {
                             backgroundColor: "#4267B2",
                             color: "white",
                             border: "none",
-                            padding: "5px 10px",
+                            padding: "5px 9px",
                             cursor: "pointer",
                           }}
                         >
                           <FontAwesomeIcon icon={faEye} />
+                        </button>
+                      </OverlayTrigger>
+                      &nbsp; &nbsp;
+                      <OverlayTrigger placement="top" overlay={renderTooltip({ title: "Edit Legal Assistance" })}>
+                        <button
+                          onClick={() => {
+                            setSelectedAppointment(appointment);
+                            setEditedLegalAssistance(appointment.selectedAssistanceType || "");
+                            setShowEditLegalAssistanceForm(true);
+                          }}
+                          style={{
+                            backgroundColor: "#FFA500",
+                            color: "white",
+                            border: "none",
+                            padding: "5px 9px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faFileSignature} />
                         </button>
                       </OverlayTrigger>
                       &nbsp; &nbsp;
@@ -1803,6 +2094,7 @@ function ApptsLawyer() {
                                 setSelectedLawyerUid(
                                   appointment.appointmentDetails?.assignedLawyer || ""
                                 );
+                                setShowEditLegalAssistanceForm(false);
                                 setShowAcceptRefuseModal(true);
                                 setActionType("accept");
                               }}
@@ -1810,7 +2102,7 @@ function ApptsLawyer() {
                                 backgroundColor: "#1f5954",
                                 color: "white",
                                 border: "none",
-                                padding: "5px 9px",
+                                padding: "5px 7px",
                                 cursor: "pointer",
                               }}
                             >
@@ -1818,7 +2110,7 @@ function ApptsLawyer() {
                             </button>
                           </OverlayTrigger>
 
-                          &nbsp;&nbsp;
+                          &nbsp; &nbsp;
 
                           {/* Done Button (Disabled by default like others) */}
                           <OverlayTrigger
@@ -1831,7 +2123,7 @@ function ApptsLawyer() {
                                 backgroundColor: "gray",
                                 color: "white",
                                 border: "none",
-                                padding: "5px 10px",
+                                padding: "5px 9px",
                                 cursor: "not-allowed",
                               }}
                             >
@@ -1841,106 +2133,162 @@ function ApptsLawyer() {
                         </>
                       )}
 
-                      {appointment.appointmentStatus === "refused" && (
-                        <>
-                          {/* Accept/Refuse button */}
-                          <OverlayTrigger
-                            placement="top"
-                            overlay={renderTooltip({ title: "Accept/Refuse" })}
-                          >
-                            <button
-                              disabled
-                              onClick={() => {
-                                setSelectedAppointment(appointment);
-                                setSelectedLawyerUid(
-                                  appointment.appointmentDetails
-                                    ?.assignedLawyer || ""
-                                );
+                      {appointment.appointmentStatus === "refused" && (() => {
+                        const refusedAt = appointment.appointmentDetails?.refusedAt;
+                        const canUndoRefuse = isWithin12Hours(refusedAt);
 
-                                setShowAcceptRefuseModal(true);
-                                setActionType("accept");
-                              }}
-                              style={{
-                                backgroundColor: "gray",
-                                color: "white",
-                                border: "none",
-                                padding: "5px 10px",
-                                cursor: "not-allowed",
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faFileEdit} />
-                            </button>
-                          </OverlayTrigger>
-                          &nbsp; &nbsp;
-                          {/* Done (Disabled) */}
-                          <OverlayTrigger
-                            placement="top"
-                            overlay={renderTooltip({ title: "Done" })}
-                          >
-                            <button
-                              disabled
-                              style={{
-                                backgroundColor: "gray",
-                                color: "white",
-                                border: "none",
-                                padding: "5px 10px",
-                                cursor: "not-allowed",
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faCheck} />
-                            </button>
-                          </OverlayTrigger>
-                        </>
-                      )}
-                      {appointment.appointmentStatus === "accepted" && (
-                        <>
-                          <OverlayTrigger
-                            placement="top"
-                            overlay={renderTooltip({ title: "Schedule" })}
-                          >
-                            <button
-                              onClick={() => {
-                                setSelectedAppointment(appointment);
-                                setSelectedLawyerUid(
-                                  appointment.appointmentDetails
-                                    ?.assignedLawyer || ""
-                                );
+                        return (
+                          <>
+                            {canUndoRefuse ? (
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={renderTooltip({ title: "Undo Refuse" })}
+                              >
+                                <button
+                                  onClick={() => {
+                                    setUndoTargetAppointment(appointment);
+                                    setShowUndoConfirmModal(true);
+                                  }}
+                                  style={{
+                                    backgroundColor: "#dc3545",
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 9px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={faUndo} />
+                                </button>
+                              </OverlayTrigger>
+                            ) : (
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={renderTooltip({
+                                  title: "Undo period has expired. You can no longer change your decision.",
+                                })}
+                              >
+                                <span>
+                                  <button
+                                    disabled
+                                    style={{
+                                      backgroundColor: "gray",
+                                      color: "white",
+                                      border: "none",
+                                      padding: "5px 9px",
+                                      cursor: "not-allowed",
+                                    }}
+                                  >
+                                    <FontAwesomeIcon icon={faUndo} />
+                                  </button>
+                                </span>
+                              </OverlayTrigger>
+                            )}
 
-                                setShowProceedingNotesForm(false);
-                                setShowRescheduleForm(false);
-                                setShowScheduleForm(true);
-                              }}
-                              style={{
-                                backgroundColor: "#28a745",
-                                color: "white",
-                                border: "none",
-                                padding: "5px 10px",
-                                cursor: "pointer",
-                              }}
+                            &nbsp;&nbsp;
+
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={renderTooltip({ title: "Done" })}
                             >
-                              <FontAwesomeIcon icon={faCalendarAlt} />
-                            </button>
-                          </OverlayTrigger>
-                          &nbsp; &nbsp;
-                          <OverlayTrigger
-                            placement="top"
-                            overlay={renderTooltip({ title: "Done" })}
-                          >
-                            <button
-                              disabled
-                              style={{
-                                backgroundColor: "gray",
-                                color: "white",
-                                border: "none",
-                                padding: "5px 10px",
-                                cursor: "not-allowed",
-                              }}
+                              <button
+                                disabled
+                                style={{
+                                  backgroundColor: "gray",
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 9px",
+                                  cursor: "not-allowed",
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faCheck} />
+                              </button>
+                            </OverlayTrigger>
+                          </>
+                        );
+                      })()}
+
+                      {appointment.appointmentStatus === "accepted" && (() => {
+                        const acceptedAt = appointment.appointmentDetails?.acceptedAt;
+                        const canUndoAccept = isWithin12Hours(acceptedAt);
+
+                        return (
+                          <>
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={renderTooltip({ title: "Schedule" })}
                             >
-                              <FontAwesomeIcon icon={faCheck} />
-                            </button>
-                          </OverlayTrigger>
-                        </>
-                      )}
+                              <button
+                                onClick={() => {
+                                  setSelectedAppointment(appointment);
+                                  setSelectedLawyerUid(
+                                    appointment.appointmentDetails?.assignedLawyer || ""
+                                  );
+                                  setShowEditLegalAssistanceForm(false);
+                                  setShowProceedingNotesForm(false);
+                                  setShowRescheduleForm(false);
+                                  setShowScheduleForm(true);
+                                }}
+                                style={{
+                                  backgroundColor: "#28a745",
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 9px",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faCalendarAlt} />
+                              </button>
+                            </OverlayTrigger>
+                            &nbsp; &nbsp;
+
+                            {canUndoAccept ? (
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={renderTooltip({ title: "Undo Accept" })}
+                              >
+                                <button
+                                  onClick={() => {
+                                    setUndoTargetAppointment(appointment);
+                                    setShowUndoConfirmModal(true);
+                                  }}
+                                  style={{
+                                    backgroundColor: "#dc3545",
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 9px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={faUndo} />
+                                </button>
+                              </OverlayTrigger>
+                            ) : (
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={renderTooltip({
+                                  title: "Undo period has expired. You can no longer change your decision.",
+                                })}
+                              >
+                                <span>
+                                  <button
+                                    disabled
+                                    style={{
+                                      backgroundColor: "gray",
+                                      color: "white",
+                                      border: "none",
+                                      padding: "5px 9px",
+                                      cursor: "not-allowed",
+                                    }}
+                                  >
+                                    <FontAwesomeIcon icon={faUndo} />
+                                  </button>
+                                </span>
+                              </OverlayTrigger>
+                            )}
+                          </>
+                        );
+                      })()}
+
                       {appointment.appointmentStatus === "scheduled" && (
                         <>
                           <OverlayTrigger
@@ -1949,25 +2297,27 @@ function ApptsLawyer() {
                           >
                             <button
                               onClick={() => {
+                                setShowEditLegalAssistanceForm(false);
+
                                 setSelectedAppointment(appointment);
-                                setSelectedLawyerUid(
-                                  appointment.appointmentDetails?.assignedLawyer || ""
-                                );
+                                setSelectedLawyerUid(appointment.appointmentDetails?.assignedLawyer || "");
                                 setShowProceedingNotesForm(false);
                                 setShowRescheduleForm(true);
                                 setShowScheduleForm(false);
                               }}
+                              disabled={hasExceededRescheduleLimit(appointment, currentUser)}
                               style={{
-                                backgroundColor: "#ff8b61",
+                                backgroundColor: hasExceededRescheduleLimit(appointment, currentUser) ? "gray" : "#ff8b61",
                                 color: "white",
                                 border: "none",
-                                padding: "5px 10px",
-                                cursor: "pointer",
+                                padding: "5px 9px",
+                                cursor: hasExceededRescheduleLimit(appointment, currentUser) ? "not-allowed" : "pointer",
                               }}
                             >
                               <FontAwesomeIcon icon={faCalendarAlt} />
                             </button>
                           </OverlayTrigger>
+
                           &nbsp; &nbsp;
                           <OverlayTrigger
                             placement="top"
@@ -1983,6 +2333,7 @@ function ApptsLawyer() {
                                   appointment.clientAttend !== "no";
 
                                 if (!canProceed) return;
+                                setShowEditLegalAssistanceForm(false);
 
                                 setSelectedAppointment(appointment);
                                 setSelectedLawyerUid(
@@ -2016,7 +2367,7 @@ function ApptsLawyer() {
                                 })(),
                                 color: "white",
                                 border: "none",
-                                padding: "5px 10px",
+                                padding: "5px 9px",
                                 cursor: (() => {
                                   const now = new Date();
                                   const scheduledDate = appointment.appointmentDate?.toDate?.() || new Date(appointment.appointmentDate);
@@ -2045,7 +2396,7 @@ function ApptsLawyer() {
                                 backgroundColor: "gray",
                                 color: "white",
                                 border: "none",
-                                padding: "5px 10px",
+                                padding: "5px 9px",
                                 cursor: "not-allowed",
                               }}
                             >
@@ -2063,7 +2414,7 @@ function ApptsLawyer() {
                                 backgroundColor: "gray",
                                 color: "white",
                                 border: "none",
-                                padding: "5px 10px",
+                                padding: "5px 9px",
                                 cursor: "not-allowed",
                               }}
                             >
@@ -2115,6 +2466,102 @@ function ApptsLawyer() {
             disabled={currentPage === totalPages}
           />
         </Pagination>
+        {showEditLegalAssistanceForm && selectedAppointment && (
+          <div className="edit-legal-assistance-container">
+            <h4>Edit Legal Assistance for {selectedAppointment.controlNumber}</h4>
+            <select
+              value={editedLegalAssistance}
+              onChange={(e) => {
+                setEditedLegalAssistance(e.target.value);
+                if (e.target.value !== "Others") {
+                  setCustomAssistanceText(""); // Clear when not Others
+                }
+              }}
+            >
+              {predefinedOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+              <option value="Others">Others</option>
+            </select>
+
+            {editedLegalAssistance === "Others" && (
+              <input
+                type="text"
+                placeholder="Enter other type of legal assistance"
+                value={customAssistanceText}
+                onChange={(e) => setCustomAssistanceText(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginTop: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #ccc",
+                }}
+              />
+            )}
+            <br />
+            <div className="edit-legal-assistance-buttons">
+              <button
+                className="save-button"
+                disabled={isEditingLegal}
+                onClick={async () => {
+                  const finalValue =
+                    editedLegalAssistance === "Others"
+                      ? customAssistanceText.trim()
+                      : editedLegalAssistance;
+
+                  if (!finalValue) {
+                    alert("Please enter a valid legal assistance type.");
+                    return;
+                  }
+
+                  setIsEditingLegal(true);
+
+                  try {
+                    await updateAppointment(selectedAppointment.id, {
+                      "legalAssistanceRequested.selectedAssistanceType": finalValue,
+                      updatedTime: Timestamp.fromDate(new Date()),
+                    });
+
+
+                    setAppointments((prev) =>
+                      prev.map((appt) =>
+                        appt.id === selectedAppointment.id
+                          ? { ...appt, selectedAssistanceType: finalValue }
+                          : appt
+                      )
+                    );
+
+                    setSnackbarMessage("Legal Assistance updated.");
+                    setShowSnackbar(true);
+
+                    // Automatically close the snackbar after 3 seconds
+                    setTimeout(() => {
+                      setShowSnackbar(false);
+                    }, 3000);
+
+                    setShowSnackbar(true);
+                    setShowEditLegalAssistanceForm(false);
+                    setSelectedAppointment(null);
+                  } catch (error) {
+                    console.error("Error updating legal assistance:", error);
+                    setSnackbarMessage("Error saving changes. Please try again.");
+                    setShowSnackbar(true);
+                  } finally {
+                    setIsEditingLegal(false);
+                  }
+                }}
+              >
+                {isEditingLegal ? "Saving..." : "Save"}
+              </button>
+
+            </div>
+          </div>
+        )}
+
+
         {selectedAppointment &&
           !showProceedingNotesForm &&
           !showRescheduleForm &&
@@ -2571,7 +3018,9 @@ function ApptsLawyer() {
                             <th style={{ padding: "10px" }}>Original Date</th>
                             <th style={{ padding: "10px" }}>Original Type</th>
                             <th style={{ padding: "10px" }}>Reason</th>
-                            <th style={{ padding: "10px" }}>Reschedule Time</th>
+                            <th style={{ padding: "10px" }}>Person Rescheduled</th>
+                            <th style={{ padding: "10px" }}>Status</th>
+                            <th style={{ padding: "10px" }}>Time Updated</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2586,6 +3035,17 @@ function ApptsLawyer() {
                                 </td>
                                 <td style={{ padding: "10px" }}>
                                   {entry.rescheduleReason || "N/A"}
+                                </td>
+                                <td style={{ padding: "10px" }}>
+                                  {reschedulerNames[entry.rescheduledByUid] || entry.rescheduledByUid}
+                                </td>
+                                <td style={{ padding: "10px" }}>
+                                  {reschedulerNames[entry.rescheduledByUid] || entry.rescheduledByUid}
+                                </td>
+                                <td style={{ padding: "10px" }}>
+                                  {entry.rescheduleStatus
+                                    ? entry.rescheduleStatus.charAt(0).toUpperCase() + entry.rescheduleStatus.slice(1)
+                                    : "N/A"}
                                 </td>
                                 <td style={{ padding: "10px" }}>
                                   {getFormattedDate(
@@ -3144,6 +3604,31 @@ function ApptsLawyer() {
               </button>
             </div>
             <h2>Reschedule Appointment</h2>
+            {selectedAppointment?.rescheduleHistory && (
+              <div
+                style={{
+                  backgroundColor: "#e6f4ea", // soft green background
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid #c8e6c9",
+                  marginBottom: "16px",
+                  color: "#2e7d32", // dark green text
+                  fontSize: "16px",
+                  lineHeight: "1.5",
+                }}
+              >
+                <strong>
+                  {3 -
+                    selectedAppointment.rescheduleHistory.filter(
+                      (entry) => entry.rescheduledByUid === currentUser.uid
+                    ).length}
+                </strong>{" "}
+                reschedule(s) left &nbsp;
+                <span style={{ color: "#1b5e20", fontWeight: "500" }}>
+                  (Maximum of 3 allowed)
+                </span>
+              </div>
+            )}
             <table className="table table-striped table-bordered">
               <tbody>
                 <tr>
@@ -3169,14 +3654,17 @@ function ApptsLawyer() {
                 <b>
                   <label>Reason for Reschedule: *</label>
                 </b>
-                <textarea
-                  name="rescheduleReason"
-                  rows="4"
-                  placeholder="Enter reason for reschedule..."
-                  value={rescheduleReason}
-                  onChange={handleRescheduleChange}
-                  required
-                ></textarea>
+                {selectedAppointment?.appointmentDetails?.appointmentStatus !== "pending_reschedule" && (
+                  <div>
+                    <textarea
+                      id="rescheduleReason"
+                      value={rescheduleReason}
+                      onChange={handleRescheduleChange}
+                      className="form-control"
+                      rows="3"
+                    />
+                  </div>
+                )}
               </div>
               <br />
               <div>
@@ -3444,139 +3932,222 @@ function ApptsLawyer() {
         )}
       </div>
       {/* MODAL for Accept / Refuse */}
-      {
-        showAcceptRefuseModal && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              {actionType === "refuse" ? (
-                <>
-                  <h5>
-                    Please specify the reason for refusing this appointment.
-                  </h5>
-                  <textarea
-                    value={refuseReason}
-                    onChange={(e) => setRefuseReason(e.target.value)}
-                    placeholder="Please specify the reason..."
-                    style={{ width: "100%", height: "100px", marginTop: "10px" }}
-                    required
-                  />
-                  <div
+      {showAcceptRefuseModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            {actionType === "refuse" ? (
+              <>
+                <h4
+                  style={{
+                    marginBottom: "20px",
+                    color: "#2c2c2c",
+                    fontWeight: "600",
+                    fontSize: "20px",
+                  }}
+                >
+                  Please specify the reason for refusing this appointment.
+                </h4>
+
+                <textarea
+                  value={refuseReason}
+                  onChange={(e) => setRefuseReason(e.target.value)}
+                  placeholder="Type your reason here..."
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    height: "140px",
+                    borderRadius: "8px",
+                    border: "1px solid #ccc",
+                    padding: "16px",
+                    fontSize: "16px",
+                    resize: "vertical",
+                    boxShadow: "inset 0 1px 4px rgba(0,0,0,0.05)",
+                    outlineColor: "#dc3545",
+                    marginBottom: "28px",
+                  }}
+                />
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "14px" }}>
+                  <button
+                    onClick={() => {
+                      setActionType("accept");
+                      setRefuseReason("");
+                    }}
                     style={{
-                      marginTop: "15px",
-                      display: "flex",
-                      justifyContent: "flex-end",
+                      backgroundColor: "#6c757d",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      padding: "10px 20px",
+                      fontWeight: "500",
+                      fontSize: "16px",
+                      cursor: "pointer",
                     }}
                   >
-                    <button
-                      onClick={() => setActionType("accept")}
-                      style={{
-                        backgroundColor: "#6c757d",
-                        color: "white",
-                        border: "none",
-                        padding: "5px 10px",
-                        marginRight: "10px",
-                      }}
-                    >
-                      Back
-                    </button>
-                    <button
-                      onClick={handleRefuse}
-                      style={{
-                        backgroundColor: "#dc3545",
-                        color: "white",
-                        border: "none",
-                        padding: "5px 10px",
-                      }}
-                      disabled={!refuseReason.trim()}
-                    >
-                      Submit Refusal
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ marginBottom: "15px" }}>
-                    <h5 style={{ marginBottom: "10px" }}>
-                      Are you sure you want to accept this appointment?
-                    </h5>
+                    Back
+                  </button>
 
-                    {selectedAppointment?.appointmentDetails?.appointmentStatus === "pending_reschedule" && (
-                      <div
-                        style={{
-                          backgroundColor: "#fff3cd",
-                          padding: "10px 12px",
-                          borderRadius: "5px",
-                          border: "1px solid #ffeeba",
-                          color: "#856404",
-                        }}
-                      >
-                        <strong>Reason for Reschedule Request:</strong>
-                        <p style={{ margin: "8px 0 0" }}>
-                          {selectedAppointment.appointmentDetails?.rescheduleReason || "Not provided"}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div
+                  <button
+                    onClick={handleRefuse}
+                    disabled={!refuseReason.trim()}
                     style={{
-                      display: "flex",
-                      justifyContent: "flex-end",
+                      backgroundColor: "#dc3545",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      padding: "10px 20px",
+                      fontWeight: "500",
+                      fontSize: "16px",
+                      cursor: refuseReason.trim() ? "pointer" : "not-allowed",
+                      opacity: refuseReason.trim() ? 1 : 0.6,
                     }}
                   >
-                    <button
-                      onClick={handleAccept}
-                      style={{
-                        backgroundColor: "#28a745",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "4px",
-                        padding: "6px 12px",
-                        marginRight: "10px",
-                        fontWeight: "500",
-                      }}
-                    >
-                      Accept
-                    </button>
-                    <button
-                      onClick={() => setActionType("refuse")}
-                      style={{
-                        backgroundColor: "#dc3545",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "4px",
-                        padding: "6px 12px",
-                        marginRight: "10px",
-                        fontWeight: "500",
-                      }}
-                    >
-                      Refuse
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowAcceptRefuseModal(false);
-                        setActionType("");
-                        setRefuseReason("");
-                      }}
-                      style={{
-                        backgroundColor: "#6c757d",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "4px",
-                        padding: "6px 12px",
-                        fontWeight: "500",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </>
+                    Submit Refusal
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h4
+                  style={{
+                    marginBottom: "24px",
+                    color: "#2c2c2c",
+                    fontSize: "22px",
+                    fontWeight: "600",
+                  }}
+                >
+                  Are you sure you want to accept this appointment?
+                </h4>
 
-              )}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "14px" }}>
+                  <button
+                    onClick={handleAccept}
+                    style={{
+                      backgroundColor: "#28a745",
+                      color: "white",
+                      padding: "10px 24px",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "16px",
+                      fontWeight: "500",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Accept
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActionType("refuse");
+                      setRefuseReason("");
+                    }}
+                    style={{
+                      backgroundColor: "#dc3545",
+                      color: "white",
+                      padding: "8px 18px",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "16px",
+                      fontWeight: "500",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Refuse
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAcceptRefuseModal(false);
+                      setRefuseReason("");
+                      setActionType("");
+                    }}
+                    style={{
+                      backgroundColor: "#6c757d",
+                      color: "white",
+                      padding: "10px 24px",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "16px",
+                      fontWeight: "500",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {showUndoConfirmModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h4 style={{ marginBottom: "10px", color: "#333" }}>
+              Confirm Undo Decision
+            </h4>
+            <p
+              style={{
+                marginBottom: "20px",
+                color: "#555",
+                fontSize: "18px",
+                textAlign: "center", // 👈 center the paragraph text
+              }}
+            >
+              Are you sure you want to <strong>undo</strong> this decision?
+              <br />
+              This will revert the status back to <strong>“approved”</strong>.
+              <br />
+              <span
+                style={{
+                  fontSize: "16px",
+                  color: "#dc3545",
+                  display: "inline-block",
+                  marginTop: "8px",
+                }}
+              >
+                You still have <strong>{timeLeftText}</strong> to undo this decision.
+              </span>
+            </p>
+
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                onClick={() => {
+                  handleUndoDecision(undoTargetAppointment);
+                  setShowUndoConfirmModal(false);
+                }}
+                style={{
+                  backgroundColor: "#dc3545",
+                  color: "white",
+                  border: "none",
+                  padding: "8px 14px",
+                  borderRadius: "4px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                }}
+              >
+                Yes, Undo
+              </button>
+              <button
+                onClick={() => setShowUndoConfirmModal(false)}
+                style={{
+                  backgroundColor: "#e0e0e0",
+                  color: "#333",
+                  border: "none",
+                  padding: "8px 14px",
+                  borderRadius: "4px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
-        )
-      }
+        </div>
+      )}
+
+
     </div >
   );
 }

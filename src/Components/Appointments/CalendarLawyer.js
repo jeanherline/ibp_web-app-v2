@@ -40,7 +40,7 @@ function CalendarLawyer() {
 
     return () => unsubscribe(); // Clean up the listener on component unmount
   }, [auth, navigate]);
-  
+
   const toggleRescheduleHistory = () => {
     setIsRescheduleHistoryOpen((prevState) => !prevState);
   };
@@ -289,11 +289,10 @@ function CalendarLawyer() {
       <div class="header">
         <img src="${ibpLogo}" alt="IBP Logo" />
         <h2>Integrated Bar of the Philippines - Malolos</h2>
-        ${
-          selectedAppointment.appointmentDetails.qrCode
-            ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 60px; margin: 0 auto;" />`
-            : ""
-        }
+        ${selectedAppointment.appointmentDetails.qrCode
+        ? `<img src="${selectedAppointment.appointmentDetails.qrCode}" alt="QR Code" style="width: 60px; margin: 0 auto;" />`
+        : ""
+      }
       </div>
     `);
 
@@ -433,14 +432,14 @@ function CalendarLawyer() {
                     {appointments.filter((appt) =>
                       moment(appt.start).isSame(date, "day")
                     ).length > 1 && (
-                      <span style={{ color: "red", marginLeft: "5px" }}>
-                        +
-                        {appointments.filter((appt) =>
-                          moment(appt.start).isSame(date, "day")
-                        ).length - 1}{" "}
-                        more
-                      </span>
-                    )}
+                        <span style={{ color: "red", marginLeft: "5px" }}>
+                          +
+                          {appointments.filter((appt) =>
+                            moment(appt.start).isSame(date, "day")
+                          ).length - 1}{" "}
+                          more
+                        </span>
+                      )}
                   </div>
                 ),
               },
@@ -466,55 +465,55 @@ function CalendarLawyer() {
                 {(selectedAppointment.appointmentDetails?.newRequest ||
                   selectedAppointment.appointmentDetails?.requestReason) && (
                     <section className="mb-4 print-section no-print">
-                    <h2>
-                      <em style={{ color: "#a34bc9", fontSize: "16px" }}>
-                        New Request Details
-                      </em>
-                    </h2>
-                    <table className="table table-striped table-bordered">
-                      <tbody>
-                        {/* Only show the control number if newRequest is true */}
-                        {selectedAppointment.appointmentDetails?.newRequest &&
-                          !selectedAppointment.appointmentDetails
-                            ?.requestReason && (
-                            <tr>
-                              <th>New Request Control Number:</th>
-                              <td>
-                                {selectedAppointment.appointmentDetails
-                                  ?.newControlNumber || "N/A"}
-                              </td>
-                            </tr>
-                          )}
-                        <tr>
-                          <th>Reason for New Request:</th>
-                          <td>
-                            {selectedAppointment.appointmentDetails
-                              ?.requestReason || "N/A"}
-                          </td>
-                        </tr>
-                        {/* Only show Attached File if it exists */}
-                        {selectedAppointment.appointmentDetails
-                          ?.newRequestUrl && (
+                      <h2>
+                        <em style={{ color: "#a34bc9", fontSize: "16px" }}>
+                          New Request Details
+                        </em>
+                      </h2>
+                      <table className="table table-striped table-bordered">
+                        <tbody>
+                          {/* Only show the control number if newRequest is true */}
+                          {selectedAppointment.appointmentDetails?.newRequest &&
+                            !selectedAppointment.appointmentDetails
+                              ?.requestReason && (
+                              <tr>
+                                <th>New Request Control Number:</th>
+                                <td>
+                                  {selectedAppointment.appointmentDetails
+                                    ?.newControlNumber || "N/A"}
+                                </td>
+                              </tr>
+                            )}
                           <tr>
-                            <th>Attached File:</th>
+                            <th>Reason for New Request:</th>
                             <td>
-                              <a
-                                href={
-                                  selectedAppointment.appointmentDetails
-                                    ?.newRequestUrl
-                                }
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                View File
-                              </a>
+                              {selectedAppointment.appointmentDetails
+                                ?.requestReason || "N/A"}
                             </td>
                           </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </section>
-                )}
+                          {/* Only show Attached File if it exists */}
+                          {selectedAppointment.appointmentDetails
+                            ?.newRequestUrl && (
+                              <tr>
+                                <th>Attached File:</th>
+                                <td>
+                                  <a
+                                    href={
+                                      selectedAppointment.appointmentDetails
+                                        ?.newRequestUrl
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    View File
+                                  </a>
+                                </td>
+                              </tr>
+                            )}
+                        </tbody>
+                      </table>
+                    </section>
+                  )}
                 <br />
                 <h2>
                   <em style={{ color: "#a34bc9", fontSize: "16px" }}>
@@ -552,77 +551,77 @@ function CalendarLawyer() {
                     </tr>
                     {selectedAppointment.appointmentDetails?.apptType ===
                       "Online" && (
-                      <tr className="no-print">
-                        <th>Meeting Link:</th>
-                        <td>
-                          {selectedAppointment.appointmentDetails?.apptType ===
-                          "Online" ? (
-                            selectedAppointment.appointmentDetails
-                              ?.appointmentStatus === "done" ? (
-                              // Appointment is done, show "Done" with a check icon
-                              <button
-                                style={{
-                                  backgroundColor: "#1DB954", // Green background for "Done"
-                                  color: "white",
-                                  border: "none",
-                                  padding: "5px 8px",
-                                  cursor: "not-allowed",
-                                  display: "flex",
-                                  alignItems: "center",
-                                }}
-                                disabled // Make the button unclickable
-                              >
-                                <FontAwesomeIcon
-                                  icon={faCheck}
-                                  style={{ marginRight: "8px" }}
-                                />
-                                Done
-                              </button>
-                            ) : selectedAppointment.clientAttend === "no" ? (
-                              // If client didn't attend, show "Unavailable" with a red background
-                              <button
-                                style={{
-                                  backgroundColor: "#dc3545", // Red background for "Unavailable"
-                                  color: "white",
-                                  border: "none",
-                                  padding: "5px 8px",
-                                  cursor: "not-allowed",
-                                }}
-                                disabled // Make the button unclickable
-                              >
-                                Unavailable
-                              </button>
+                        <tr className="no-print">
+                          <th>Meeting Link:</th>
+                          <td>
+                            {selectedAppointment.appointmentDetails?.apptType ===
+                              "Online" ? (
+                              selectedAppointment.appointmentDetails
+                                ?.appointmentStatus === "done" ? (
+                                // Appointment is done, show "Done" with a check icon
+                                <button
+                                  style={{
+                                    backgroundColor: "#1DB954", // Green background for "Done"
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 8px",
+                                    cursor: "not-allowed",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                  disabled // Make the button unclickable
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faCheck}
+                                    style={{ marginRight: "8px" }}
+                                  />
+                                  Done
+                                </button>
+                              ) : selectedAppointment.clientAttend === "no" ? (
+                                // If client didn't attend, show "Unavailable" with a red background
+                                <button
+                                  style={{
+                                    backgroundColor: "#dc3545", // Red background for "Unavailable"
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 8px",
+                                    cursor: "not-allowed",
+                                  }}
+                                  disabled // Make the button unclickable
+                                >
+                                  Unavailable
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    window.open(
+                                      `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
+                                      "_blank"
+                                    )
+                                  }
+                                  style={{
+                                    backgroundColor: "#28a745", // Green background for active Join
+                                    color: "white",
+                                    border: "none",
+                                    padding: "5px 8px",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faVideo}
+                                    style={{ marginRight: "8px" }}
+                                  />
+                                  Join
+                                </button>
+                              )
                             ) : (
-                              <button
-                                onClick={() =>
-                                  window.open(
-                                    `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${selectedAppointment.id}`,
-                                    "_blank"
-                                  )
-                                }
-                                style={{
-                                  backgroundColor: "#28a745", // Green background for active Join
-                                  color: "white",
-                                  border: "none",
-                                  padding: "5px 8px",
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                }}
-                              >
-                                <FontAwesomeIcon
-                                  icon={faVideo}
-                                  style={{ marginRight: "8px" }}
-                                />
-                                Join
-                              </button>
-                            )
-                          ) : (
-                            "N/A"
-                          )}
-                        </td>
-                      </tr>
-                    )}
+                              "N/A"
+                            )}
+                          </td>
+                        </tr>
+                      )}
                     <tr>
                       <th>Control Number:</th>
                       <td>{selectedAppointment.controlNumber}</td>
@@ -651,42 +650,42 @@ function CalendarLawyer() {
                     <>
                       {selectedAppointment.appointmentStatus ===
                         "scheduled" && (
-                        <>
-                          <tr>
-                            <th>Eligibility:</th>
-                            <td>
-                              {capitalizeFirstLetter(
-                                selectedAppointment.clientEligibility
-                                  ?.eligibility || "N/A"
-                              )}
-                            </td>
-                          </tr>
-                          <tr>
-                            <th>Assigned Lawyer:</th>
-                            <td>
-                              {assignedLawyerDetails
-                                ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
-                                : "Not Available"}
-                            </td>
-                          </tr>
-                          <tr>
-                            <th>Eligibility Notes:</th>
-                            <td>
-                              {selectedAppointment.clientEligibility?.notes ||
-                                "N/A"}
-                            </td>
-                          </tr>
-                          <tr>
-                            <th>Appointment Date:</th>
-                            <td>
-                              {getFormattedDate(
-                                selectedAppointment.appointmentDate,
-                                true
-                              )}
-                            </td>
-                          </tr>
-                        </>
-                      )}
+                          <>
+                            <tr>
+                              <th>Eligibility:</th>
+                              <td>
+                                {capitalizeFirstLetter(
+                                  selectedAppointment.clientEligibility
+                                    ?.eligibility || "N/A"
+                                )}
+                              </td>
+                            </tr>
+                            <tr>
+                              <th>Assigned Lawyer:</th>
+                              <td>
+                                {assignedLawyerDetails
+                                  ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
+                                  : "Not Available"}
+                              </td>
+                            </tr>
+                            <tr>
+                              <th>Eligibility Notes:</th>
+                              <td>
+                                {selectedAppointment.clientEligibility?.notes ||
+                                  "N/A"}
+                              </td>
+                            </tr>
+                            <tr>
+                              <th>Appointment Date:</th>
+                              <td>
+                                {getFormattedDate(
+                                  selectedAppointment.appointmentDate,
+                                  true
+                                )}
+                              </td>
+                            </tr>
+                          </>
+                        )}
 
                       {selectedAppointment.appointmentStatus === "denied" && (
                         <>
@@ -806,7 +805,7 @@ function CalendarLawyer() {
               </section>
               <br />
               {selectedAppointment?.rescheduleHistory &&
-              selectedAppointment.rescheduleHistory.length > 0 ? (
+                selectedAppointment.rescheduleHistory.length > 0 ? (
                 <section className="mb-4 print-section no-print">
                   <h2
                     style={{ cursor: "pointer" }}
@@ -828,7 +827,9 @@ function CalendarLawyer() {
                           <th style={{ padding: "10px" }}>Original Date</th>
                           <th style={{ padding: "10px" }}>Original Type</th>
                           <th style={{ padding: "10px" }}>Reason</th>
-                          <th style={{ padding: "10px" }}>Reschedule Time</th>
+                          <th style={{ padding: "10px" }}>Person Rescheduled</th>
+                          <th style={{ padding: "10px" }}>Status</th>
+                          <th style={{ padding: "10px" }}>Time Updated</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -843,6 +844,11 @@ function CalendarLawyer() {
                               </td>
                               <td style={{ padding: "10px" }}>
                                 {entry.rescheduleReason || "N/A"}
+                              </td>
+                              <td style={{ padding: "10px" }}>
+                                {entry.rescheduleStatus
+                                  ? entry.rescheduleStatus.charAt(0).toUpperCase() + entry.rescheduleStatus.slice(1)
+                                  : "N/A"}
                               </td>
                               <td style={{ padding: "10px" }}>
                                 {getFormattedDate(
@@ -883,12 +889,12 @@ function CalendarLawyer() {
                       <td>
                         {selectedAppointment.dob
                           ? new Date(
-                              selectedAppointment.dob
-                            ).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })
+                            selectedAppointment.dob
+                          ).toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })
                           : "N/A"}
                       </td>
                     </tr>

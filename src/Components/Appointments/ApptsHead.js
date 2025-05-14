@@ -55,6 +55,12 @@ function ApptsHead() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [lastVisible, setLastVisible] = useState(null);
+  const predefinedOptions = [
+    "Payong Legal (Legal Advice)",
+    "Legal na Representasyon (Legal Representation)",
+    "Pag gawa ng Legal na Dokumento (Drafting of Legal Document)"
+  ];
+
   const pageSize = 7;
   const [clientEligibility, setClientEligibility] = useState({
     eligibility: "",
@@ -215,10 +221,11 @@ function ApptsHead() {
     try {
       await updateAppointment(selectedAppointment.id, {
         "appointmentDetails.assignedLawyer": reassignLawyerId,
-        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
+        "updatedTime": Timestamp.fromDate(new Date()),
         "clientEligibility.notes": reassignNotes,
         "appointmentDetails.appointmentStatus": "approved",
       });
+
       setSnackbarMessage("Lawyer successfully reassigned.");
       setShowSnackbar(true);
       setShowReassignForm(false);
@@ -707,16 +714,54 @@ function ApptsHead() {
         : "Not Available";
 
       const updatedData = {
+        "updatedTime": Timestamp.fromDate(new Date()),
         "clientEligibility.eligibility": clientEligibility.eligibility,
         "appointmentDetails.appointmentStatus":
           clientEligibility.eligibility === "yes" ? "approved" : "denied",
         "clientEligibility.denialReason": clientEligibility.denialReason,
-        "clientEligibility.notes": clientEligibility.notes,
+        "clientEligibility.notes": clientEligibility.notes?.trim()
+          ? clientEligibility.notes
+          : "All Documents Verified.",
         "appointmentDetails.assignedLawyer": clientEligibility.assistingCounsel,
-        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
+        "updatedTime": Timestamp.fromDate(new Date()),
       };
 
       await updateAppointment(selectedAppointment.id, updatedData);
+
+      // 🔔 Notify client
+      if (selectedAppointment?.uid && selectedAppointment?.controlNumber) {
+        let message = "";
+
+        if (clientEligibility.eligibility === "yes") {
+          message = `Your request (ID: ${selectedAppointment.id}) has been approved.`;
+        } else {
+          message = `Your request (ID: ${selectedAppointment.id}) has been denied.`;
+        }
+
+        await sendNotification(
+          message,
+          selectedAppointment.uid,
+          "appointment",
+          selectedAppointment.controlNumber
+        );
+      }
+      // Notify secretary of assigned lawyer if approved
+      if (
+        clientEligibility.eligibility === "yes" &&
+        selectedLawyer &&
+        selectedLawyer.associate
+      ) {
+        const secretarySnapshot = await getDoc(doc(fs, "users", selectedLawyer.associate));
+        if (secretarySnapshot.exists()) {
+          const secretaryUid = secretarySnapshot.id;
+          await sendNotification(
+            `An appointment (ID: ${selectedAppointment.id}) involving your assigned lawyer has been approved.`,
+            secretaryUid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
+      }
 
       // Fetch latest login activity
       const { ipAddress, deviceName } = await fetchLatestLoginActivity(
@@ -756,9 +801,9 @@ function ApptsHead() {
               }
               : null,
           updatedTime:
-            selectedAppointment.appointmentDetails?.updatedTime !== undefined
+            selectedAppointment.updatedTime !== undefined
               ? {
-                oldValue: selectedAppointment.appointmentDetails.updatedTime,
+                oldValue: selectedAppointment.updatedTime,
                 newValue: Timestamp.fromDate(new Date()),
               }
               : null,
@@ -832,13 +877,14 @@ function ApptsHead() {
 
       // Update appointment data in Firestore
       const updatedData = {
+        "updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.proceedingNotes": proceedingNotes,
         "appointmentDetails.ibpParalegalStaff":
           clientEligibility.ibpParalegalStaff,
         "appointmentDetails.assistingCounsel":
           clientEligibility.assistingCounsel,
         "appointmentDetails.appointmentStatus": appointmentStatus,
-        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
+        "updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
         "appointmentDetails.proceedingFileUrl": fileUrl,
       };
@@ -915,9 +961,9 @@ function ApptsHead() {
               newValue: fileUrl,
             }
             : null,
-          updatedTime: selectedAppointment.appointmentDetails?.updatedTime
+          updatedTime: selectedAppointment.updatedTime
             ? {
-              oldValue: selectedAppointment.appointmentDetails.updatedTime,
+              oldValue: selectedAppointment.updatedTime,
               newValue: Timestamp.fromDate(new Date()),
             }
             : null,
@@ -1076,6 +1122,7 @@ function ApptsHead() {
     }
 
     const updatedData = {
+      "updatedTime": Timestamp.fromDate(new Date()),
       "appointmentDetails.appointmentDate": Timestamp.fromDate(appointmentDate),
       "appointmentDetails.appointmentStatus": "scheduled",
       "appointmentDetails.apptType": appointmentType,
@@ -1106,10 +1153,23 @@ function ApptsHead() {
 
       if (assignedLawyerDetails?.uid) {
         await sendNotification(
-          `You have chosen a type of appointment for request (ID: ${appointmentId}).`,
+          `You have scheduled appointment for request (ID: ${appointmentId}).`,
           assignedLawyerDetails.uid,
           "appointment"
         );
+      }
+      // Notify secretary of assigned lawyer
+      if (assignedLawyerDetails?.associate) {
+        const secretarySnapshot = await getDoc(doc(fs, "users", assignedLawyerDetails.associate));
+        if (secretarySnapshot.exists()) {
+          const secretaryUid = secretarySnapshot.id;
+          await sendNotification(
+            `A new appointment (ID: ${appointmentId}) involving your assigned lawyer has been scheduled.`,
+            secretaryUid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
       }
 
       // Notify the head lawyer
@@ -1250,20 +1310,40 @@ function ApptsHead() {
     const rescheduleEntry = {
       rescheduleDate: selectedAppointment.appointmentDetails?.appointmentDate,
       rescheduleAppointmentType:
-        selectedAppointment.appointmentDetails?.apptType,
+        selectedAppointment.appointmentDetails?.scheduleType,
       rescheduleReason: rescheduleReason,
       rescheduleTimestamp: Timestamp.fromDate(new Date()),
     };
 
-    const updatedRescheduleHistory = appointmentData.rescheduleHistory
-      ? [...appointmentData.rescheduleHistory, rescheduleEntry]
-      : [rescheduleEntry];
+    let updatedRescheduleHistory = [];
+
+    if (
+      appointmentData.appointmentDetails?.appointmentStatus === "pending_reschedule" &&
+      appointmentData.rescheduleHistory &&
+      appointmentData.rescheduleHistory.length > 0
+    ) {
+      // 🔁 Just approve the last entry
+      updatedRescheduleHistory = [...appointmentData.rescheduleHistory];
+      updatedRescheduleHistory[updatedRescheduleHistory.length - 1].rescheduleStatus = "approved";
+    } else {
+      // ✅ Regular reschedule — add new with status
+      const approvedRescheduleEntry = {
+        ...rescheduleEntry,
+        rescheduleStatus: "approved",
+      };
+
+      updatedRescheduleHistory = appointmentData.rescheduleHistory
+        ? [...appointmentData.rescheduleHistory, approvedRescheduleEntry]
+        : [approvedRescheduleEntry];
+    }
+
 
     const updatedData = {
+      "updatedTime": Timestamp.fromDate(new Date()),
       "appointmentDetails.appointmentDate": Timestamp.fromDate(rescheduleDate),
       "appointmentDetails.apptType": rescheduleAppointmentType,
       rescheduleHistory: updatedRescheduleHistory,
-      "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
+      "updatedTime": Timestamp.fromDate(new Date()),
       ...(meetingLink && {
         "appointmentDetails.meetingLink": meetingLink,
       }),
@@ -1296,6 +1376,19 @@ function ApptsHead() {
           "appointment",
           selectedAppointment.controlNumber
         );
+      }
+      // Notify secretary of assigned lawyer
+      if (assignedLawyerDetails?.associate) {
+        const secretarySnapshot = await getDoc(doc(fs, "users", assignedLawyerDetails.associate));
+        if (secretarySnapshot.exists()) {
+          const secretaryUid = secretarySnapshot.id;
+          await sendNotification(
+            `The appointment (ID: ${appointmentId}) involving your assigned lawyer has been rescheduled.`,
+            secretaryUid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
       }
 
       const headLawyerUid = await getHeadLawyerUid();
@@ -1354,9 +1447,9 @@ function ApptsHead() {
               newValue: meetingLink,
             }
             : null,
-          updatedTime: selectedAppointment.appointmentDetails?.updatedTime
+          updatedTime: selectedAppointment.updatedTime
             ? {
-              oldValue: selectedAppointment.appointmentDetails.updatedTime,
+              oldValue: selectedAppointment.updatedTime,
               newValue: Timestamp.fromDate(new Date()),
             }
             : null,
@@ -1569,15 +1662,12 @@ function ApptsHead() {
           value={natureOfLegalAssistanceFilter}
         >
           <option value="all">Nature of Legal Assistance</option>
-          <option value="Payong Legal (Legal Advice)">
-            Payong Legal (Legal Advice)
-          </option>
-          <option value="Legal na Representasyon (Legal Representation)">
-            Legal na Representasyon (Legal Representation)
-          </option>
-          <option value="Pag gawa ng Legal na Dokumento (Drafting of Legal Document)">
-            Pag gawa ng Legal na Dokumento (Drafting of Legal Document)
-          </option>
+          {predefinedOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+          <option value="Others">Others</option>
         </select>
         &nbsp;&nbsp;
         <button onClick={resetFilters}>Reset Filters</button>
@@ -2311,7 +2401,9 @@ function ApptsHead() {
                             <th style={{ padding: "10px" }}>Original Date</th>
                             <th style={{ padding: "10px" }}>Original Type</th>
                             <th style={{ padding: "10px" }}>Reason</th>
-                            <th style={{ padding: "10px" }}>Reschedule Time</th>
+                            <th style={{ padding: "10px" }}>Person Rescheduled</th>
+                            <th style={{ padding: "10px" }}>Status</th>
+                            <th style={{ padding: "10px" }}>Time Updated</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2326,6 +2418,9 @@ function ApptsHead() {
                                 </td>
                                 <td style={{ padding: "10px" }}>
                                   {entry.rescheduleReason || "N/A"}
+                                </td>
+                                <td style={{ padding: "10px" }}>
+                                  {entry.rescheduledByUid || "N/A"}
                                 </td>
                                 <td style={{ padding: "10px" }}>
                                   {getFormattedDate(
@@ -2924,6 +3019,32 @@ function ApptsHead() {
               </button>
             </div>
             <h2>Reschedule Appointment</h2>
+            {selectedAppointment?.rescheduleHistory && (
+              <div
+                style={{
+                  backgroundColor: "#e6f4ea", // soft green background
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid #c8e6c9",
+                  marginBottom: "16px",
+                  color: "#2e7d32", // dark green text
+                  fontSize: "16px",
+                  lineHeight: "1.5",
+                }}
+              >
+                <strong>
+                  {3 -
+                    selectedAppointment.rescheduleHistory.filter(
+                      (entry) => entry.rescheduledByUid === currentUser.uid
+                    ).length}
+                </strong>{" "}
+                reschedule(s) left &nbsp;
+                <span style={{ color: "#1b5e20", fontWeight: "500" }}>
+                  (Maximum of 3 allowed)
+                </span>
+              </div>
+            )}
+
             <table className="table table-striped table-bordered">
               <tbody>
                 <tr>

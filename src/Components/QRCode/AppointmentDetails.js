@@ -136,11 +136,11 @@ function AppointmentDetails() {
       );
       console.log(
         "createdDate:",
-        appointmentDetails?.appointmentDetails?.createdDate
+        appointmentDetails?.createdDate
       );
       console.log(
         "Type of createdDate:",
-        typeof appointmentDetails?.appointmentDetails?.createdDate
+        typeof appointmentDetails?.createdDate
       );
     }
   }, [appointmentDetails]);
@@ -194,7 +194,7 @@ function AppointmentDetails() {
           <p>
             <strong>Created Date:</strong>{" "}
             {formatDateTime(
-              appointmentDetails?.appointmentDetails?.createdDate
+              appointmentDetails?.createdDate
             )}
           </p>
         </div>

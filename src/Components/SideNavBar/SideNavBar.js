@@ -62,10 +62,19 @@ function SideNavBar() {
           );
           const snapshot = await getDocs(secretariesQuery);
           if (!snapshot.empty) {
-            const secretary = snapshot.docs[0].data();
-            setAssignedSecretaryName(
-              `${secretary.display_name} ${secretary.middle_name} ${secretary.last_name}`
+            const secretaries = snapshot.docs.map((doc) => doc.data());
+            const names = secretaries.map((sec) =>
+              `${sec.display_name} ${sec.middle_name} ${sec.last_name}`
             );
+            let formatted = "";
+            if (names.length === 1) {
+              formatted = names[0];
+            } else if (names.length === 2) {
+              formatted = names.join(" & ");
+            } else {
+              formatted = names.slice(0, -1).join(", ") + " & " + names[names.length - 1];
+            }
+            setAssignedSecretaryName(formatted);
           }
         } else if (userData.member_type === "secretary" && userData.associate) {
           const lawyerDoc = await getDoc(doc(fs, "users", userData.associate));
@@ -548,14 +557,14 @@ function SideNavBar() {
             )}
           </ul>
         </nav>
-<footer className="footer">
-  <img
-    src="https://firebasestorage.googleapis.com/v0/b/lawyer-app-ed056.appspot.com/o/signin-footer.png?alt=media&token=1668da39-f37a-4620-ae55-d19386631dfe"
-    alt="Footer"
-    style={{ width: "100%", maxWidth: "1000px", marginBottom: "10px" }}
-  />
-  <p>Copyright © 2025. All Rights Reserved</p>
-</footer>
+        <footer className="footer">
+          <img
+            src="https://firebasestorage.googleapis.com/v0/b/lawyer-app-ed056.appspot.com/o/signin-footer.png?alt=media&token=1668da39-f37a-4620-ae55-d19386631dfe"
+            alt="Footer"
+            style={{ width: "100%", maxWidth: "1000px", marginBottom: "10px" }}
+          />
+          <p>Copyright © 2025. All Rights Reserved</p>
+        </footer>
 
 
       </div>

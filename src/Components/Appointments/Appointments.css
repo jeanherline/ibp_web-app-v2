@@ -532,14 +532,14 @@ button:disabled {
 
 /* React DatePicker Custom Styles */
 .react-datepicker {
-  font-size: 16px;
+  font-size: 18px; /* Slightly bigger font */
   border: none;
-  padding: 10px;
+  padding: 20px; /* More padding inside */
   background-color: #fff;
   border-radius: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  width: 100%;
-  max-width: 400px;
+  width: 340px; /* Reduced width */
+  max-width: 100%;
   margin: 20px auto;
 }
 
@@ -553,9 +553,10 @@ button:disabled {
 .react-datepicker__day,
 .react-datepicker__time-name {
   color: #666;
-  width: 2.5rem;
-  line-height: 2.5rem;
-  margin: 0.166rem;
+  width: 2.8rem; /* Bigger day cells */
+  line-height: 2.8rem; /* Bigger click targets */
+  margin: 0.15rem;
+  font-size: 1rem;
 }
 
 .react-datepicker__day--selected,
@@ -804,5 +805,99 @@ button:disabled {
   }
   100% {
     transform: rotate(360deg);
+  }
+}
+.edit-legal-assistance-container {
+  max-width: 500px;
+  margin: 40px auto;
+  background: #fff;
+  border: 1px solid #ddd;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.edit-legal-assistance-container h4 {
+  margin-bottom: 20px;
+  font-size: 18px;
+  color: #333;
+}
+
+.edit-legal-assistance-container select {
+  padding: 10px;
+  width: 100%;
+  margin-bottom: 20px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.edit-legal-assistance-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+.save-button,
+.cancel-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.save-button {
+  background-color: #28a745;
+}
+
+.cancel-button {
+  background-color: #6c757d;
+}
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1050;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 32px 24px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+  animation: slideIn 0.3s ease;
+  transition: all 0.3s ease;
+}
+
+/* Optional subtle animations */
+@keyframes fadeIn {
+  from {
+    background: rgba(0, 0, 0, 0);
+  }
+  to {
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }

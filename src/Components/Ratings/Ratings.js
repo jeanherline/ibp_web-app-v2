@@ -13,6 +13,12 @@ function Ratings() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [lastVisible, setLastVisible] = useState(null);
+const predefinedOptions = [
+  "Payong Legal (Legal Advice)",
+  "Legal na Representasyon (Legal Representation)",
+  "Pag gawa ng Legal na Dokumento (Drafting of Legal Document)"
+];
+
   const pageSize = 10;
   const [cityFilter, setCityFilter] = useState("all");
   const [totalFilteredItems, setTotalFilteredItems] = useState(0);

@@ -6,6 +6,8 @@ import Pagination from "react-bootstrap/Pagination";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
 import zxcvbn from "zxcvbn"; // For password strength detection
+import { sendEmailVerification } from "firebase/auth";
+
 import {
   getUsers,
   getUsersCount,
@@ -51,6 +53,12 @@ function Secretary() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [lastVisible, setLastVisible] = useState(null);
+  const predefinedOptions = [
+    "Payong Legal (Legal Advice)",
+    "Legal na Representasyon (Legal Representation)",
+    "Pag gawa ng Legal na Dokumento (Drafting of Legal Document)"
+  ];
+
   const pageSize = 10;
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -111,8 +119,15 @@ function Secretary() {
     e.preventDefault();
 
     // Validate password strength before proceeding
-    if (passwordError) {
-      alert("Please fix password issues.");
+    const passwordToValidate = newUser.password;
+    const strongPasswordRegex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
+
+    if (!strongPasswordRegex.test(passwordToValidate)) {
+      alert(
+        "Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters."
+      );
+      setIsSubmitting(false);
       return;
     }
 
@@ -136,6 +151,8 @@ function Secretary() {
       }
 
       // Step 2: Create the new user in Firebase Authentication
+
+      // Step 2: Create the new user in Firebase Authentication
       userCredential = await createUserWithEmailAndPassword(
         auth,
         newUser.email,
@@ -143,7 +160,10 @@ function Secretary() {
       );
       const { uid } = userCredential.user;
 
-      // Step 3: Add the new user to Firestore directly within the users collection
+      // Step 3: Send email verification
+      await sendEmailVerification(userCredential.user);
+
+      // Step 4: Add to Firestore with status: "inactive"
       const {
         password, // omit password from being saved
         ...userWithoutPassword
@@ -152,11 +172,15 @@ function Secretary() {
       await setDoc(doc(fs, "users", uid), {
         ...userWithoutPassword,
         uid,
-        user_status: "active",
+        user_status: "inactive", // Initially inactive
         member_type: "secretary",
-        associate: userData?.uid, // ✅ Link to current logged-in lawyer
+        associate: userData?.uid,
         created_time: new Date(),
       });
+
+      // Optional: Notify admin to wait for verification
+      alert("Verification email sent. The user must verify their email to activate the account.");
+
       await updateUser(userData?.uid, {
         associate: arrayUnion(uid),
       });
@@ -192,7 +216,6 @@ function Secretary() {
       // Step 5: Close modal, reset the form, and navigate back to the root URL
       setShowSignUpModal(false);
       clearForm();
-      alert("User added successfully.");
 
       // Optional: sign out the current user and redirect to login
       setIsSubmitting(false);
@@ -283,28 +306,45 @@ function Secretary() {
 
   // Function to generate a strong password
   const generatePassword = () => {
-    const chars =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
-    let password = "";
-    for (let i = 0; i < 12; i++) {
-      password += chars[Math.floor(Math.random() * chars.length)];
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const digits = "0123456789";
+    const special = "!@#$%^&*";
+    const allChars = lower + upper + digits + special;
+
+    // Ensure at least one from each required group
+    let password =
+      lower[Math.floor(Math.random() * lower.length)] +
+      upper[Math.floor(Math.random() * upper.length)] +
+      digits[Math.floor(Math.random() * digits.length)] +
+      special[Math.floor(Math.random() * special.length)];
+
+    // Fill the rest of the password randomly
+    for (let i = password.length; i < 12; i++) {
+      password += allChars[Math.floor(Math.random() * allChars.length)];
     }
 
-    setNewUser((prev) => ({ ...prev, password }));
-
-    // ✅ Add this block to update password strength and error
-    const passwordScore = zxcvbn(password).score;
-    setPasswordStrength(passwordScore);
+    // Shuffle the password to avoid predictable pattern
+    password = password
+      .split("")
+      .sort(() => 0.5 - Math.random())
+      .join("");
 
     const strongPasswordRegex =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
-    if (!strongPasswordRegex.test(password)) {
-      setPasswordError(
-        "Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters."
-      );
-    } else {
-      setPasswordError("");
-    }
+
+    const score = zxcvbn(password).score;
+
+    setNewUser((prev) => ({
+      ...prev,
+      password,
+    }));
+    setPasswordStrength(score);
+    setPasswordError(
+      strongPasswordRegex.test(password)
+        ? ""
+        : "Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters."
+    );
   };
 
   useEffect(() => {
@@ -804,8 +844,11 @@ function Secretary() {
   const confirmActivate = async () => {
     try {
       await updateUser(selectedUser.uid, {
-        ...selectedUser,
         user_status: "active",
+        associate:
+          selectedUser.associate && selectedUser.associate !== ""
+            ? selectedUser.associate
+            : userData?.uid,
       });
 
       if (selectedUser.member_type === "secretary" && selectedUser.associate) {
@@ -981,6 +1024,17 @@ function Secretary() {
     if (name === "password") {
       const score = zxcvbn(value).score;
       setPasswordStrength(score);
+
+      const strongPasswordRegex =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
+
+      if (!strongPasswordRegex.test(value)) {
+        setPasswordError(
+          "Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters."
+        );
+      } else {
+        setPasswordError("");
+      }
     }
 
     // Auto-assign lawyer if current user is a lawyer and adding secretary
@@ -1069,9 +1123,9 @@ function Secretary() {
               <th>First Name</th>
               <th>Middle Name</th>
               <th>Last Name</th>
+              <th>Date of Birth</th>
               <th>Email</th>
               <th>City</th>
-              <th>Member Type</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
@@ -1083,28 +1137,9 @@ function Secretary() {
                 <td>{user.display_name}</td>
                 <td>{user.middle_name}</td>
                 <td>{user.last_name}</td>
+                <td>{formatDate(user.dob || "-")}</td>
                 <td>{user.email}</td>
                 <td>{user.city || "N/A"}</td>
-                <td>
-                  <>
-                    {capitalizeFirstLetter(user.member_type)}
-                    {user.member_type === "secretary" && user.associate && (
-                      <>
-                        {" "}
-                        of{" "}
-                        {(() => {
-                          const lawyer = lawyersList.find(
-                            (l) => l.uid === user.associate
-                          );
-                          return lawyer
-                            ? `${lawyer.display_name} ${lawyer.middle_name} ${lawyer.last_name}`
-                            : "Lawyer";
-                        })()}
-                      </>
-                    )}
-                  </>
-                </td>
-
                 <td>{capitalizeFirstLetter(user.user_status)}</td>
                 <td>
                   <button

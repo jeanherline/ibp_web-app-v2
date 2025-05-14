@@ -69,6 +69,7 @@ const generateControlNumber = () => {
 
 const defaultImageUrl =
   "https://as2.ftcdn.net/v2/jpg/03/49/49/79/1000_F_349497933_Ly4im8BDmHLaLzgyKg2f2yZOvJjBtlw5.jpg";
+const EMAIL_DOMAIN = "@gmail.com";
 
 const initialUserData = {
   display_name: "",
@@ -105,6 +106,7 @@ const initialScannedDocuments = {
 function WalkInForm() {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
   const [scannedDocuments, setScannedDocuments] = useState(
     initialScannedDocuments
   );
@@ -157,6 +159,9 @@ function WalkInForm() {
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
       return;
+      const firstInvalid = document.querySelector("input:invalid, select:invalid, textarea:invalid");
+      firstInvalid?.focus();
+
     }
 
     if (formRef.current) {
@@ -211,7 +216,7 @@ function WalkInForm() {
             dob: user.dob ? formatDob(user.dob) : "",
             streetAddress: user.address || "",
             city: user.city || "",
-            phone: user.phone || "+63",
+            phone: user.phone || "09",
             gender: user.gender || "",
             spouse: user.spouse || "",
             spouseOccupation: user.spouseOccupation || "",
@@ -235,6 +240,27 @@ function WalkInForm() {
     }
   }, [uid]);
 
+  useEffect(() => {
+    if (!userData.phone) {
+      setUserData((prevData) => ({
+        ...prevData,
+        phone: "09",
+      }));
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (!isSubmitting && step > 1) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [step, isSubmitting]);
+
+
   const formatDob = (dob) => {
     if (!dob) return "";
     const date =
@@ -255,11 +281,15 @@ function WalkInForm() {
       if (!searchTerm) {
         if (isMounted) {
           setUserData(initialUserData);
+          setScannedDocuments(initialScannedDocuments);
           setCredentialsOmitted(false);
           setIsFromAppointment(false);
+          setUid("");
+          setStep(1);
         }
         return;
       }
+
 
       try {
         let user;
@@ -300,7 +330,7 @@ function WalkInForm() {
             dob: formatDob(user.dob),
             streetAddress: user.address || "",
             city: user.city || "",
-            phone: user.phone || "+63",
+            phone: user.phone || "09",
             gender: user.gender || "",
             spouse: user.spouse || "",
             spouseOccupation: user.spouseOccupation || "",
@@ -420,6 +450,9 @@ function WalkInForm() {
     );
     setShowSnackbar(true);
     setTimeout(() => setShowSnackbar(false), 3000);
+    const firstInvalid = document.querySelector("input:invalid, select:invalid, textarea:invalid");
+    firstInvalid?.focus();
+
     setShowCamera(false);
   };
 
@@ -472,6 +505,33 @@ function WalkInForm() {
     handleSubmit();
   };
 
+  const uploadAllDocuments = async (scannedDocs, fullName, controlNumber, uid) => {
+    const uploadDocument = async (file, path) => {
+      const storageRef = ref(storage, path);
+      const snapshot = await uploadBytes(storageRef, file);
+      return await getDownloadURL(storageRef);
+    };
+
+    const uploaded = {};
+
+    for (const [key, label] of Object.entries({
+      certificateBarangay: "barangayCertificateOfIndigency",
+      certificateDSWD: "dswdCertificateOfIndigency",
+      disqualificationLetterPAO: "paoDisqualificationLetter",
+    })) {
+      const scan = scannedDocs[key];
+      if (scan?.startsWith("data:")) {
+        const blob = dataURItoBlob(scan);
+        const url = await uploadDocument(blob, `konsulta_user_uploads/${uid}/${controlNumber}/${fullName}_${controlNumber}_${label}`);
+        uploaded[key] = url;
+      } else {
+        uploaded[key] = scan || null;
+      }
+    }
+
+    return uploaded;
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
@@ -522,7 +582,7 @@ function WalkInForm() {
           : `${userData.display_name[0].toLowerCase()}${userData.middle_name ? userData.middle_name[0].toLowerCase() : ""
           }${userData.last_name
             .replace(/\s+/g, "")
-            .toLowerCase()}${userData.dob.replace(/-/g, "")}@gmail.com`;
+            .toLowerCase()}${userData.dob.replace(/-/g, "")}${EMAIL_DOMAIN}`;
         const password = `${userData.last_name.replace(
           /\s+/g,
           ""
@@ -548,6 +608,12 @@ function WalkInForm() {
         setUserQrCodeUrl(userQrCodeUrl);
 
         // Populate user data to save in Firestore
+        // Upload scanned documents first
+        setIsUploadingDocs(true);
+        const uploadedDocs = await uploadAllDocuments(scannedDocuments, fullName, controlNumber, firebaseUid);
+        setIsUploadingDocs(false);
+
+
         const userDataToSave = {
           display_name: userData.display_name,
           middle_name: userData.middle_name,
@@ -569,13 +635,13 @@ function WalkInForm() {
           employerAddress: userData.employerAddress,
           monthlyIncome: userData.monthlyIncome,
           uploadedImages: {
-            barangayImageUrl,
+            barangayImageUrl: uploadedDocs.certificateBarangay,
             barangayImageUrlDateUploaded: now,
-            dswdImageUrl,
+            dswdImageUrl: uploadedDocs.certificateDSWD,
             dswdImageUrlDateUploaded: now,
-            paoImageUrl,
+            paoImageUrl: uploadedDocs.disqualificationLetterPAO,
             paoImageUrlDateUploaded: now,
-          },
+          }
         };
 
         await setDoc(doc(fs, "users", firebaseUid), userDataToSave);
@@ -611,12 +677,12 @@ function WalkInForm() {
 
       // Save appointment data in Firestore
       const appointmentData = {
+        createdDate: now,
+        uid: firebaseUid,
         appointmentDetails: {
-          uid: firebaseUid,
           appointmentStatus: "pending",
           controlNumber,
           apptType: "Walk-in",
-          createdDate: now,
           qrCode: controlNumberQrCodeUrl,
         },
         legalAssistanceRequested: {
@@ -634,6 +700,10 @@ function WalkInForm() {
       await setDoc(doc(fs, "appointments", controlNumber), appointmentData);
 
       setIsSubmissionModalOpen(true);
+      setSnackbarMessage("Form submitted successfully!");
+      setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 4000);
+
     } catch (error) {
       console.error("Error submitting form: ", error.message);
       setSnackbarMessage(`Failed to submit form. Error: ${error.message}`);
@@ -641,6 +711,8 @@ function WalkInForm() {
       setIsSubmitting(false);
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
+      const firstInvalid = document.querySelector("input:invalid, select:invalid, textarea:invalid");
+      firstInvalid?.focus();
     }
   };
 
@@ -648,7 +720,7 @@ function WalkInForm() {
     if (!userData.phone) {
       setUserData((prevData) => ({
         ...prevData,
-        phone: "+63",
+        phone: "09",
       }));
     }
   }, []);
@@ -670,6 +742,8 @@ function WalkInForm() {
         setShowSnackbar(true);
         setTimeout(() => setShowSnackbar(false), 3000);
         return;
+        const firstInvalid = document.querySelector("input:invalid, select:invalid, textarea:invalid");
+        firstInvalid?.focus();
       }
     } else if (step === 2) {
       if (
@@ -683,6 +757,8 @@ function WalkInForm() {
         setShowSnackbar(true);
         setTimeout(() => setShowSnackbar(false), 3000);
         return;
+        const firstInvalid = document.querySelector("input:invalid, select:invalid, textarea:invalid");
+        firstInvalid?.focus();
       }
     } else if (step === 3) {
       if (
@@ -697,6 +773,9 @@ function WalkInForm() {
         setShowSnackbar(true);
         setTimeout(() => setShowSnackbar(false), 3000);
         return;
+        const firstInvalid = document.querySelector("input:invalid, select:invalid, textarea:invalid");
+        firstInvalid?.focus();
+
       }
     }
 
@@ -859,6 +938,7 @@ function WalkInForm() {
                   disabled={isFromAppointment || credentialsOmitted}
                 />
               </div>
+
               <div className="form-group">
                 <label htmlFor="gender">
                   Kasarian <span className="subtitle">(Gender)</span>
@@ -910,7 +990,7 @@ function WalkInForm() {
               </div>
               <div className="form-group">
                 <label htmlFor="childrenNamesAges">
-                  Kung kasal, ilagay ang pangalan ng mga anak at edad nila
+                  Kung kasal, ilagay ang pangalan ng mga anak at edad nila{" "}
                   <span className="subtitle">
                     (If married, write name of children and age)
                   </span>
@@ -1232,10 +1312,7 @@ function WalkInForm() {
                             : ""
                             }${userData.last_name
                               .replace(/\s+/g, "")
-                              .toLowerCase()}${userData.dob.replace(
-                                /-/g,
-                                ""
-                              )}@gmail.com`}
+                              .toLowerCase()}${userData.dob.replace(/-/g, "")}${EMAIL_DOMAIN}`}
                           readOnly
                         />
                       </div>
@@ -1257,6 +1334,7 @@ function WalkInForm() {
                       </div>
                     </>
                   )}
+
                 </div>
               </>
             )}
@@ -1362,7 +1440,39 @@ function WalkInForm() {
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search by email or UID"
         />
+        {searchTerm && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm("");
+              setUserData(initialUserData);
+              setScannedDocuments(initialScannedDocuments);
+              setCredentialsOmitted(false);
+              setIsFromAppointment(false);
+              setUid("");
+              setStep(1);
+              setDocValidityMessage(null);
+              setGeneratedEmail("");
+              setGeneratedPassword("");
+              setControlNumber("");
+              setAppointmentQrCodeUrl("");
+              setUserQrCodeUrl("");
+              formRef.current?.reset?.();
+            }}
+            style={{
+              marginLeft: "10px",
+              backgroundColor: "#580049",
+              padding: "10px 12px",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+            }}
+          >
+            Clear
+          </button>
+        )}
         {searchTerm && userData.display_name && (
+
           <>
             <h6>
               <em>
@@ -1416,38 +1526,58 @@ function WalkInForm() {
             ></div>
           </div>
         ) : (
-          <form
-            ref={formRef}
-            onSubmit={handleSubmitWithPrevent}
-            className="walkin-form"
-          >
-            {renderStep()}
-            <div className="form-navigation">
-              {step > 1 && (
-                <button type="button" onClick={prevStep}>
-                  Previous
-                </button>
-              )}
-              {step < 4 && (
-                <button type="button" onClick={nextStep}>
-                  Next
-                </button>
-              )}
-              {step === 4 && (
-                <button
-                  type="button"
-                  className="submit-button"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    const latestReviewData = { ...userData };
-                    setReviewData(latestReviewData);
-                    setShowReviewModal(true);
-                  }}
-                >
-                  {isSubmitting ? "Submitting..." : "Submit Walk-In Form"}
-                </button>
-              )}
+          <form ref={formRef} onSubmit={handleSubmitWithPrevent} className="walkin-form">
+            <div className="progress-container">
+              <div className="progress-labels">
+                <span className={step >= 1 ? "active" : ""}>1. Profile</span>
+                <span className={step >= 2 ? "active" : ""}>2. Employment</span>
+                <span className={step >= 3 ? "active" : ""}>3. Legal Help</span>
+                <span className={step === 4 ? "active" : ""}>4. Credentials</span>
+              </div>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width: `${(step - 1) * 33.33 + 25}%` }}></div>
+              </div>
             </div>
+
+            {renderStep()}
+
+            <div className="form-navigation" style={{ display: "flex", justifyContent: "space-between", marginTop: "20px" }}>
+              <div>
+                {step > 1 && (
+                  <button type="button" onClick={prevStep}>
+                    Previous
+                  </button>
+                )}
+              </div>
+              <div>
+                {step < 4 && (
+                  <button type="button" onClick={nextStep}>
+                    Next
+                  </button>
+                )}
+                {step === 4 && (
+                  <button
+                    type="button"
+                    className="submit-button"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      const latestReviewData = { ...userData };
+                      setReviewData(latestReviewData);
+                      setShowReviewModal(true);
+                    }}
+                  >
+                    <>
+                      {isSubmitting ? (
+                        <span><span className="spinner" /> Submitting...</span>
+                      ) : (
+                        "Submit Walk-In Form"
+                      )}
+                    </>
+                  </button>
+                )}
+              </div>
+            </div>
+
           </form>
         )}
 
@@ -1634,14 +1764,7 @@ const SubmissionModal = ({
     </div>
   );
 };
-const ReviewModal = ({
-  isOpen,
-  onCancel,
-  onConfirm,
-  userData,
-  scannedDocuments,
-  documentDates,
-}) => {
+function ReviewModal({ onConfirm, onCancel, userData, documentDates, hasExpiredDocs, isUploadingDocs, isOpen }) {
   useEffect(() => {
     if (isOpen) {
       document.body.classList.add("modal-open");
@@ -1653,34 +1776,19 @@ const ReviewModal = ({
 
   if (!isOpen) return null;
 
-  const hasExpiredDocs = Object.values(documentDates || {}).some((dateStr) => {
-    if (!dateStr) return true;
-    const date = new Date(dateStr);
-    return (new Date() - date) / (1000 * 60 * 60 * 24 * 30) > 6;
-  });
-
   const getDocStatus = (dateObj) => {
     if (!dateObj) return { status: "N/A", color: "#888" };
-    const date =
-      typeof dateObj?.toDate === "function"
-        ? dateObj.toDate()
-        : new Date(dateObj);
-
+    const date = typeof dateObj?.toDate === "function" ? dateObj.toDate() : new Date(dateObj);
     const months = (new Date() - date) / (1000 * 60 * 60 * 24 * 30);
     return months > 6
       ? { status: "Expired", color: "red" }
       : { status: "Valid", color: "green" };
   };
+
   const formatDate = (dateObj) => {
     if (!dateObj) return "No Upload";
-
-    const date =
-      typeof dateObj?.toDate === "function"
-        ? dateObj.toDate()
-        : new Date(dateObj);
-
+    const date = typeof dateObj?.toDate === "function" ? dateObj.toDate() : new Date(dateObj);
     if (isNaN(date.getTime())) return "Invalid Date";
-
     return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
@@ -1690,222 +1798,94 @@ const ReviewModal = ({
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div
-        className="modal-content"
-        onClick={(e) => e.stopPropagation()} // prevents closing on inner click
-      >
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h4 style={{ textAlign: "center" }}>Review Your Information</h4>
         <div className="scroll-box">
-          <table
-            className="review-table"
-            style={{
-              width: "100%",
-              height: "100%",
-              borderCollapse: "collapse",
-              fontSize: "18px !important",
-            }}
-          >
-            <thead>
-              <tr>
-                <th
-                  colSpan="2"
-                  style={{
-                    textAlign: "left",
-                    background: "#f0f0f0",
-                    padding: "10px",
-                  }}
-                >
-                  1. Applicant's Profile
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Full Name</td>
-                <td>
-                  {userData.display_name} {userData.middle_name}{" "}
-                  {userData.last_name}
-                </td>
-              </tr>
-              <tr>
-                <td>Date of Birth</td>
-                <td>{formatDate(userData.dob)}</td>
-              </tr>
-              <tr>
-                <td>Address</td>
-                <td>{userData.streetAddress}</td>
-              </tr>
-              <tr>
-                <td>City</td>
-                <td>{userData.city}</td>
-              </tr>
-              <tr>
-                <td>Phone</td>
-                <td>{userData.phone}</td>
-              </tr>
-              <tr>
-                <td>Gender</td>
-                <td>{userData.gender}</td>
-              </tr>
-              <tr>
-                <td>Spouse Name</td>
-                <td>{userData.spouse || "N/A"}</td>
-              </tr>
-              <tr>
-                <td>Spouse Occupation</td>
-                <td>{userData.spouseOccupation || "N/A"}</td>
-              </tr>
-              <tr>
-                <td>Children</td>
-                <td>{userData.childrenNamesAges}</td>
-              </tr>
 
-              <tr>
-                <th
-                  colSpan="2"
-                  style={{
-                    textAlign: "left",
-                    background: "#f0f0f0",
-                    padding: "10px",
-                  }}
-                >
-                  2. Employment Information
-                </th>
-              </tr>
-              <tr>
-                <td>Occupation</td>
-                <td>{userData.employment}</td>
-              </tr>
-              <tr>
-                <td>Type</td>
-                <td>{userData.employmentType}</td>
-              </tr>
-              <tr>
-                <td>Employer</td>
-                <td>{userData.employerName}</td>
-              </tr>
-              <tr>
-                <td>Employer Address</td>
-                <td>{userData.employerAddress}</td>
-              </tr>
-              <tr>
-                <td>Monthly Family Income</td>
-                <td>
-                  {userData.monthlyIncome
-                    ? `₱${Number(userData.monthlyIncome).toLocaleString()}`
-                    : "N/A"}
-                </td>
-              </tr>
+          {/* Section 1: Applicant Profile */}
+          <div className="review-section">
+            <h4>1. Applicant’s Profile</h4>
+            <div className="review-row"><span className="review-label">Full Name:</span><span className="review-value">{userData.display_name} {userData.middle_name} {userData.last_name}</span></div>
+            <div className="review-row"><span className="review-label">Date of Birth:</span><span className="review-value">{formatDate(userData.dob)}</span></div>
+            <div className="review-row"><span className="review-label">Address:</span><span className="review-value">{userData.streetAddress}</span></div>
+            <div className="review-row"><span className="review-label">City:</span><span className="review-value">{userData.city}</span></div>
+            <div className="review-row"><span className="review-label">Phone:</span><span className="review-value">{userData.phone}</span></div>
+            <div className="review-row"><span className="review-label">Gender:</span><span className="review-value">{userData.gender}</span></div>
+            <div className="review-row"><span className="review-label">Spouse:</span><span className="review-value">{userData.spouse || "N/A"}</span></div>
+            <div className="review-row"><span className="review-label">Spouse Occupation:</span><span className="review-value">{userData.spouseOccupation || "N/A"}</span></div>
+            <div className="review-row"><span className="review-label">Children:</span><span className="review-value">{userData.childrenNamesAges}</span></div>
+          </div>
 
-              <tr>
-                <th
-                  colSpan="2"
-                  style={{
-                    textAlign: "left",
-                    background: "#f0f0f0",
-                    padding: "10px",
-                  }}
-                >
-                  3. Legal Assistance Requested
-                </th>
-              </tr>
-              <tr>
-                <td>Nature</td>
-                <td>{userData.selectedAssistanceType}</td>
-              </tr>
-              <tr>
-                <td>Problems</td>
-                <td>{userData.problems}</td>
-              </tr>
-              <tr>
-                <td>Reason</td>
-                <td>{userData.problemReason}</td>
-              </tr>
-              <tr>
-                <td>Desired Solutions</td>
-                <td>{userData.desiredSolutions}</td>
-              </tr>
+          {/* Section 2: Employment Info */}
+          <div className="review-section">
+            <h4>2. Employment Information</h4>
+            <div className="review-row"><span className="review-label">Occupation:</span><span className="review-value">{userData.employment}</span></div>
+            <div className="review-row"><span className="review-label">Type of Employment:</span><span className="review-value">{userData.employmentType}</span></div>
+            <div className="review-row"><span className="review-label">Employer:</span><span className="review-value">{userData.employerName}</span></div>
+            <div className="review-row"><span className="review-label">Employer Address:</span><span className="review-value">{userData.employerAddress}</span></div>
+            <div className="review-row"><span className="review-label">Monthly Income:</span><span className="review-value">{userData.monthlyIncome ? `₱${Number(userData.monthlyIncome).toLocaleString()}` : "N/A"}</span></div>
+          </div>
 
-              <tr>
-                <th
-                  colSpan="2"
-                  style={{
-                    textAlign: "left",
-                    background: "#f0f0f0",
-                    padding: "10px",
-                  }}
-                >
-                  4. Documents
-                </th>
-              </tr>
-              {[
-                { label: "Barangay Certificate", key: "certificateBarangay" },
-                { label: "DSWD Certificate", key: "certificateDSWD" },
-                {
-                  label: "PAO Disqualification Letter",
-                  key: "disqualificationLetterPAO",
-                },
-              ].map((doc) => {
-                const status = getDocStatus(documentDates?.[doc.key]);
-                return (
-                  <tr key={doc.key}>
-                    <td>{doc.label}</td>
-                    <td>
-                      {formatDate(documentDates?.[doc.key])}{" "}
-                      <span style={{ fontWeight: "bold", color: status.color }}>
-                        ({status.status})
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {hasExpiredDocs && (
-            <p
-              style={{
-                color: "red",
-                fontWeight: "bold",
-                marginBottom: "12px",
-              }}
-            >
-              You must upload valid (non-expired) documents to proceed.
-            </p>
-          )}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "5px",
-              marginTop: "5px",
-            }}
-          >
-            <button onClick={onCancel} className="cancel-button">
+          {/* Section 3: Legal Assistance */}
+          <div className="review-section">
+            <h4>3. Legal Assistance Requested</h4>
+            <div className="review-row"><span className="review-label">Nature of Assistance:</span><span className="review-value">{userData.selectedAssistanceType}</span></div>
+            <div className="review-row"><span className="review-label">Problems:</span><span className="review-value">{userData.problems}</span></div>
+            <div className="review-row"><span className="review-label">Reason:</span><span className="review-value">{userData.problemReason}</span></div>
+            <div className="review-row"><span className="review-label">Desired Solutions:</span><span className="review-value">{userData.desiredSolutions}</span></div>
+          </div>
+
+          {/* Section 4: Documents */}
+          <div className="review-section">
+            <h4>4. Documents</h4>
+            {[
+              { label: "Barangay Certificate", key: "certificateBarangay" },
+              { label: "DSWD Certificate", key: "certificateDSWD" },
+              { label: "PAO Disqualification Letter", key: "disqualificationLetterPAO" },
+            ].map((doc) => {
+              const status = getDocStatus(documentDates?.[doc.key]);
+              return (
+                <div className="review-row" key={doc.key}>
+                  <span className="review-label">{doc.label}:</span>
+                  <span className="review-value">
+                    {formatDate(documentDates?.[doc.key])}{" "}
+                    <strong style={{ color: status.color }}>({status.status})</strong>
+                  </span>
+                </div>
+              );
+            })}
+            {hasExpiredDocs && (
+              <div style={{ marginTop: "12px" }}>
+                <p style={{ color: "red", fontWeight: "bold" }}>
+                  You must upload valid (non-expired) documents to proceed.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" }}>
+            <button onClick={onCancel} className="cancel-button" disabled={isUploadingDocs}>
               Cancel
             </button>
 
-            <div className="modal-footer">
-              {hasExpiredDocs ? (
-                <p
-                  style={{
-                    color: "red",
-                    fontWeight: "bold",
-                    marginTop: "10px",
-                  }}
-                >
-                  You must upload valid (non-expired) documents to proceed.
-                </p>
+            {!hasExpiredDocs && (
+              isUploadingDocs ? (
+                <button className="submit-button" disabled>
+                  <span className="spinner" /> Uploading documents...
+                </button>
               ) : (
                 <button onClick={onConfirm} className="submit-button">
                   Confirm and Submit
                 </button>
-              )}
-            </div>
+              )
+            )}
           </div>
         </div>
       </div>
     </div>
   );
-};
+}
+
 
 export default WalkInForm;

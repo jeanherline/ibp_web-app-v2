@@ -40,6 +40,7 @@ import {
   createUserWithEmailAndPassword,
 } from "firebase/auth"; // Import Firebase Auth
 import { arrayUnion, arrayRemove } from "firebase/firestore";
+import { sendEmailVerification } from "firebase/auth"; // make sure this is at the top
 
 function Users() {
   const [users, setUsers] = useState([]);
@@ -51,6 +52,12 @@ function Users() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [lastVisible, setLastVisible] = useState(null);
+  const predefinedOptions = [
+    "Payong Legal (Legal Advice)",
+    "Legal na Representasyon (Legal Representation)",
+    "Pag gawa ng Legal na Dokumento (Drafting of Legal Document)"
+  ];
+
   const pageSize = 10;
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -149,21 +156,38 @@ function Users() {
 
   // Function to generate a strong password
   const generatePassword = () => {
-    const chars =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
-    let password = "";
-    for (let i = 0; i < 12; i++) {
-      password += chars[Math.floor(Math.random() * chars.length)];
+    const lowercase = "abcdefghijklmnopqrstuvwxyz";
+    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const numbers = "0123456789";
+    const specialChars = "!@#$%^&*()_+";
+    const allChars = lowercase + uppercase + numbers + specialChars;
+
+    // Ensure at least one of each required character type
+    const getRandom = (str) => str[Math.floor(Math.random() * str.length)];
+    let password =
+      getRandom(lowercase) +
+      getRandom(uppercase) +
+      getRandom(numbers) +
+      getRandom(specialChars);
+
+    // Add remaining random characters
+    for (let i = 0; i < 8; i++) {
+      password += getRandom(allChars);
     }
+
+    // Shuffle password
+    password = password
+      .split("")
+      .sort(() => 0.5 - Math.random())
+      .join("");
 
     setNewUser((prev) => ({ ...prev, password }));
 
-    // ✅ Add this block to update password strength and error
     const passwordScore = zxcvbn(password).score;
     setPasswordStrength(passwordScore);
 
     const strongPasswordRegex =
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
     if (!strongPasswordRegex.test(password)) {
       setPasswordError(
         "Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters."
@@ -172,6 +196,7 @@ function Users() {
       setPasswordError("");
     }
   };
+
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -893,10 +918,12 @@ function Users() {
       // Step 3: Add the new user to Firestore directly within the users collection
       const { password, ...userWithoutPassword } = newUser;
 
+      await sendEmailVerification(userCredential.user); // ✅ Send email verification
+
       await setDoc(doc(fs, "users", uid), {
         ...userWithoutPassword,
         uid,
-        user_status: "active",
+        user_status: "inactive", // ✅ Start as inactive
         created_time: new Date(),
       });
 
@@ -932,9 +959,9 @@ function Users() {
       await addDoc(collection(fs, "audit_logs"), auditLogEntry);
 
       // Step 5: Close modal, reset the form, and navigate back to the root URL
+      alert("Verification email sent. The user must verify their email to activate the account.");
       setShowSignUpModal(false);
       clearForm();
-      alert("User added successfully.");
 
       setIsSubmitting(false);
 
@@ -1074,7 +1101,7 @@ function Users() {
                       >
                         <option value="admin">Admin</option>
                         <option value="head">Head Lawyer</option>
-                        <option value="lawyer">Legal Aid Volunteer</option>
+                        <option value="lawyer">Legal Aid Volunteer (Lawyer)</option>
                         <option value="frontdesk">Front Desk</option>
                         <option value="client">Client</option>
                         <option value="secretary">Secretary</option>
@@ -1560,7 +1587,7 @@ function Users() {
                     </option>
                     <option value="admin">Admin</option>
                     <option value="head">Head Lawyer</option>
-                    <option value="lawyer">Legal Aid Volunteer</option>
+                    <option value="lawyer">Legal Aid Volunteer (Lawyer)</option>
                     <option value="frontdesk">Front Desk</option>
                     <option value="client">Client</option>
                     <option value="secretary">Secretary</option>

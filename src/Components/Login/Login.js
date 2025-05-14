@@ -1,14 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  getAuth,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-} from "firebase/auth";
-import {
   getFirestore,
   doc,
   getDoc,
+  updateDoc,
   collection,
   setDoc,
   addDoc,
@@ -22,6 +18,8 @@ import "../../Config/Firebase"; // Ensure Firebase is initialized
 import "./Login.css";
 import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from "firebase/auth";
+
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,7 +31,6 @@ function Login() {
   const fs = getFirestore();
   const [showPassword, setShowPassword] = useState(false); // New state to control password visibility
   const [loading, setLoading] = useState(false);
-
   // Toggle password visibility
   const togglePasswordVisibility = () => {
     setShowPassword((prevShowPassword) => !prevShowPassword);
@@ -58,6 +55,18 @@ function Login() {
         password
       );
       const user = userCredential.user;
+      // 🔄 Refresh the user to get updated email verification status
+      await user.reload();
+
+      // ✅ If email is verified but user_status is still inactive, activate it
+      if (user.emailVerified) {
+        const userDocRef = doc(fs, "users", user.uid);
+        const userSnap = await getDoc(userDocRef);
+
+        if (userSnap.exists() && userSnap.data().user_status === "inactive") {
+          await updateDoc(userDocRef, { user_status: "active" });
+        }
+      }
 
       // Fetch the ID token from Firebase
       const token = await user.getIdToken();
@@ -135,25 +144,34 @@ function Login() {
         setError("No such user found");
       }
     } catch (err) {
+      console.warn("Login failed:", err.message);
       setError("Invalid credentials");
+      setLoading(false);
 
-      // Optional: Log failed login attempt
-      const auditLogEntry = {
-        actionType: "ACCESS",
-        timestamp: new Date(),
-        uid: "unknown",
-        changes: {
-          action: "Login",
-          status: "Failed",
-        },
-        metadata: {
-          ipAddress: "Unknown",
-          userAgent: navigator.userAgent || "Unknown",
-        },
-      };
+      try {
+        const auditLogEntry = {
+          actionType: "ACCESS",
+          timestamp: new Date(),
+          uid: "unknown",
+          changes: {
+            action: "Login",
+            status: "Failed",
+          },
+          metadata: {
+            ipAddress: "Unknown",
+            userAgent: navigator.userAgent || "Unknown",
+          },
+        };
 
-      await addDoc(collection(fs, "audit_logs"), auditLogEntry); // Use addDoc instead of .add
+        await addDoc(collection(fs, "audit_logs"), auditLogEntry);
+      } catch (auditError) {
+        console.warn("Audit log write failed:", auditError.message);
+        // Optionally ignore or silently log this
+      }
+
+      return;
     }
+
   };
 
   const handleForgotPassword = async (e) => {
@@ -165,11 +183,12 @@ function Login() {
       await sendPasswordResetEmail(auth, email);
       setMessage("Password reset email sent! Check your inbox.");
     } catch (err) {
-      setError(
-        "Error sending password reset email. Please check the email address or try again later."
-      );
+      console.warn("Login failed:", err.message); // Log safely without throwing
+      setError("Invalid credentials");
+      setLoading(false);
+      return;
     }
-  };
+  }
 
   // Log Login Activity and save trusted device if not already present
   const logLoginActivity = async (user) => {

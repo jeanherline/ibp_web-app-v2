@@ -50,6 +50,12 @@ function ApptsFrontDesk() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [lastVisible, setLastVisible] = useState(null);
+  const predefinedOptions = [
+    "Payong Legal (Legal Advice)",
+    "Legal na Representasyon (Legal Representation)",
+    "Pag gawa ng Legal na Dokumento (Drafting of Legal Document)"
+  ];
+
   const pageSize = 7;
   const [clientEligibility, setClientEligibility] = useState({
     eligibility: "",
@@ -87,6 +93,30 @@ function ApptsFrontDesk() {
   const [clientAttend, setClientAttend] = useState(null);
   const navigate = useNavigate();
   const auth = getAuth();
+  const [reschedulerNames, setReschedulerNames] = useState({});
+  const latestReason = selectedAppointment?.rescheduleHistory
+    ?.filter(entry => entry.rescheduleReason) // ensure it has the reason
+    ?.slice(-1)[0]?.rescheduleReason || "No reason provided";
+
+  useEffect(() => {
+    const fetchReschedulerNames = async () => {
+      const names = {};
+      for (const entry of selectedAppointment?.rescheduleHistory || []) {
+        const uid = entry.rescheduledByUid;
+        if (uid && !names[uid]) {
+          const user = await getUserById(uid);
+          if (user) {
+            names[uid] = `${user.display_name} ${user.middle_name || ""} ${user.last_name}`;
+          }
+        }
+      }
+      setReschedulerNames(names);
+    };
+
+    if (selectedAppointment?.rescheduleHistory) {
+      fetchReschedulerNames();
+    }
+  }, [selectedAppointment]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -218,72 +248,58 @@ function ApptsFrontDesk() {
         <div class="section">
           <div class="header">
             <img src="${ibpLogo}" class="logo" alt="IBP Logo" />
-            ${
-              qr
-                ? `<img src="${qr}" class="qr" alt="Appointment QR Code" />`
-                : ""
-            }
+            ${qr
+        ? `<img src="${qr}" class="qr" alt="Appointment QR Code" />`
+        : ""
+      }
           </div>
           <h2>Integrated Bar of the Philippines – Malolos Chapter</h2>
           <table>
-            <tr><th>Control Number</th><td>${
-              selectedAppointment.controlNumber
-            }</td></tr>
-            <tr><th>Status</th><td>${
-              selectedAppointment.appointmentStatus
-            }</td></tr>
+            <tr><th>Control Number</th><td>${selectedAppointment.controlNumber
+      }</td></tr>
+            <tr><th>Status</th><td>${selectedAppointment.appointmentStatus
+      }</td></tr>
             <tr><th>Type</th><td>${selectedAppointment.apptType}</td></tr>
             <tr><th>Appointment Date</th><td>${appointmentDate}</td></tr>
-            <tr><th>Full Name</th><td>${selectedAppointment.display_name} ${
-      selectedAppointment.middle_name
-    } ${selectedAppointment.last_name}</td></tr>
+            <tr><th>Full Name</th><td>${selectedAppointment.display_name} ${selectedAppointment.middle_name
+      } ${selectedAppointment.last_name}</td></tr>
             <tr><th>Birthdate</th><td>${dob}</td></tr>
             <tr><th>Phone</th><td>${selectedAppointment.phone}</td></tr>
             <tr><th>Gender</th><td>${selectedAppointment.gender}</td></tr>
             <tr><th>Address</th><td>${selectedAppointment.address}</td></tr>
             <tr><th>Spouse</th><td>${selectedAppointment.spouse}</td></tr>
-            <tr><th>Spouse Occupation</th><td>${
-              selectedAppointment.spouseOccupation
-            }</td></tr>
-            <tr><th>Children Names and Ages</th><td>${
-              selectedAppointment.childrenNamesAges
-            }</td></tr>
-            <tr><th>Occupation</th><td>${
-              selectedAppointment.occupation
-            }</td></tr>
-            <tr><th>Employment Type</th><td>${
-              selectedAppointment.employmentType
-            }</td></tr>
-            <tr><th>Employer</th><td>${
-              selectedAppointment.employerName
-            }</td></tr>
-            <tr><th>Employer Address</th><td>${
-              selectedAppointment.employerAddress
-            }</td></tr>
-            <tr><th>Monthly Income</th><td>${
-              selectedAppointment.monthlyIncome
-            }</td></tr>
-            <tr><th>Legal Assistance Type</th><td>${
-              selectedAppointment.selectedAssistanceType
-            }</td></tr>
+            <tr><th>Spouse Occupation</th><td>${selectedAppointment.spouseOccupation
+      }</td></tr>
+            <tr><th>Children Names and Ages</th><td>${selectedAppointment.childrenNamesAges
+      }</td></tr>
+            <tr><th>Occupation</th><td>${selectedAppointment.occupation
+      }</td></tr>
+            <tr><th>Employment Type</th><td>${selectedAppointment.employmentType
+      }</td></tr>
+            <tr><th>Employer</th><td>${selectedAppointment.employerName
+      }</td></tr>
+            <tr><th>Employer Address</th><td>${selectedAppointment.employerAddress
+      }</td></tr>
+            <tr><th>Monthly Income</th><td>${selectedAppointment.monthlyIncome
+      }</td></tr>
+            <tr><th>Legal Assistance Type</th><td>${selectedAppointment.selectedAssistanceType
+      }</td></tr>
             <tr><th>Problem</th><td>${selectedAppointment.problems}</td></tr>
-            <tr><th>Problem Reason</th><td>${
-              selectedAppointment.problemReason
-            }</td></tr>
-            <tr><th>Desired Solutions</th><td>${
-              selectedAppointment.desiredSolutions
-            }</td></tr>
+            <tr><th>Problem Reason</th><td>${selectedAppointment.problemReason
+      }</td></tr>
+            <tr><th>Desired Solutions</th><td>${selectedAppointment.desiredSolutions
+      }</td></tr>
           </table>
         </div>
   
         ${images
-          .map(
-            (img) => `
+        .map(
+          (img) => `
           <div class="image-page">
             <img src="${img.url}" />
           </div>`
-          )
-          .join("")}
+        )
+        .join("")}
       </body>
       </html>
     `);
@@ -554,16 +570,58 @@ function ApptsFrontDesk() {
     if (!isOpen) return null;
 
     return (
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-          <div className="image-container">
-            <img
-              src={url}
-              alt="Fullscreen Image"
-              className="fullscreen-image"
-            />
-          </div>
-          <button onClick={onClose} className="close-button">
+      <div
+        className="modal-overlay"
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          backgroundColor: "rgba(0, 0, 0, 0.8)",
+          zIndex: 9999, // 👈 ensure this is higher than any Bootstrap/other modals
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          className="modal-content"
+          style={{
+            position: "relative",
+            maxWidth: "90%",
+            maxHeight: "90%",
+            zIndex: 10000,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <img
+            src={url}
+            alt="Preview"
+            style={{
+              width: "100%",
+              height: "auto",
+              borderRadius: "8px",
+              boxShadow: "0 0 15px rgba(0,0,0,0.5)",
+            }}
+          />
+          <button
+            onClick={onClose}
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 10,
+              background: "white",
+              border: "none",
+              borderRadius: "50%",
+              width: 30,
+              height: 30,
+              fontSize: 18,
+              cursor: "pointer",
+              zIndex: 10001,
+            }}
+          >
             &times;
           </button>
         </div>
@@ -632,18 +690,30 @@ function ApptsFrontDesk() {
         : "Not Available";
 
       const updatedData = {
+        "updatedTime": Timestamp.fromDate(new Date()),
         "clientEligibility.eligibility": clientEligibility.eligibility,
         "appointmentDetails.appointmentStatus":
           clientEligibility.eligibility === "yes" ? "approved" : "denied",
         "clientEligibility.denialReason": clientEligibility.denialReason,
-        "clientEligibility.notes": clientEligibility.notes,
+        "clientEligibility.notes": clientEligibility.notes?.trim()
+          ? clientEligibility.notes
+          : "All Documents Verified.",
         "appointmentDetails.assignedLawyer": clientEligibility.assistingCounsel,
-        "appointmentDetails.updatedTime": Timestamp.fromDate(new Date()),
+        "updatedTime": Timestamp.fromDate(new Date()),
       };
 
       await updateAppointment(selectedAppointment.id, updatedData);
 
-      // Fetch latest login activity
+      // 🔔 Notify client
+      if (selectedAppointment?.uid && selectedAppointment?.controlNumber) {
+        let message = "";
+
+        if (clientEligibility.eligibility === "yes") {
+          message = `Your request (ID: ${selectedAppointment.id}) has been approved.`;
+        } else {
+          message = `Your request (ID: ${selectedAppointment.id}) has been denied.`;
+        }
+      }
       const { ipAddress, deviceName } = await fetchLatestLoginActivity(
         currentUser.uid
       );
@@ -657,33 +727,33 @@ function ApptsFrontDesk() {
           eligibility:
             selectedAppointment.clientEligibility?.eligibility !== undefined
               ? {
-                  oldValue: selectedAppointment.clientEligibility.eligibility,
-                  newValue: clientEligibility.eligibility,
-                }
+                oldValue: selectedAppointment.clientEligibility.eligibility,
+                newValue: clientEligibility.eligibility,
+              }
               : null,
           appointmentStatus:
             selectedAppointment.appointmentStatus !== undefined
               ? {
-                  oldValue: selectedAppointment.appointmentStatus,
-                  newValue:
-                    clientEligibility.eligibility === "yes"
-                      ? "approved"
-                      : "denied",
-                }
+                oldValue: selectedAppointment.appointmentStatus,
+                newValue:
+                  clientEligibility.eligibility === "yes"
+                    ? "approved"
+                    : "denied",
+              }
               : null,
           denialReason:
             selectedAppointment.clientEligibility?.denialReason !== undefined
               ? {
-                  oldValue: selectedAppointment.clientEligibility.denialReason,
-                  newValue: clientEligibility.denialReason,
-                }
+                oldValue: selectedAppointment.clientEligibility.denialReason,
+                newValue: clientEligibility.denialReason,
+              }
               : null,
           updatedTime:
             selectedAppointment.updatedTime !== undefined
               ? {
-                  oldValue: selectedAppointment.updatedTime,
-                  newValue: Timestamp.fromDate(new Date()),
-                }
+                oldValue: selectedAppointment.updatedTime,
+                newValue: Timestamp.fromDate(new Date()),
+              }
               : null,
         },
         affectedData: { appointmentId: selectedAppointment.id },
@@ -751,7 +821,7 @@ function ApptsFrontDesk() {
       (appointment) =>
         appointment.assignedLawyer === currentUser.uid &&
         appointment.appointmentDate.toDate().toDateString() ===
-          date.toDateString()
+        date.toDateString()
     );
 
     return isFullyBooked || isAssignedToCurrentLawyer
@@ -883,15 +953,12 @@ function ApptsFrontDesk() {
           value={natureOfLegalAssistanceFilter}
         >
           <option value="all">Nature of Legal Assistance</option>
-          <option value="Payong Legal (Legal Advice)">
-            Payong Legal (Legal Advice)
-          </option>
-          <option value="Legal na Representasyon (Legal Representation)">
-            Legal na Representasyon (Legal Representation)
-          </option>
-          <option value="Pag gawa ng Legal na Dokumento (Drafting of Legal Document)">
-            Pag gawa ng Legal na Dokumento (Drafting of Legal Document)
-          </option>
+          {predefinedOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+          <option value="Others">Others</option>
         </select>
         &nbsp;&nbsp;
         <button onClick={resetFilters}>Reset Filters</button>
@@ -1037,12 +1104,12 @@ function ApptsFrontDesk() {
                         <td>
                           {selectedAppointment.dob?.toDate
                             ? selectedAppointment.dob
-                                .toDate()
-                                .toLocaleDateString("en-US", {
-                                  year: "numeric",
-                                  month: "long",
-                                  day: "numeric",
-                                })
+                              .toDate()
+                              .toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })
                             : "N/A"}
                         </td>
                       </tr>
@@ -1091,50 +1158,50 @@ function ApptsFrontDesk() {
                 <section className="mb-4 print-section">
                   {(selectedAppointment.newRequest ||
                     selectedAppointment.requestReason) && (
-                    <section className="mb-4 print-section no-print">
-                      <h2>
-                        <em style={{ color: "#a34bc9", fontSize: "16px" }}>
-                          New Request Details
-                        </em>
-                      </h2>
-                      <table className="table table-striped table-bordered">
-                        <tbody>
-                          {/* Only show the control number if newRequest is true */}
-                          {selectedAppointment.newRequest &&
-                            !selectedAppointment?.requestReason && (
+                      <section className="mb-4 print-section no-print">
+                        <h2>
+                          <em style={{ color: "#a34bc9", fontSize: "16px" }}>
+                            New Request Details
+                          </em>
+                        </h2>
+                        <table className="table table-striped table-bordered">
+                          <tbody>
+                            {/* Only show the control number if newRequest is true */}
+                            {selectedAppointment.newRequest &&
+                              !selectedAppointment?.requestReason && (
+                                <tr>
+                                  <th>New Request Control Number:</th>
+                                  <td>
+                                    {selectedAppointment?.newControlNumber ||
+                                      "N/A"}
+                                  </td>
+                                </tr>
+                              )}
+                            <tr>
+                              <th>Reason for New Request:</th>
+                              <td>
+                                {selectedAppointment?.requestReason || "N/A"}
+                              </td>
+                            </tr>
+                            {/* Only show Attached File if it exists */}
+                            {selectedAppointment?.newRequestUrl && (
                               <tr>
-                                <th>New Request Control Number:</th>
+                                <th>Attached File:</th>
                                 <td>
-                                  {selectedAppointment?.newControlNumber ||
-                                    "N/A"}
+                                  <a
+                                    href={selectedAppointment?.newRequestUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    View File
+                                  </a>
                                 </td>
                               </tr>
                             )}
-                          <tr>
-                            <th>Reason for New Request:</th>
-                            <td>
-                              {selectedAppointment?.requestReason || "N/A"}
-                            </td>
-                          </tr>
-                          {/* Only show Attached File if it exists */}
-                          {selectedAppointment?.newRequestUrl && (
-                            <tr>
-                              <th>Attached File:</th>
-                              <td>
-                                <a
-                                  href={selectedAppointment?.newRequestUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  View File
-                                </a>
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </section>
-                  )}
+                          </tbody>
+                        </table>
+                      </section>
+                    )}
                   <br />
                   <h2>
                     <em style={{ color: "#a34bc9", fontSize: "16px" }}>
@@ -1172,7 +1239,7 @@ function ApptsFrontDesk() {
                           <td>
                             {selectedAppointment?.apptType === "Online" ? (
                               selectedAppointment?.appointmentStatus ===
-                              "done" ? (
+                                "done" ? (
                                 // Appointment is done, show "Done" with a check icon
                                 <button
                                   style={{
@@ -1262,42 +1329,42 @@ function ApptsFrontDesk() {
                       <>
                         {selectedAppointment.appointmentStatus ===
                           "scheduled" && (
-                          <>
-                            <tr>
-                              <th>Eligibility:</th>
-                              <td>
-                                {capitalizeFirstLetter(
-                                  selectedAppointment.clientEligibility
-                                    ?.eligibility || "N/A"
-                                )}
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>Assigned Lawyer:</th>
-                              <td>
-                                {assignedLawyerDetails
-                                  ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
-                                  : "Not Available"}
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>Eligibility Notes:</th>
-                              <td>
-                                {selectedAppointment.clientEligibility?.notes ||
-                                  "N/A"}
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>Appointment Date:</th>
-                              <td>
-                                {getFormattedDate(
-                                  selectedAppointment.appointmentDate,
-                                  true
-                                )}
-                              </td>
-                            </tr>
-                          </>
-                        )}
+                            <>
+                              <tr>
+                                <th>Eligibility:</th>
+                                <td>
+                                  {capitalizeFirstLetter(
+                                    selectedAppointment.clientEligibility
+                                      ?.eligibility || "N/A"
+                                  )}
+                                </td>
+                              </tr>
+                              <tr>
+                                <th>Assigned Lawyer:</th>
+                                <td>
+                                  {assignedLawyerDetails
+                                    ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
+                                    : "Not Available"}
+                                </td>
+                              </tr>
+                              <tr>
+                                <th>Eligibility Notes:</th>
+                                <td>
+                                  {selectedAppointment.clientEligibility?.notes ||
+                                    "N/A"}
+                                </td>
+                              </tr>
+                              <tr>
+                                <th>Appointment Date:</th>
+                                <td>
+                                  {getFormattedDate(
+                                    selectedAppointment.appointmentDate,
+                                    true
+                                  )}
+                                </td>
+                              </tr>
+                            </>
+                          )}
 
                         {selectedAppointment.appointmentStatus === "denied" && (
                           <>
@@ -1384,40 +1451,40 @@ function ApptsFrontDesk() {
                         )}
                         {selectedAppointment.appointmentStatus ===
                           "approved" && (
-                          <>
-                            <tr>
-                              <th>Eligibility:</th>
-                              <td>
-                                {capitalizeFirstLetter(
-                                  selectedAppointment.clientEligibility
-                                    ?.eligibility || "N/A"
-                                )}
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>Assigned Lawyer:</th>
-                              <td>
-                                {assignedLawyerDetails
-                                  ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
-                                  : "Not Available"}
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>Eligibility Notes:</th>
-                              <td>
-                                {selectedAppointment.clientEligibility?.notes ||
-                                  "N/A"}
-                              </td>
-                            </tr>
-                          </>
-                        )}
+                            <>
+                              <tr>
+                                <th>Eligibility:</th>
+                                <td>
+                                  {capitalizeFirstLetter(
+                                    selectedAppointment.clientEligibility
+                                      ?.eligibility || "N/A"
+                                  )}
+                                </td>
+                              </tr>
+                              <tr>
+                                <th>Assigned Lawyer:</th>
+                                <td>
+                                  {assignedLawyerDetails
+                                    ? `${assignedLawyerDetails.display_name} ${assignedLawyerDetails.middle_name} ${assignedLawyerDetails.last_name}`
+                                    : "Not Available"}
+                                </td>
+                              </tr>
+                              <tr>
+                                <th>Eligibility Notes:</th>
+                                <td>
+                                  {selectedAppointment.clientEligibility?.notes ||
+                                    "N/A"}
+                                </td>
+                              </tr>
+                            </>
+                          )}
                       </>
                     </tbody>
                   </table>
                 </section>
                 <br />
                 {selectedAppointment?.rescheduleHistory &&
-                selectedAppointment.rescheduleHistory.length > 0 ? (
+                  selectedAppointment.rescheduleHistory.length > 0 ? (
                   <section className="mb-4 print-section no-print">
                     <h2
                       style={{ cursor: "pointer" }}
@@ -1439,7 +1506,9 @@ function ApptsFrontDesk() {
                             <th style={{ padding: "10px" }}>Original Date</th>
                             <th style={{ padding: "10px" }}>Original Type</th>
                             <th style={{ padding: "10px" }}>Reason</th>
-                            <th style={{ padding: "10px" }}>Reschedule Time</th>
+                            <th style={{ padding: "10px" }}>Person Rescheduled</th>
+                            <th style={{ padding: "10px" }}>Status</th>
+                            <th style={{ padding: "10px" }}>Time Updated</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1454,6 +1523,9 @@ function ApptsFrontDesk() {
                                 </td>
                                 <td style={{ padding: "10px" }}>
                                   {entry.rescheduleReason || "N/A"}
+                                </td>
+                                <td style={{ padding: "10px" }}>
+                                  {reschedulerNames[entry.rescheduledByUid] || entry.rescheduledByUid}
                                 </td>
                                 <td style={{ padding: "10px" }}>
                                   {getFormattedDate(

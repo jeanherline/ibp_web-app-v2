@@ -58,7 +58,7 @@ const getAppointments = async (
 
     queryRef = query(
       queryRef,
-      orderBy("appointmentDetails.createdDate", "desc")
+      orderBy("createdDate", "desc")
     );
 
     if (lastVisible) {
@@ -85,7 +85,7 @@ const getAppointments = async (
 
     for (const docSnap of querySnapshot.docs) {
       const data = docSnap.data();
-      const uid = data.appointmentDetails?.uid;
+      const uid = data.uid;
 
       let userData = {};
       if (uid) {
@@ -107,7 +107,7 @@ const getAppointments = async (
         reviewerDetails: data.reviewerDetails,
         proceedingNotes: data.proceedingNotes,
         rescheduleHistory: data.rescheduleHistory || [],
-        createdDate: data.appointmentDetails?.createdDate,
+        createdDate: data.createdDate,
         appointmentStatus: data.appointmentDetails?.appointmentStatus,
         controlNumber: data.appointmentDetails?.controlNumber,
         appointmentDate: data.appointmentDetails?.appointmentDate,
@@ -250,20 +250,20 @@ const aptsLawyerCalendar = async (
 
     queryRef = query(
       queryRef,
-      orderBy("appointmentDetails.createdDate", "desc"),
+      orderBy("createdDate", "desc"),
       limit(pageSize)
     );
 
     if (lastVisible) {
       queryRef = isPrevious
         ? query(
-            queryRef,
-            startAt(lastVisible?.appointmentDetails?.controlNumber || "")
-          )
+          queryRef,
+          startAt(lastVisible?.appointmentDetails?.controlNumber || "")
+        )
         : query(
-            queryRef,
-            startAfter(lastVisible?.appointmentDetails?.controlNumber || "")
-          );
+          queryRef,
+          startAfter(lastVisible?.appointmentDetails?.controlNumber || "")
+        );
     }
 
     const querySnapshot = await getDocs(queryRef);
@@ -307,7 +307,7 @@ const aptsLawyerCalendar = async (
           ...data.employmentProfile,
           ...data.legalAssistanceRequested,
           ...data.uploadedImages,
-          createdDate: data.appointmentDetails?.createdDate,
+          createdDate: data.createdDate,
           appointmentStatus: data.appointmentDetails?.appointmentStatus,
           controlNumber: data.appointmentDetails?.controlNumber,
           appointmentDate: data.appointmentDetails?.appointmentDate,
@@ -355,7 +355,7 @@ const aptsCalendar = async (
 
     queryRef = query(
       queryRef,
-      orderBy("appointmentDetails.createdDate", "desc"),
+      orderBy("createdDate", "desc"),
       limit(pageSize)
     );
 
@@ -371,7 +371,7 @@ const aptsCalendar = async (
 
     querySnapshot.docs.forEach((docSnap) => {
       const data = docSnap.data();
-      const userUid = data.appointmentDetails?.uid;
+      const userUid = data.uid;
 
       appointmentsRaw.push({ id: docSnap.id, ...data, userUid });
 
@@ -398,9 +398,8 @@ const aptsCalendar = async (
       return {
         id: appointment.id,
         uid: appointment.userUid,
-        fullName: `${userData.display_name || ""} ${
-          userData.middle_name || ""
-        } ${userData.last_name || ""}`.trim(),
+        fullName: `${userData.display_name || ""} ${userData.middle_name || ""
+          } ${userData.last_name || ""}`.trim(),
         display_name: userData.display_name || "",
         middle_name: userData.middle_name || "",
         last_name: userData.last_name || "",
@@ -435,7 +434,7 @@ const aptsCalendar = async (
         controlNumber: appointment.appointmentDetails?.controlNumber,
         appointmentDate: appointment.appointmentDetails?.appointmentDate,
         appointmentDetails: appointment.appointmentDetails,
-        createdDate: appointment.appointmentDetails?.createdDate || null,
+        createdDate: appointment.createdDate || null,
         reviewerDetails: appointment.reviewerDetails,
         proceedingNotes: appointment.proceedingNotes,
         rescheduleHistory: appointment.rescheduleHistory || [],
@@ -460,7 +459,6 @@ const aptsCalendar = async (
   }
 };
 
-
 const getLawyerAppointments = (
   filter,
   lastVisible,
@@ -481,9 +479,18 @@ const getLawyerAppointments = (
       );
     }
 
+    // List of predefined legal assistance types
+    const predefinedOptions = [
+      "Payong Legal (Legal Advice)",
+      "Legal na Representasyon (Legal Representation)",
+      "Pag gawa ng Legal na Dokumento (Drafting of Legal Document)",
+    ];
+
+    // Apply legal assistance filter (Firestore limitation workaround)
     if (
       natureOfLegalAssistanceFilter &&
-      natureOfLegalAssistanceFilter !== "all"
+      natureOfLegalAssistanceFilter !== "all" &&
+      natureOfLegalAssistanceFilter !== "Others"
     ) {
       queryRef = query(
         queryRef,
@@ -495,8 +502,7 @@ const getLawyerAppointments = (
       );
     }
 
-    // Ensure only appointments assigned to the current user are fetched
-    // Only fetch appointments assigned to lawyer or secretary's associated lawyer
+    // Apply lawyer/secretary filter
     if (
       currentUser?.member_type === "lawyer" ||
       currentUser?.member_type === "secretary"
@@ -514,21 +520,31 @@ const getLawyerAppointments = (
       }
     }
 
-    // Order by createdDate and limit results for pagination
+    // Order by createdDate and handle pagination
     queryRef = query(
       queryRef,
-      orderBy("appointmentDetails.createdDate", "desc"),
+      orderBy("createdDate", "desc"),
       limit(pageSize)
     );
 
-    // Handle pagination
     if (lastVisible) {
       queryRef = query(queryRef, startAfter(lastVisible));
     }
 
-    // Use onSnapshot for real-time updates
     return onSnapshot(queryRef, async (querySnapshot) => {
-      const filtered = querySnapshot.docs.filter((doc) => {
+      let filteredDocs = querySnapshot.docs;
+
+      // Apply "Others" filter after fetching if selected
+      if (natureOfLegalAssistanceFilter === "Others") {
+        filteredDocs = filteredDocs.filter((doc) => {
+          const data = doc.data();
+          const selected = data.legalAssistanceRequested?.selectedAssistanceType;
+          return selected && !predefinedOptions.includes(selected);
+        });
+      }
+
+      // Apply text search filter
+      const filtered = filteredDocs.filter((doc) => {
         const data = doc.data();
         return (
           data.applicantProfile?.fullName
@@ -545,16 +561,14 @@ const getLawyerAppointments = (
         );
       });
 
-      // Map the filtered data and trigger callback
       const appointments = await Promise.all(
         filtered.map(async (docSnap) => {
           const data = docSnap.data();
-          const uid = data.appointmentDetails?.uid;
+          const uid = data.uid;
 
           let userData = {};
           if (uid) {
-            const userDoc = await getDoc(doc(fs, "users", uid)); // ✅ Now `doc` refers to the Firebase function
-
+            const userDoc = await getDoc(doc(fs, "users", uid));
             if (userDoc.exists()) {
               userData = userDoc.data();
             }
@@ -562,11 +576,8 @@ const getLawyerAppointments = (
 
           return {
             id: docSnap.id,
-
-            // Flattened appointmentDetails
             appointmentDetails: data.appointmentDetails,
-            appointmentStatus:
-              data.appointmentDetails?.appointmentStatus || null,
+            appointmentStatus: data.appointmentDetails?.appointmentStatus || null,
             controlNumber: data.appointmentDetails?.controlNumber || null,
             appointmentDate: data.appointmentDetails?.appointmentDate || null,
             apptType: data.appointmentDetails?.apptType || null,
@@ -575,19 +586,12 @@ const getLawyerAppointments = (
             newRequest: data.appointmentDetails?.newRequest || false,
             requestReason: data.appointmentDetails?.requestReason || null,
             newControlNumber: data.appointmentDetails?.newControlNumber || null,
-
-            // Flattened legal assistance data
             selectedAssistanceType:
               data.legalAssistanceRequested?.selectedAssistanceType || null,
             problemReason: data.legalAssistanceRequested?.problemReason || null,
             problems: data.legalAssistanceRequested?.problems || null,
-            desiredSolutions:
-              data.legalAssistanceRequested?.desiredSolutions || null,
-
-            // Employment
+            desiredSolutions: data.legalAssistanceRequested?.desiredSolutions || null,
             ...data.employmentProfile,
-
-            // Images from users collection (barangay, dswd, pao)
             barangayImageUrl: userData.uploadedImages?.barangayImageUrl || null,
             barangayImageUrlDateUploaded:
               userData.uploadedImages?.barangayImageUrlDateUploaded || null,
@@ -597,11 +601,7 @@ const getLawyerAppointments = (
             paoImageUrl: userData.uploadedImages?.paoImageUrl || null,
             paoImageUrlDateUploaded:
               userData.uploadedImages?.paoImageUrlDateUploaded || null,
-
-            // Images from appointments (for newRequest/proceedingNotes)
             ...data.uploadedImages,
-
-            // User info (from users collection)
             display_name: userData.display_name || "",
             middle_name: userData.middle_name || "",
             last_name: userData.last_name || "",
@@ -619,13 +619,11 @@ const getLawyerAppointments = (
             spouse: userData.spouse || "",
             spouseOccupation: userData.spouseOccupation || "",
             childrenNamesAges: userData.childrenNamesAges || "",
-
-            // Meta
             reviewerDetails: data.reviewerDetails || null,
             proceedingNotes: data.proceedingNotes || null,
             clientEligibility: data.clientEligibility || null,
             rescheduleHistory: data.rescheduleHistory || [],
-            createdDate: data.appointmentDetails?.createdDate || null,
+            createdDate: data.createdDate || null,
           };
         })
       );
@@ -648,12 +646,12 @@ export const generateControlNumber = () => {
   return `${now.getFullYear().toString().padStart(4, "0")}${(now.getMonth() + 1)
     .toString()
     .padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}${now
-    .getHours()
-    .toString()
-    .padStart(2, "0")}${now.getMinutes().toString().padStart(2, "0")}${now
-    .getSeconds()
-    .toString()
-    .padStart(2, "0")}`;
+      .getHours()
+      .toString()
+      .padStart(2, "0")}${now.getMinutes().toString().padStart(2, "0")}${now
+        .getSeconds()
+        .toString()
+        .padStart(2, "0")}`;
 };
 
 // Utility function to convert a string to title case
@@ -704,7 +702,7 @@ export const getAllAppointments = async (
     // Order by created date for pagination
     queryRef = query(
       queryRef,
-      orderBy("appointmentDetails.createdDate", "desc")
+      orderBy("createdDate", "desc")
     );
 
     // Handle pagination logic
@@ -734,7 +732,7 @@ export const getAllAppointments = async (
 
     for (const docSnap of querySnapshot.docs) {
       const data = docSnap.data();
-      const uid = data.appointmentDetails?.uid;
+      const uid = data.uid;
 
       let userData = {};
       if (uid) {
@@ -755,7 +753,7 @@ export const getAllAppointments = async (
         reviewerDetails: data.reviewerDetails,
         proceedingNotes: data.proceedingNotes,
         rescheduleHistory: data.rescheduleHistory || [],
-        createdDate: data.appointmentDetails?.createdDate,
+        createdDate: data.createdDate,
         appointmentStatus: data.appointmentDetails?.appointmentStatus,
         controlNumber: data.appointmentDetails?.controlNumber,
         appointmentDate: data.appointmentDetails?.appointmentDate,
@@ -824,7 +822,7 @@ const getAdminAppointments = async (
 
     queryRef = query(
       queryRef,
-      orderBy("appointmentDetails.createdDate", "desc")
+      orderBy("createdDate", "desc")
     );
 
     if (lastVisible) {
@@ -846,7 +844,7 @@ const getAdminAppointments = async (
 
     querySnapshot.docs.forEach((docSnap) => {
       const data = docSnap.data();
-    const userUid = data.appointmentDetails?.uid;
+      const userUid = data.uid;
       appointmentsRaw.push({ id: docSnap.id, ...data, userUid });
 
       if (userUid) {
@@ -873,9 +871,8 @@ const getAdminAppointments = async (
       return {
         id: appointment.id,
         uid: appointment.userUid,
-        fullName: `${userData.display_name || ""} ${
-          userData.middle_name || ""
-        } ${userData.last_name || ""}`.trim(),
+        fullName: `${userData.display_name || ""} ${userData.middle_name || ""
+          } ${userData.last_name || ""}`.trim(),
         display_name: userData.display_name || "",
         middle_name: userData.middle_name || "",
         last_name: userData.last_name || "",
@@ -914,7 +911,7 @@ const getAdminAppointments = async (
         proceedingNotes: appointment.proceedingNotes,
         rescheduleHistory: appointment.rescheduleHistory || [],
         clientEligibility: appointment.clientEligibility,
-        createdDate: appointment.appointmentDetails?.createdDate || null,
+        createdDate: appointment.createdDate || null,
 
         // additional data
         ...appointment.legalAssistanceRequested,
@@ -930,9 +927,8 @@ const getAdminAppointments = async (
     if (searchText) {
       const searchLower = searchText.toLowerCase();
       filteredAppointments = appointmentsData.filter((a) => {
-        const name = `${a.display_name || ""} ${a.middle_name || ""} ${
-          a.last_name || ""
-        }`.toLowerCase();
+        const name = `${a.display_name || ""} ${a.middle_name || ""} ${a.last_name || ""
+          }`.toLowerCase();
         const controlNumber = a.controlNumber?.toLowerCase() || "";
         const email = a.email?.toLowerCase() || "";
         const phone = a.phone || "";

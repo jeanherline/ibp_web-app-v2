@@ -30,6 +30,30 @@ function ApptsCalendar() {
   const navigate = useNavigate();
   const auth = getAuth();
   const [loading, setLoading] = useState(false);
+  const [reschedulerNames, setReschedulerNames] = useState({});
+  const latestReason = selectedAppointment?.rescheduleHistory
+    ?.filter(entry => entry.rescheduleReason) // ensure it has the reason
+    ?.slice(-1)[0]?.rescheduleReason || "No reason provided";
+
+  useEffect(() => {
+    const fetchReschedulerNames = async () => {
+      const names = {};
+      for (const entry of selectedAppointment?.rescheduleHistory || []) {
+        const uid = entry.rescheduledByUid;
+        if (uid && !names[uid]) {
+          const user = await getUserById(uid);
+          if (user) {
+            names[uid] = `${user.display_name} ${user.middle_name || ""} ${user.last_name}`;
+          }
+        }
+      }
+      setReschedulerNames(names);
+    };
+
+    if (selectedAppointment?.rescheduleHistory) {
+      fetchReschedulerNames();
+    }
+  }, [selectedAppointment]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -957,7 +981,8 @@ function ApptsCalendar() {
                         <th style={{ padding: "10px" }}>Original Date</th>
                         <th style={{ padding: "10px" }}>Original Type</th>
                         <th style={{ padding: "10px" }}>Reason</th>
-                        <th style={{ padding: "10px" }}>Reschedule Time</th>
+                        <th style={{ padding: "10px" }}>Person Rescheduled</th>
+                        <th style={{ padding: "10px" }}>Time Updated</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -972,6 +997,14 @@ function ApptsCalendar() {
                             </td>
                             <td style={{ padding: "10px" }}>
                               {entry.rescheduleReason || "N/A"}
+                            </td>
+                            <td style={{ padding: "10px" }}>
+                              {reschedulerNames[entry.rescheduledByUid] || entry.rescheduledByUid}
+                            </td>
+                              <td style={{ padding: "10px" }}>
+                              {entry.rescheduleStatus
+    ? entry.rescheduleStatus.charAt(0).toUpperCase() + entry.rescheduleStatus.slice(1)
+    : "N/A"}
                             </td>
                             <td style={{ padding: "10px" }}>
                               {getFormattedDate(

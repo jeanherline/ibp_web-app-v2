@@ -89,7 +89,7 @@ function Dashboard() {
   }
 
   const filteredAppointments = appointments.filter((app) => {
-    const date = app.appointmentDetails?.createdDate?.toDate?.() || new Date(app.appointmentDetails?.createdDate);
+   const date = app.createdDate?.toDate?.() || new Date(app.createdDate);
     return date >= dateRange[0].startDate && date <= dateRange[0].endDate;
   });
 
@@ -248,11 +248,11 @@ function Dashboard() {
       const caseResolutionTimes = lawyerAppointments
         .filter(app =>
           app.appointmentDetails?.appointmentStatus === "done" &&
-          app.appointmentDetails?.createdDate &&
+          app.createdDate &&
           app.appointmentDetails?.appointmentDate
         )
         .map(app => {
-          const start = app.appointmentDetails.createdDate.toDate?.() || new Date(app.appointmentDetails.createdDate);
+          const start = app.createdDate.toDate?.() || new Date(app.createdDate);
           const end = app.appointmentDetails.appointmentDate.toDate?.() || new Date(app.appointmentDetails.appointmentDate);
           return (end - start) / (1000 * 60 * 60 * 24); // in days
         });
@@ -313,7 +313,7 @@ function Dashboard() {
       timeRanges.forEach(range => {
         const grouped = groupDataByTimeRange(
           filteredAppointments,
-          (app) => app.appointmentDetails?.createdDate,
+          (app) => app.createdDate,
           range
         );
 
@@ -524,7 +524,7 @@ function Dashboard() {
   const generateNewWalkInUsersData = () => {
     const groupedWalkIns = groupDataByTimeRange(
       filteredAppointments.filter(app => app.appointmentDetails?.apptType === "Walk-in"),
-      (app) => app.appointmentDetails?.createdDate,
+      (app) => app.createdDate,
       "day"
     );
 
@@ -691,7 +691,7 @@ function Dashboard() {
       return {
         id: doc.id,
         ...data,
-        uid: data.appointmentDetails?.uid || null, // ✅ Pull UID from inside appointmentDetails
+        uid: data.uid || null, // ✅ Pull UID from inside appointmentDetails
       };
     });
     setAppointments(appointmentsList);
@@ -921,7 +921,7 @@ function Dashboard() {
 
   const groupedAppointments = groupDataByTimeRange(
     filteredAppointments,
-    (app) => app.appointmentDetails?.createdDate,
+    (app) => app.createdDate,
     "day" // or "month", depending on how you want to group
   );
 
@@ -995,7 +995,7 @@ function Dashboard() {
 
   const groupedScheduleTypeAppointments = groupDataByTimeRange(
     filteredAppointments,
-    (app) => app.appointmentDetails?.createdDate,
+    (app) => app.createdDate,
     "day"
   );
 
@@ -1438,11 +1438,11 @@ function Dashboard() {
   const caseResolutionTimes = filteredAppointments
     .filter(app =>
       app.appointmentDetails?.appointmentStatus === "done" &&
-      app.appointmentDetails?.createdDate &&
+      app.createdDate &&
       app.appointmentDetails?.appointmentDate
     )
     .map(app => {
-      const start = app.appointmentDetails.createdDate.toDate?.() || new Date(app.appointmentDetails.createdDate);
+      const start = app.createdDate.toDate?.() || new Date(app.createdDate);
       const end = app.appointmentDetails.appointmentDate.toDate?.() || new Date(app.appointmentDetails.appointmentDate);
       return (end - start) / (1000 * 60 * 60 * 24); // in days
     });
@@ -1460,11 +1460,11 @@ function Dashboard() {
           const durations = apps
             .filter(app =>
               app.appointmentDetails?.appointmentStatus === "done" &&
-              app.appointmentDetails?.createdDate &&
+              app.createdDate &&
               app.appointmentDetails?.appointmentDate
             )
             .map(app => {
-              const start = app.appointmentDetails.createdDate.toDate?.() || new Date(app.appointmentDetails.createdDate);
+              const start = app.createdDate.toDate?.() || new Date(app.createdDate);
               const end = app.appointmentDetails.appointmentDate.toDate?.() || new Date(app.appointmentDetails.appointmentDate);
               return (end - start) / (1000 * 60 * 60 * 24);
             });
@@ -2370,7 +2370,7 @@ function Dashboard() {
               <p>Loading users...</p>
             </div>
           ) : (
-            ["admin", "lawyer", "frontdesk"].map((roleKey) => {
+            ["admin", "head", "lawyer","secretary", "frontdesk"].map((roleKey) => {
               const roleUsers = users
                 .filter(
                   (user) =>
