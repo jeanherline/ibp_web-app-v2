@@ -24,7 +24,6 @@ import {
   multiFactor,
   RecaptchaVerifier,
 } from "firebase/auth";
-import firebase from "firebase/compat/app";
 import zxcvbn from "zxcvbn";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import IconButton from "@mui/material/IconButton";
@@ -130,9 +129,8 @@ function Settings() {
       const userDoc = await getDoc(doc(db, "users", log.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        userNames[log.uid] = `${userData.display_name} ${
-          userData.middle_name || ""
-        } ${userData.last_name}`.trim();
+        userNames[log.uid] = `${userData.display_name} ${userData.middle_name || ""
+          } ${userData.last_name}`.trim();
       }
     }
 
@@ -153,22 +151,36 @@ function Settings() {
       affectedData: JSON.stringify(sortObjectKeys(log.affectedData), null, 2), // Sort affected data
       metadata: JSON.stringify(sortObjectKeys(log.metadata), null, 2), // Sort metadata
     }));
-
     setAuditLogs(formattedAuditLogs);
   };
 
-  fetchAuditLogs(); // Fetch audit logs
+  useEffect(() => {
+    if (currentUser?.uid) {
+      fetchAuditLogs();
+    }
+  }, [currentUser]);
+
 
   // Initialize reCAPTCHA verifier for phone authentication (for production mode only)
   useEffect(() => {
-    if (process.env.NODE_ENV !== "development" && !window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(
-        "recaptcha-container",
-        { size: "invisible" },
-        auth
-      );
+    if (typeof window !== "undefined") {
+      try {
+        const authInstance = getAuth();
+        authInstance.settings.appVerificationDisabledForTesting = false;
+
+        if (!window.recaptchaVerifier && process.env.NODE_ENV !== "development") {
+          window.recaptchaVerifier = new RecaptchaVerifier(
+            "recaptcha-container",
+            { size: "invisible" },
+            authInstance
+          );
+        }
+      } catch (error) {
+        console.error("Recaptcha initialization failed:", error);
+      }
     }
-  }, [auth]);
+  }, []);
+
 
   // Send OTP
   const sendOtp = async () => {
@@ -532,7 +544,7 @@ function Settings() {
                   Password Strength:{" "}
                   {
                     ["Too Weak", "Weak", "Fair", "Good", "Strong"][
-                      passwordStrength
+                    passwordStrength
                     ]
                   }
                 </p>

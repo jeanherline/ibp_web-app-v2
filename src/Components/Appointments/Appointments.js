@@ -407,9 +407,7 @@ function Appointments() {
         clearFormFields();
       }, 3000);
     } catch (error) {
-      console.error("Error scheduling appointment:", error);
-      setSnackbarMessage("Error scheduling appointment, please try again.");
-      setShowSnackbar(true);
+      setShowScheduleForm(false);
     }
   };
 
@@ -1335,27 +1333,56 @@ function Appointments() {
       await updateAppointment(selectedAppointment.id, updatedData);
 
       if (appointmentStatus === "done" && selectedAppointment.uid) {
-        const clientMsg =
+        const headLawyerUid = await getHeadLawyerUid();
+
+        const clientMessage =
           clientEligibility.hasAdditionalDocs === "yes"
             ? `Thank you for attending your appointment. However, further documentation is required. Please provide the requested document(s): ${clientEligibility.additionalDocNote || "N/A"}.`
             : "Thank you for attending your appointment. Your consultation has been completed. We value your feedback — please take a moment to rate your experience in the recently concluded meeting.";
 
+        const headMessage = `Remarks have been submitted and appointment (ID: ${selectedAppointment.controlNumber}) has been marked as done.`;
+
+        // Send notification to client
         await sendNotification(
-          clientMsg,
+          clientMessage,
           selectedAppointment.uid,
           "appointment",
           selectedAppointment.controlNumber
         );
 
-        const headLawyerUid = await getHeadLawyerUid();
+        // Send notification to head lawyer
         if (headLawyerUid) {
           await sendNotification(
-            `The advising session for appointment ID: ${selectedAppointment.controlNumber} has been completed.`,
+            headMessage,
             headLawyerUid,
             "appointment",
             selectedAppointment.controlNumber
           );
+
+          // Save to notifications collection (Head Lawyer)
+          await addDoc(collection(fs, "users", headLawyerUid, "notifications"), {
+            title: "Appointment Completed",
+            message: headMessage,
+            type: "appointment",
+            timestamp: Timestamp.fromDate(new Date()),
+            controlNumber: selectedAppointment.controlNumber,
+            read: false,
+            senderUid: currentUser.uid,
+            recipientUid: headLawyerUid,
+          });
         }
+
+        // Save to notifications collection (Client)
+        await addDoc(collection(fs, "users", selectedAppointment.uid, "notifications"), {
+          title: "Thank you for attending",
+          message: clientMessage,
+          type: "appointment",
+          timestamp: Timestamp.fromDate(new Date()),
+          controlNumber: selectedAppointment.controlNumber,
+          read: false,
+          senderUid: currentUser.uid,
+          recipientUid: selectedAppointment.uid,
+        });
       }
 
       const loginActivitySnapshot = await getDocs(

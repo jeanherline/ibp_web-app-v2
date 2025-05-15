@@ -30,6 +30,27 @@ import {
 import { useNavigate } from "react-router-dom";
 const storage = getStorage();
 
+const sendNotification = async (uid, message, controlNumber = null, type = "appointment") => {
+  try {
+    const docRef = await addDoc(collection(fs, "notifications"), {
+      uid,
+      message,
+      controlNumber,
+      timestamp: new Date(),
+      read: false,
+      type,
+    });
+
+    await setDoc(doc(fs, "notifications", docRef.id), {
+      notifId: docRef.id,
+    }, { merge: true });
+
+  } catch (error) {
+    console.error("Failed to send notification:", error);
+  }
+};
+
+
 const generateQrCodeImageUrl = async (data, folder, controlNumber) => {
   try {
     const qrDataUrl = await QRCode.toDataURL(data, {
@@ -86,6 +107,7 @@ const initialUserData = {
   spouse: "",
   spouseOccupation: "",
   childrenNamesAges: "",
+  maritalStatus: "",
   employment: "",
   employmentType: "",
   employerName: "",
@@ -221,6 +243,7 @@ function WalkInForm() {
             streetAddress: user.address || "",
             city: user.city || "",
             phone: user.phone?.replace(/^0/, "+63") || "+63",
+            maritalStatus: user.maritalStatus || "",
             gender: user.gender || "",
             spouse: user.spouse || "",
             spouseOccupation: user.spouseOccupation || "",
@@ -601,6 +624,17 @@ function WalkInForm() {
 
       let userQrCodeUrl = null;
       let firebaseUid = uid;
+      const message = `Your appointment request with ticket number ${controlNumber} has been submitted successfully. Please wait for the confirmation of the date and type of appointment.`;
+      await sendNotification(firebaseUid, message, controlNumber, "appointment");
+      // Notify all frontdesk members
+      const frontdeskQuery = query(collection(fs, "users"), where("member_type", "==", "frontdesk"));
+      const frontdeskSnapshot = await getDocs(frontdeskQuery);
+
+      frontdeskSnapshot.forEach((docSnap) => {
+        const frontdeskUid = docSnap.id;
+        const adminMessage = `A new Walk-In appointment with Ticket #${controlNumber} has been submitted. .`;
+        sendNotification(frontdeskUid, adminMessage, controlNumber, "appointment");
+      });
 
       const fullName = `${userData.display_name} ${userData.middle_name ? userData.middle_name + " " : ""
         }${userData.last_name}`;
@@ -638,12 +672,17 @@ function WalkInForm() {
             ? userData.phone.replace(/^0/, "+63")
             : userData.phone,
           gender: userData.gender,
-          spouse: userData.spouse,
-          spouseOccupation: userData.spouseOccupation,
+          maritalStatus: userData.maritalStatus, // <-- add this
+          ...(userData.maritalStatus !== "Single" && {
+            spouse: userData.spouse,
+            spouseOccupation: userData.spouseOccupation,
+            childrenNamesAges: userData.childrenNamesAges,
+          }),
           email: email,
           city: userData.city,
           member_type: "client",
           user_status: "inactive",
+          address: userData.streetAddress,
           created_time: now,
           userQrCode: userQrCodeUrl,
           occupation: userData.employment,
@@ -1025,51 +1064,74 @@ function WalkInForm() {
                 </select>
               </div>
               <div className="form-group">
-                <label htmlFor="spouse">
-                  Pangalan ng Asawa{" "}
-                  <span className="subtitle">(Name of Spouse)</span>
+                <label htmlFor="maritalStatus">
+                  Katayuan sa Buhay <span className="subtitle">(Marital Status)</span>
+                  <span style={{ color: "red", marginLeft: "5px" }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  id="spouse"
-                  name="spouse"
-                  value={userData.spouse}
-                  placeholder="Name of Spouse"
+                <select
+                  id="maritalStatus"
+                  name="maritalStatus"
+                  value={userData.maritalStatus}
                   onChange={handleChange}
-                  disabled={isFromAppointment || credentialsOmitted}
-                />
+                  required
+                >
+                  <option value="">Pumili ng Katayuan (Status)</option>
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Widowed">Widowed</option>
+                  <option value="Separated">Separated</option>
+                </select>
               </div>
-              <div className="form-group">
-                <label htmlFor="spouseOccupation">
-                  Trabaho ng Asawa{" "}
-                  <span className="subtitle">(Occupation of Spouse)</span>
-                </label>
-                <input
-                  type="text"
-                  id="spouseOccupation"
-                  name="spouseOccupation"
-                  value={userData.spouseOccupation}
-                  placeholder="Occupation of Spouse"
-                  onChange={handleChange}
-                  disabled={isFromAppointment || credentialsOmitted}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="childrenNamesAges">
-                  Kung kasal, ilagay ang pangalan ng mga anak at edad nila{" "}
-                  <span className="subtitle">
-                    (If married, write name of children and age)
-                  </span>
-                </label>
-                <textarea
-                  id="childrenNamesAges"
-                  name="childrenNamesAges"
-                  value={userData.childrenNamesAges}
-                  placeholder="Ilagay ang pangalan at edad ng mga anak (Enter children’s name and age)"
-                  onChange={handleChange}
-                  disabled={isFromAppointment || credentialsOmitted}
-                />
-              </div>
+              {userData.maritalStatus !== "Single" && (
+                <>
+                  <div className="form-group">
+                    <label htmlFor="spouse">
+                      Pangalan ng Asawa{" "}
+                      <span className="subtitle">(Name of Spouse)</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="spouse"
+                      name="spouse"
+                      value={userData.spouse}
+                      placeholder="Name of Spouse"
+                      onChange={handleChange}
+                      disabled={isFromAppointment || credentialsOmitted}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="spouseOccupation">
+                      Trabaho ng Asawa{" "}
+                      <span className="subtitle">(Occupation of Spouse)</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="spouseOccupation"
+                      name="spouseOccupation"
+                      value={userData.spouseOccupation}
+                      placeholder="Occupation of Spouse"
+                      onChange={handleChange}
+                      disabled={isFromAppointment || credentialsOmitted}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="childrenNamesAges">
+                      Kung kasal, ilagay ang pangalan ng mga anak at edad nila{" "}
+                      <span className="subtitle">
+                        (If married, write name of children and age)
+                      </span>
+                    </label>
+                    <textarea
+                      id="childrenNamesAges"
+                      name="childrenNamesAges"
+                      value={userData.childrenNamesAges}
+                      placeholder="Ilagay ang pangalan at edad ng mga anak (Enter children’s name and age)"
+                      onChange={handleChange}
+                      disabled={isFromAppointment || credentialsOmitted}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         );
