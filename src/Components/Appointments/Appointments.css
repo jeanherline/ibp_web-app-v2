@@ -901,3 +901,32 @@ button:disabled {
     opacity: 1;
   }
 }
+
+.modal-content label input[type="checkbox"] {
+  margin-right: 8px;
+  transform: scale(1.5);
+  accent-color: #28a745; /* optional: matches Accept button color */
+}
+
+.modal-content label {
+  font-size: 16px !important; /* Increased from 14px */
+  color: #2c2c2c; /* Darker text */
+  font-weight: 500; /* Slightly bolder */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px !important;
+}
+
+.modal-content textarea {
+  font-family: inherit;
+  line-height: 1.4;
+ font-size: 16px !important; /* Increased from 14px */
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.modal-content textarea:focus {
+  border-color: #28a745;
+  box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.2);
+  outline: none;
+}

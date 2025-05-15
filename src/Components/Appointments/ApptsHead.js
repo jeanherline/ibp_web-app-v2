@@ -721,7 +721,11 @@ function ApptsHead() {
         "clientEligibility.denialReason": clientEligibility.denialReason,
         "clientEligibility.notes": clientEligibility.notes?.trim()
           ? clientEligibility.notes
-          : "All Documents Verified.",
+          : clientEligibility.eligibility === "no"
+            ? "Ineligible"
+            : clientEligibility.eligibility === "yes"
+              ? "All Documents Verified."
+              : "No further reason provided.",
         "appointmentDetails.assignedLawyer": clientEligibility.assistingCounsel,
         "updatedTime": Timestamp.fromDate(new Date()),
       };
@@ -2641,7 +2645,7 @@ function ApptsHead() {
                         </td>
                       </tr>
                       <tr>
-                        <th>New Appointment Request File:</th>
+                        <th>Recent Reschedule Request File:</th>
                         <td>
                           {selectedAppointment.newRequestUrl ? (
                             <a
@@ -2655,7 +2659,7 @@ function ApptsHead() {
                             >
                               <img
                                 src={selectedAppointment.newRequestUrl}
-                                alt="New Appointment Request File"
+                                alt="Recent Reschedule Request File"
                                 className="img-thumbnail"
                                 style={{ width: "100px", cursor: "pointer" }}
                               />
@@ -2663,6 +2667,87 @@ function ApptsHead() {
                           ) : (
                             "Not Available"
                           )}
+                        </td>
+                      </tr>
+<tr>
+                        <th>Additional Documentation:</th>
+                        <td>
+                          <td>
+                            <td>
+                              <td>
+                                {selectedAppointment?.additionalDocs?.length > 0 ? (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: "20px",
+                                      marginTop: "12px",
+                                      justifyContent: "flex-start",
+                                    }}
+                                  >
+                                    {selectedAppointment.additionalDocs.map((doc, index) => (
+                                      <div
+                                        key={index}
+                                        style={{
+                                          width: "200px",
+                                          padding: "12px",
+                                          border: "1px solid #ccc",
+                                          borderRadius: "10px",
+                                          textAlign: "center",
+                                          backgroundColor: "#ffffff",
+                                          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+                                          transition: "transform 0.2s",
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.03)")}
+                                        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+                                      >
+                                        <img
+                                          src={doc.url}
+                                          alt={doc.name || `File ${index + 1}`}
+                                          onClick={() => openImageModal(doc.url)}
+                                          style={{
+                                            width: "100%",
+                                            height: "140px",
+                                            objectFit: "cover",
+                                            borderRadius: "6px",
+                                            cursor: "pointer",
+                                          }}
+                                        />
+                                        <p
+                                          style={{
+                                            fontSize: "14px",
+                                            marginTop: "10px",
+                                            fontWeight: "500",
+                                            color: "#333",
+                                            wordBreak: "break-word",
+                                          }}
+                                        >
+                                          {doc.name || `Document ${index + 1}`}
+                                        </p>
+                                        {doc.note && (
+                                          <p
+                                            style={{
+                                              fontSize: "12px",
+                                              color: "#777",
+                                              marginTop: "4px",
+                                              wordBreak: "break-word",
+                                            }}
+                                          >
+                                            {doc.note}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p style={{ marginTop: "10px", color: "#888" }}>No additional documents submitted.</p>
+                                )}
+
+                              </td>
+
+                            </td>
+
+                          </td>
                         </td>
                       </tr>
                     </tbody>
@@ -2885,7 +2970,6 @@ function ApptsHead() {
                     placeholder="Enter any relevant notes here..."
                     value={clientEligibility.notes}
                     onChange={handleChange}
-                    required
                   ></textarea>
                 </div>
                 <button>Submit</button>

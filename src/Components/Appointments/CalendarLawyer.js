@@ -1141,7 +1141,7 @@ function CalendarLawyer() {
                       </td>
                     </tr>
                     <tr>
-                      <th>New Appointment Request File:</th>
+                      <th>Recent Reschedule Request File:</th>
                       <td>
                         {selectedAppointment.newRequestUrl ? (
                           <a
@@ -1153,7 +1153,7 @@ function CalendarLawyer() {
                           >
                             <img
                               src={selectedAppointment.newRequestUrl}
-                              alt="New Appointment Request File"
+                              alt="Recent Reschedule Request File"
                               className="img-thumbnail"
                               style={{ width: "100px", cursor: "pointer" }}
                             />

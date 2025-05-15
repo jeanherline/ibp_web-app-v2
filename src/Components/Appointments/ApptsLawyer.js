@@ -120,6 +120,11 @@ function ApptsLawyer() {
     selectedAppointment?.appointmentDetails?.acceptedAt?.toDate?.() ||
     selectedAppointment?.appointmentDetails?.refusedAt?.toDate?.();
   const [timeLeftText, setTimeLeftText] = useState("");
+  const [isProceedingHistoryOpen, setIsProceedingHistoryOpen] = useState(false);
+
+  const toggleProceedingHistory = () => {
+    setIsProceedingHistoryOpen(!isProceedingHistoryOpen);
+  };
 
   useEffect(() => {
     if (!undoTargetAppointment) {
@@ -147,10 +152,7 @@ function ApptsLawyer() {
     }
   }, [undoTargetAppointment]);
 
-  const hasExceededRescheduleLimit = (appointment, currentUser) => {
-    const history = appointment.rescheduleHistory || [];
-    return history.filter((entry) => entry.rescheduledByUid === currentUser.uid).length >= 3;
-  };
+
   const [reschedulerNames, setReschedulerNames] = useState({});
   const latestReason = selectedAppointment?.rescheduleHistory
     ?.filter(entry => entry.rescheduleReason) // ensure it has the reason
@@ -879,64 +881,70 @@ function ApptsLawyer() {
 
     return (
       <div
-        className="modal-overlay"
         onClick={onClose}
         style={{
           position: "fixed",
           top: 0,
           left: 0,
+          zIndex: 9999,
           width: "100vw",
           height: "100vh",
           backgroundColor: "rgba(0, 0, 0, 0.8)",
-          zIndex: 9999, // 👈 ensure this is higher than any Bootstrap/other modals
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          padding: "20px",
         }}
       >
         <div
-          className="modal-content"
+          onClick={(e) => e.stopPropagation()}
           style={{
-            position: "relative",
             maxWidth: "90%",
             maxHeight: "90%",
-            zIndex: 10000,
+            position: "relative",
+            borderRadius: "10px",
+            overflow: "hidden",
+            background: "#fff",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
           }}
-          onClick={(e) => e.stopPropagation()}
         >
           <img
             src={url}
             alt="Preview"
             style={{
-              width: "100%",
-              height: "auto",
-              borderRadius: "8px",
-              boxShadow: "0 0 15px rgba(0,0,0,0.5)",
+              display: "block",
+              maxWidth: "100%",
+              maxHeight: "90vh",
+              objectFit: "contain",
+              margin: "auto",
             }}
           />
           <button
             onClick={onClose}
             style={{
               position: "absolute",
-              top: 12,
-              right: 12,
-              background: "transparent",
-              border: "none",
+              top: 10,
+              right: 10,
+              background: "rgba(0, 0, 0, 0.7)",
               color: "#fff",
-              fontSize: "28px",
-              fontWeight: "bold",
+              border: "none",
+              borderRadius: "50%",
+              width: "30px",
+              height: "30px",
+              fontSize: "20px",
               cursor: "pointer",
-              lineHeight: 1,
+              lineHeight: "30px",
+              textAlign: "center",
             }}
             aria-label="Close"
           >
             ×
           </button>
-
         </div>
       </div>
     );
   };
+
 
   const handleDenialReasonChange = (e) => {
     const value = e.target.value;
@@ -1007,7 +1015,11 @@ function ApptsLawyer() {
         "clientEligibility.denialReason": clientEligibility.denialReason,
         "clientEligibility.notes": clientEligibility.notes?.trim()
           ? clientEligibility.notes
-          : "All Documents Verified.",
+          : clientEligibility.eligibility === "no"
+            ? "Ineligible"
+            : clientEligibility.eligibility === "yes"
+              ? "All Documents Verified."
+              : "No further reason provided.",
         "appointmentDetails.assignedLawyer": clientEligibility.assistingCounsel,
         "updatedTime": Timestamp.fromDate(new Date()),
       };
@@ -1275,43 +1287,87 @@ function ApptsLawyer() {
     try {
       let fileUrl = null;
 
-      // Check if a file is selected and upload it to Firebase Storage
       if (proceedingFile) {
         const currentUid = currentUser.uid;
         const controlNumber = selectedAppointment.controlNumber;
         const fullName = `${selectedAppointment.display_name || ""}_${selectedAppointment.middle_name || ""}_${selectedAppointment.last_name || ""}`.replace(/ /g, "_");
-        // Get Firebase storage reference
+
         const storage = getStorage();
         const fileRef = ref(
           storage,
           `konsulta_user_uploads/${currentUid}/${controlNumber}/${fullName}_${controlNumber}_proceedingNotesFile`
         );
-
-        // Upload the file
         await uploadBytes(fileRef, proceedingFile);
         fileUrl = await getDownloadURL(fileRef);
       }
 
-      // Determine appointment status based on client attendance
       const appointmentStatus = clientAttend === "yes" ? "done" : "missed";
 
-      // Update appointment data in Firestore
+      const appointmentRef = doc(fs, "appointments", selectedAppointment.id);
+      const snapshot = await getDoc(appointmentRef);
+      const existingData = snapshot.data();
+      const history = Array.isArray(existingData?.proceedingNotesHistory)
+        ? existingData.proceedingNotesHistory
+        : [];
+
+      const headLawyerUid = await getHeadLawyerUid();
+
       const updatedData = {
-        "updatedTime": Timestamp.fromDate(new Date()),
+        updatedTime: Timestamp.fromDate(new Date()),
         "appointmentDetails.proceedingNotes": proceedingNotes,
-        "appointmentDetails.ibpParalegalStaff":
-          clientEligibility.ibpParalegalStaff,
-        "appointmentDetails.assistingCounsel":
-          clientEligibility.assistingCounsel,
+        "appointmentDetails.ibpParalegalStaff": clientEligibility.ibpParalegalStaff,
+        "appointmentDetails.assistingCounsel": clientEligibility.assistingCounsel,
         "appointmentDetails.appointmentStatus": appointmentStatus,
-        "updatedTime": Timestamp.fromDate(new Date()),
         "appointmentDetails.clientAttend": clientAttend,
         "appointmentDetails.proceedingFileUrl": fileUrl,
+        "appointmentDetails.hasAdditionalDocs": clientEligibility.hasAdditionalDocs || "",
+        "appointmentDetails.additionalDocNote": clientEligibility.additionalDocNote?.trim() || "",
+        proceedingNotesHistory: [
+          ...history,
+          {
+            note: proceedingNotes,
+            clientAttend,
+            hasAdditionalDocs: clientEligibility.hasAdditionalDocs || "",
+            additionalDocNote: clientEligibility.additionalDocNote?.trim() || "",
+            ibpParalegalStaff: clientEligibility.ibpParalegalStaff || "",
+            assistingCounsel: clientEligibility.assistingCounsel || "",
+            proceedingFileUrl: fileUrl || "",
+            scheduleDate: selectedAppointment?.appointmentDetails?.appointmentDate || null,
+            scheduleType: selectedAppointment?.appointmentDetails?.scheduleType || "",
+            submittedBy: currentUser.uid,
+            submittedAt: Timestamp.fromDate(new Date()),
+          },
+        ],
+
       };
 
       await updateAppointment(selectedAppointment.id, updatedData);
 
-      // Fetch latest login activity for metadata
+      if (appointmentStatus === "done" && selectedAppointment.uid) {
+        const clientMessage =
+          clientEligibility.hasAdditionalDocs === "yes"
+            ? `Thank you for attending your appointment. However, further documentation is required. Please provide the requested document(s): ${clientEligibility.additionalDocNote || "N/A"}.`
+            : "Thank you for attending your appointment. Your consultation has been completed. We value your feedback — please take a moment to rate your experience in the recently concluded meeting.";
+
+        const headMessage = `The advising session for appointment ID: ${selectedAppointment.controlNumber} has been completed.`;
+
+        await sendNotification(
+          clientMessage,
+          selectedAppointment.uid,
+          "appointment",
+          selectedAppointment.controlNumber
+        );
+
+        if (headLawyerUid) {
+          await sendNotification(
+            headMessage,
+            headLawyerUid,
+            "appointment",
+            selectedAppointment.controlNumber
+          );
+        }
+      }
+
       const loginActivitySnapshot = await getDocs(
         query(
           collection(fs, "users", currentUser.uid, "loginActivity"),
@@ -1322,62 +1378,50 @@ function ApptsLawyer() {
 
       let ipAddress = "Unknown";
       let deviceName = "Unknown";
-
       if (!loginActivitySnapshot.empty) {
         const loginData = loginActivitySnapshot.docs[0].data();
         ipAddress = loginData.ipAddress || "Unknown";
         deviceName = loginData.deviceName || "Unknown";
       }
 
-      // Add audit log entry
       const auditLogEntry = {
         actionType: "UPDATE",
         timestamp: new Date(),
         uid: currentUser.uid,
         changes: {
-          proceedingNotes: selectedAppointment.appointmentDetails
-            ?.proceedingNotes
+          proceedingNotes: selectedAppointment.appointmentDetails?.proceedingNotes
             ? {
-              oldValue:
-                selectedAppointment.appointmentDetails.proceedingNotes,
+              oldValue: selectedAppointment.appointmentDetails.proceedingNotes,
               newValue: proceedingNotes,
             }
             : null,
-          ibpParalegalStaff: selectedAppointment.appointmentDetails
-            ?.ibpParalegalStaff
+          ibpParalegalStaff: selectedAppointment.appointmentDetails?.ibpParalegalStaff
             ? {
-              oldValue:
-                selectedAppointment.appointmentDetails.ibpParalegalStaff,
+              oldValue: selectedAppointment.appointmentDetails.ibpParalegalStaff,
               newValue: clientEligibility.ibpParalegalStaff,
             }
             : null,
-          assistingCounsel: selectedAppointment.appointmentDetails
-            ?.assistingCounsel
+          assistingCounsel: selectedAppointment.appointmentDetails?.assistingCounsel
             ? {
-              oldValue:
-                selectedAppointment.appointmentDetails.assistingCounsel,
+              oldValue: selectedAppointment.appointmentDetails.assistingCounsel,
               newValue: clientEligibility.assistingCounsel,
             }
             : null,
-          appointmentStatus: selectedAppointment.appointmentDetails
-            ?.appointmentStatus
+          appointmentStatus: selectedAppointment.appointmentDetails?.appointmentStatus
             ? {
-              oldValue:
-                selectedAppointment.appointmentDetails.appointmentStatus,
+              oldValue: selectedAppointment.appointmentDetails.appointmentStatus,
               newValue: appointmentStatus,
             }
             : null,
-          clientAttend: selectedAppointment.clientAttend
+          clientAttend: selectedAppointment.appointmentDetails?.clientAttend
             ? {
               oldValue: selectedAppointment.appointmentDetails.clientAttend,
               newValue: clientAttend,
             }
             : null,
-          proceedingFileUrl: selectedAppointment.appointmentDetails
-            ?.proceedingFileUrl
+          proceedingFileUrl: selectedAppointment.appointmentDetails?.proceedingFileUrl
             ? {
-              oldValue:
-                selectedAppointment.appointmentDetails.proceedingFileUrl,
+              oldValue: selectedAppointment.appointmentDetails.proceedingFileUrl,
               newValue: fileUrl,
             }
             : null,
@@ -1390,38 +1434,42 @@ function ApptsLawyer() {
         },
         affectedData: {
           appointmentId: selectedAppointment.id,
-
         },
         metadata: {
-          ipAddress: ipAddress,
+          ipAddress,
           userAgent: deviceName,
         },
       };
 
-      // Remove any null entries in the `changes` map
       Object.keys(auditLogEntry.changes).forEach(
         (key) =>
           auditLogEntry.changes[key] === null &&
           delete auditLogEntry.changes[key]
       );
 
-      // Add audit log entry to Firestore
       await addDoc(collection(fs, "audit_logs"), auditLogEntry);
 
-      // Notify success and reset form values
       setSnackbarMessage("Remarks have been successfully submitted.");
+      setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 3000);
+
       setProceedingNotes("");
       setProceedingFile(null);
       setClientAttend(null);
       setClientEligibility({
-        ...clientEligibility,
+        eligibility: "",
+        denialReason: "",
+        notes: "",
         ibpParalegalStaff: "",
         assistingCounsel: "",
+        hasAdditionalDocs: "",
+        additionalDocNote: "",
       });
 
-      // Send notifications based on appointment status
+      setSelectedAppointment(null);
+      setShowProceedingNotesForm(false);
+
       const appointmentId = selectedAppointment.id;
-      const appointmentDateFormatted = getFormattedDate(appointmentDate, true);
       if (
         selectedAppointment.uid &&
         selectedAppointment.controlNumber &&
@@ -1432,37 +1480,6 @@ function ApptsLawyer() {
         let headMessage = "";
 
         switch (appointmentStatus) {
-          case "pending":
-            clientMessage = `Your request (ID: ${appointmentId}) is pending review.`;
-            lawyerMessage = `A new appointment (ID: ${appointmentId}) is pending.`;
-            headMessage = `New appointment (ID: ${appointmentId}) is awaiting review.`;
-            break;
-          case "approved":
-            clientMessage = `Your request (ID: ${appointmentId}) has been approved.`;
-            lawyerMessage = `An appointment (ID: ${appointmentId}) has been approved and needs lawyer assignment.`;
-            headMessage = `Appointment (ID: ${appointmentId}) has been approved.`;
-            break;
-          case "accepted":
-            clientMessage = `A lawyer has accepted your appointment (ID: ${appointmentId}).`;
-            lawyerMessage = `You accepted the appointment (ID: ${appointmentId}).`;
-            headMessage = `Appointment (ID: ${appointmentId}) has been accepted by a lawyer.`;
-            break;
-          case "denied":
-            clientMessage = `Your request (ID: ${appointmentId}) has been denied.`;
-            lawyerMessage = `An appointment (ID: ${appointmentId}) has been marked as denied.`;
-            headMessage = `Appointment (ID: ${appointmentId}) has been denied.`;
-            break;
-          case "scheduled":
-            clientMessage = `Your appointment (ID: ${appointmentId}) has been scheduled.`;
-            lawyerMessage = `You have a scheduled appointment (ID: ${appointmentId}).`;
-            headMessage = `Appointment (ID: ${appointmentId}) has been scheduled.`;
-            break;
-          case "rescheduled":
-          case "pending_reschedule":
-            clientMessage = `Your appointment (ID: ${appointmentId}) has been rescheduled.`;
-            lawyerMessage = `Appointment (ID: ${appointmentId}) has been rescheduled.`;
-            headMessage = `Appointment (ID: ${appointmentId}) has been rescheduled.`;
-            break;
           case "missed":
             clientMessage = `You missed your appointment (ID: ${appointmentId}). Please reschedule.`;
             lawyerMessage = `The appointment (ID: ${appointmentId}) was marked as missed.`;
@@ -1479,7 +1496,6 @@ function ApptsLawyer() {
             headMessage = `Appointment (ID: ${appointmentId}) has been updated.`;
         }
 
-        // Send to client
         await sendNotification(
           clientMessage,
           selectedAppointment.uid,
@@ -1487,7 +1503,6 @@ function ApptsLawyer() {
           selectedAppointment.controlNumber
         );
 
-        // Send to lawyer (if assigned)
         const lawyerUid = selectedAppointment.appointmentDetails?.assignedLawyer;
         if (lawyerUid) {
           await sendNotification(
@@ -1498,8 +1513,6 @@ function ApptsLawyer() {
           );
         }
 
-        // Send to head lawyer
-        const headLawyerUid = await getHeadLawyerUid();
         if (headLawyerUid) {
           await sendNotification(
             headMessage,
@@ -1509,19 +1522,16 @@ function ApptsLawyer() {
           );
         }
       }
-
-
-      // Optionally close the form/modal after successful submission
-      setShowProceedingNotesForm(false);
     } catch (error) {
       console.error("Error submitting proceeding notes:", error);
       setSnackbarMessage("Error submitting remarks, please try again.");
     } finally {
+      setIsSubmitting(false);
       setShowSnackbar(true);
       setTimeout(() => setShowSnackbar(false), 3000);
-      setIsSubmitting(false);
     }
   };
+
 
   const handleRescheduleSubmit = async (e) => {
     e.preventDefault();
@@ -1547,40 +1557,40 @@ function ApptsLawyer() {
       meetingLink = null;
     }
 
-    const appointmentRef = doc(fs, "appointments", selectedAppointment.id);
-    const appointmentSnapshot = await getDoc(appointmentRef);
-    const appointmentData = appointmentSnapshot.data();
-
-    const userRescheduleCount = appointmentData.rescheduleHistory
-      ? appointmentData.rescheduleHistory.filter((entry) => entry.rescheduledByUid === currentUser.uid).length
-      : 0;
-
-    if (userRescheduleCount >= 3) {
-      setSnackbarMessage("You can only reschedule this appointment a maximum of 3 times.");
+    if (!rescheduleHour || !rescheduleMinute) {
+      setSnackbarMessage("Please select hour and minute.");
       setShowSnackbar(true);
       return;
     }
 
-    let updatedRescheduleHistory = [];
+    // ✅ Initialize fullDate BEFORE using it
+    const fullDate = new Date(rescheduleDate);
+    let h = parseInt(rescheduleHour);
+    if (rescheduleAmPm === "PM" && h < 12) h += 12;
+    if (rescheduleAmPm === "AM" && h === 12) h = 0;
+    fullDate.setHours(h, parseInt(rescheduleMinute), 0, 0);
 
+    const appointmentRef = doc(fs, "appointments", selectedAppointment.id);
+    const appointmentSnapshot = await getDoc(appointmentRef);
+    const appointmentData = appointmentSnapshot.data();
+
+    let updatedRescheduleHistory = [];
     const originalHistory = appointmentData.rescheduleHistory || [];
 
     if (
       appointmentData.appointmentDetails?.appointmentStatus === "pending_reschedule" &&
       originalHistory.length > 0
     ) {
-      // Create a new array with the last entry modified
       updatedRescheduleHistory = originalHistory.map((entry, index) => {
         if (index === originalHistory.length - 1) {
           return {
             ...entry,
-            rescheduleStatus: "approved", // ✅ Overwrite
+            rescheduleStatus: "approved",
           };
         }
         return entry;
       });
     } else {
-      // Add new entry
       const newEntry = {
         rescheduleDate: Timestamp.fromDate(fullDate),
         rescheduleAppointmentType: rescheduleAppointmentType,
@@ -1595,19 +1605,6 @@ function ApptsLawyer() {
 
       updatedRescheduleHistory = [...originalHistory, newEntry];
     }
-
-
-    if (!rescheduleHour || !rescheduleMinute) {
-      setSnackbarMessage("Please select hour and minute.");
-      setShowSnackbar(true);
-      return;
-    }
-
-    const fullDate = new Date(rescheduleDate);
-    let h = parseInt(rescheduleHour);
-    if (rescheduleAmPm === "PM" && h < 12) h += 12;
-    if (rescheduleAmPm === "AM" && h === 12) h = 0;
-    fullDate.setHours(h, parseInt(rescheduleMinute), 0, 0);
 
     // Slot conflict check
     const isSlotTakenForLawyer = async (date, lawyerUid, currentAppointmentId) => {
@@ -1644,8 +1641,11 @@ function ApptsLawyer() {
         "appointmentDetails.scheduleType": rescheduleAppointmentType,
         "appointmentDetails.meetingLink": meetingLink,
         "appointmentDetails.rescheduleReason": rescheduleReason,
+        "appointmentDetails.hasAdditionalDocs": "no",
+        "appointmentDetails.appointmentStatus": "scheduled", // ✅ this line ensures it's marked as scheduled
         rescheduleHistory: updatedRescheduleHistory,
       };
+
 
       await updateDoc(appointmentRef, updatedData);
 
@@ -1670,7 +1670,7 @@ function ApptsLawyer() {
             selectedAppointment.controlNumber
           );
         }
-        // Notify secretary of assigned lawyer
+
         if (assignedLawyerDetails?.associate) {
           const secretarySnapshot = await getDoc(doc(fs, "users", assignedLawyerDetails.associate));
           if (secretarySnapshot.exists()) {
@@ -1722,6 +1722,7 @@ function ApptsLawyer() {
       setShowSnackbar(true);
     }
   };
+
 
 
 
@@ -1926,14 +1927,19 @@ function ApptsLawyer() {
         <button onClick={resetFilters}>Reset Filters</button>
         <br />
         <p>
-          Total Filtered Items:{" "}
-          {
+          Total Filtered Items: {
             appointments.filter(
               (appointment) =>
-                appointment.appointmentStatus !== "pending"
+                appointment.appointmentStatus !== "pending" &&
+                appointment.appointmentStatus !== "denied" &&
+                appointment.appointmentDetails?.assignedLawyer ===
+                (userData?.member_type === "secretary"
+                  ? userData?.associate
+                  : currentUser?.uid)
             ).length
           }
         </p>
+
 
         <table className="table table-striped table-bordered">
           <thead>
@@ -1945,17 +1951,21 @@ function ApptsLawyer() {
               <th>Scheduled Date</th>
               <th>Type</th>
               <th>Status</th>
-              {userData?.member_type !== "secretary" && <th>Link</th>}
+              <th>Link</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
             {appointments.length > 0 ? (
-              appointments
-                .filter(
-                  (appointment) =>
-                    appointment.appointmentStatus !== "pending"
-                )
+              appointments.filter(
+                (appointment) =>
+                  appointment.appointmentStatus !== "pending" &&
+                  appointment.appointmentStatus !== "denied" &&
+                  appointment.appointmentDetails?.assignedLawyer ===
+                  (userData?.member_type === "secretary"
+                    ? userData?.associate
+                    : currentUser?.uid)
+              )
                 .sort((a, b) => {
                   const order = {
                     pending_reschedule: 0,
@@ -1985,51 +1995,48 @@ function ApptsLawyer() {
                         ? "Reschedule Request"
                         : capitalizeFirstLetter(appointment.appointmentDetails?.appointmentStatus)}
                     </td>
-                    {userData?.member_type !== "secretary" && (
-                      <td>
-                        {appointment.appointmentDetails?.scheduleType === "Online" ? (
-                          <button
-                            onClick={() => {
-                              if (
-                                isToday(appointment.appointmentDate) &&
-                                appointment.appointmentDetails?.appointmentStatus !== "done"
-                              ) {
-                                window.open(
-                                  `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
-                                  "_blank"
-                                );
-                              }
-                            }}
-                            disabled={
-                              !isToday(appointment.appointmentDate) ||
-                              appointment.appointmentDetails?.appointmentStatus === "done"
+                    <td>
+                      {appointment.appointmentDetails?.scheduleType === "Online" ? (
+                        <button
+                          onClick={() => {
+                            if (
+                              isToday(appointment.appointmentDate) &&
+                              appointment.appointmentDetails?.appointmentStatus !== "done"
+                            ) {
+                              window.open(
+                                `/vpaas-magic-cookie-ef5ce88c523d41a599c8b1dc5b3ab765/${appointment.id}`,
+                                "_blank"
+                              );
                             }
-                            style={{
-                              backgroundColor:
-                                isToday(appointment.appointmentDate) &&
-                                  appointment.appointmentDetails?.appointmentStatus !== "done"
-                                  ? "#28a745"
-                                  : "gray",
-                              color: "white",
-                              border: "none",
-                              padding: "5px 8px",
-                              cursor:
-                                isToday(appointment.appointmentDate) &&
-                                  appointment.appointmentDetails?.appointmentStatus !== "done"
-                                  ? "pointer"
-                                  : "not-allowed",
-                            }}
-                          >
-                            <FontAwesomeIcon icon={faVideo} style={{ marginRight: "8px" }} />
-                            Join
-                          </button>
+                          }}
+                          disabled={
+                            !isToday(appointment.appointmentDate) ||
+                            appointment.appointmentDetails?.appointmentStatus === "done"
+                          }
+                          style={{
+                            backgroundColor:
+                              isToday(appointment.appointmentDate) &&
+                                appointment.appointmentDetails?.appointmentStatus !== "done"
+                                ? "#28a745"
+                                : "gray",
+                            color: "white",
+                            border: "none",
+                            padding: "5px 8px",
+                            cursor:
+                              isToday(appointment.appointmentDate) &&
+                                appointment.appointmentDetails?.appointmentStatus !== "done"
+                                ? "pointer"
+                                : "not-allowed",
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faVideo} style={{ marginRight: "8px" }} />
+                          Join
+                        </button>
+                      ) : (
+                        "N/A"
+                      )}
+                    </td>
 
-                        ) : (
-                          "N/A"
-                        )}
-
-                      </td>
-                    )}
                     <td>
                       <OverlayTrigger
                         placement="top"
@@ -2069,17 +2076,31 @@ function ApptsLawyer() {
                             setEditedLegalAssistance(appointment.selectedAssistanceType || "");
                             setShowEditLegalAssistanceForm(true);
                           }}
+                          disabled={
+                            ["pending", "missed", "refused", "denied", "rejected"].includes(
+                              appointment.appointmentDetails?.appointmentStatus
+                            )
+                          }
                           style={{
-                            backgroundColor: "#FFA500",
+                            backgroundColor: ["pending", "missed", "refused", "denied", "rejected"].includes(
+                              appointment.appointmentDetails?.appointmentStatus
+                            )
+                              ? "gray"
+                              : "#FFA500",
                             color: "white",
                             border: "none",
                             padding: "5px 9px",
-                            cursor: "pointer",
+                            cursor: ["pending", "missed", "refused", "denied", "rejected"].includes(
+                              appointment.appointmentDetails?.appointmentStatus
+                            )
+                              ? "not-allowed"
+                              : "pointer",
                           }}
                         >
                           <FontAwesomeIcon icon={faFileSignature} />
                         </button>
                       </OverlayTrigger>
+
                       &nbsp; &nbsp;
                       {["approved", "pending_reschedule"].includes(appointment.appointmentStatus) && (
                         <>
@@ -2120,7 +2141,7 @@ function ApptsLawyer() {
                             <button
                               disabled
                               style={{
-                                backgroundColor: "gray",
+                                backgroundColor: "#28a745",
                                 color: "white",
                                 border: "none",
                                 padding: "5px 9px",
@@ -2298,25 +2319,24 @@ function ApptsLawyer() {
                             <button
                               onClick={() => {
                                 setShowEditLegalAssistanceForm(false);
-
                                 setSelectedAppointment(appointment);
                                 setSelectedLawyerUid(appointment.appointmentDetails?.assignedLawyer || "");
                                 setShowProceedingNotesForm(false);
                                 setShowRescheduleForm(true);
                                 setShowScheduleForm(false);
                               }}
-                              disabled={hasExceededRescheduleLimit(appointment, currentUser)}
                               style={{
-                                backgroundColor: hasExceededRescheduleLimit(appointment, currentUser) ? "gray" : "#ff8b61",
+                                backgroundColor: "#ff8b61",
                                 color: "white",
                                 border: "none",
                                 padding: "5px 9px",
-                                cursor: hasExceededRescheduleLimit(appointment, currentUser) ? "not-allowed" : "pointer",
+                                cursor: "pointer",
                               }}
                             >
                               <FontAwesomeIcon icon={faCalendarAlt} />
                             </button>
                           </OverlayTrigger>
+
 
                           &nbsp; &nbsp;
                           <OverlayTrigger
@@ -2363,7 +2383,7 @@ function ApptsLawyer() {
                                     scheduledDate <= now &&
                                     appointment.clientAttend !== "yes" &&
                                     appointment.clientAttend !== "no";
-                                  return canProceed ? "#1fs954" : "gray";
+                                  return canProceed ? "#1f5954" : "gray";
                                 })(),
                                 color: "white",
                                 border: "none",
@@ -2384,7 +2404,7 @@ function ApptsLawyer() {
                           </OverlayTrigger>
                         </>
                       )}
-                      {["pending", "done", "denied", "missed"].includes(appointment.appointmentStatus) && (
+                      {["pending", "denied", "missed"].includes(appointment.appointmentStatus) && (
                         <>
                           <OverlayTrigger
                             placement="top"
@@ -2422,7 +2442,68 @@ function ApptsLawyer() {
                             </button>
                           </OverlayTrigger>
                         </>
+
                       )}
+                      {/* Show when appointment is DONE */}
+                      {appointment.appointmentStatus === "done" && (
+                        <>
+                          {/* Reschedule Button */}
+                          <OverlayTrigger
+                            placement="top"
+                            overlay={renderTooltip({ title: "Reschedule" })}
+                          >
+                            <button
+                              onClick={() => {
+                                setShowEditLegalAssistanceForm(false);
+                                setSelectedAppointment(appointment);
+                                setSelectedLawyerUid(appointment.appointmentDetails?.assignedLawyer || "");
+                                setShowProceedingNotesForm(false);
+                                setShowRescheduleForm(true);
+                                setShowScheduleForm(false);
+                              }}
+                              disabled={appointment.appointmentDetails?.hasAdditionalDocs === "yes"}
+                              style={{
+                                backgroundColor:
+                                  appointment.appointmentDetails?.hasAdditionalDocs === "yes"
+                                    ? "gray"
+                                    : "#ff8b61",
+                                color: "white",
+                                border: "none",
+                                padding: "5px 9px",
+                                cursor:
+                                  appointment.appointmentDetails?.hasAdditionalDocs === "yes"
+                                    ? "not-allowed"
+                                    : "pointer",
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faCalendarAlt} />
+                            </button>
+                          </OverlayTrigger>
+
+                          &nbsp;&nbsp;&nbsp;
+
+                          {/* Always Disabled Done Button (Styled as Gray) */}
+                          <OverlayTrigger
+                            placement="top"
+                            overlay={renderTooltip({ title: "Done" })}
+                          >
+                            <button
+                              disabled
+                              style={{
+                                backgroundColor: "gray",
+                                color: "white",
+                                border: "none",
+                                padding: "5px 9px",
+                                cursor: "not-allowed",
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faCheck} />
+                            </button>
+                          </OverlayTrigger>
+                        </>
+                      )}
+
+
 
                     </td>
                   </tr>
@@ -2467,15 +2548,22 @@ function ApptsLawyer() {
           />
         </Pagination>
         {showEditLegalAssistanceForm && selectedAppointment && (
-          <div className="edit-legal-assistance-container">
+          <div className="edit-legal-assistance-container" style={{ marginTop: "20px", padding: "20px", background: "#f9f9f9", borderRadius: "8px", border: "1px solid #ccc" }}>
             <h4>Edit Legal Assistance for {selectedAppointment.controlNumber}</h4>
             <select
               value={editedLegalAssistance}
               onChange={(e) => {
                 setEditedLegalAssistance(e.target.value);
                 if (e.target.value !== "Others") {
-                  setCustomAssistanceText(""); // Clear when not Others
+                  setCustomAssistanceText("");
                 }
+              }}
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "10px",
+                borderRadius: "6px",
+                border: "1px solid #ccc",
               }}
             >
               {predefinedOptions.map((option) => (
@@ -2501,8 +2589,8 @@ function ApptsLawyer() {
                 }}
               />
             )}
-            <br />
-            <div className="edit-legal-assistance-buttons">
+
+            <div className="edit-legal-assistance-buttons" style={{ marginTop: "15px" }}>
               <button
                 className="save-button"
                 disabled={isEditingLegal}
@@ -2525,7 +2613,6 @@ function ApptsLawyer() {
                       updatedTime: Timestamp.fromDate(new Date()),
                     });
 
-
                     setAppointments((prev) =>
                       prev.map((appt) =>
                         appt.id === selectedAppointment.id
@@ -2536,13 +2623,10 @@ function ApptsLawyer() {
 
                     setSnackbarMessage("Legal Assistance updated.");
                     setShowSnackbar(true);
-
-                    // Automatically close the snackbar after 3 seconds
                     setTimeout(() => {
                       setShowSnackbar(false);
                     }, 3000);
 
-                    setShowSnackbar(true);
                     setShowEditLegalAssistanceForm(false);
                     setSelectedAppointment(null);
                   } catch (error) {
@@ -2553,10 +2637,17 @@ function ApptsLawyer() {
                     setIsEditingLegal(false);
                   }
                 }}
+                style={{
+                  backgroundColor: isEditingLegal ? "gray" : "#28a745",
+                  color: "white",
+                  padding: "10px 16px",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: isEditingLegal ? "not-allowed" : "pointer",
+                }}
               >
                 {isEditingLegal ? "Saving..." : "Save"}
               </button>
-
             </div>
           </div>
         )}
@@ -3063,6 +3154,49 @@ function ApptsLawyer() {
                 ) : (
                   <p>No reschedule history available.</p>
                 )}
+
+                <br />
+                {selectedAppointment?.proceedingNotesHistory?.length > 0 && (
+                  <div style={{ marginTop: "20px" }}>
+                    <h2 style={{ cursor: "pointer" }} onClick={toggleProceedingHistory}>
+                      <em style={{ color: "#a34bc9", fontSize: "16px" }}>
+                        Remarks / Record of Consultation {isProceedingHistoryOpen ? "▲" : "▼"}
+                      </em>
+                    </h2>
+                    {isProceedingHistoryOpen && (
+                      <table className="table table-bordered">
+                        <thead>
+                          <tr>
+                            <th>Note</th>
+                            <th>Attended?</th>
+                            <th>IBP Staff</th>
+                            <th>Assisting Counsel</th>
+                            <th>Schedule</th>
+                            <th>Schedule Type</th>
+                            <th>With Additional Docs?</th>
+                            <th>File</th>
+                            <th>Submitted At</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedAppointment.proceedingNotesHistory.map((entry, index) => (
+                            <tr key={index}>
+                              <td>{entry.note || "N/A"}</td>
+                              <td>{entry.clientAttend || "N/A"}</td>
+                              <td>{entry.ibpParalegalStaff || "N/A"}</td>
+                              <td>{entry.assistingCounsel || "N/A"}</td>
+                              <td>{getFormattedDate(entry.scheduleDate, true)}</td>
+                              <td>{entry.scheduleType || "N/A"}</td>
+                              <td>{entry.hasAdditionalDocs || "N/A"}</td>
+                              <td>{entry.additionalDocNote || "N/A"}</td>
+                              <td>{getFormattedDate(entry.submittedAt, true)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
                 <br />
                 <section className="mb-4 print-section employment-profile">
                   <h2>
@@ -3304,9 +3438,8 @@ function ApptsLawyer() {
                           )}
                         </td>
                       </tr>
-
                       <tr>
-                        <th>New Appointment Request File:</th>
+                        <th>Recent Reschedule Request File:</th>
                         <td>
                           {selectedAppointment.newRequestUrl ? (
                             <a
@@ -3320,7 +3453,7 @@ function ApptsLawyer() {
                             >
                               <img
                                 src={selectedAppointment.newRequestUrl}
-                                alt="New Appointment Request File"
+                                alt="Recent Reschedule Request File"
                                 className="img-thumbnail"
                                 style={{ width: "100px", cursor: "pointer" }}
                               />
@@ -3328,6 +3461,87 @@ function ApptsLawyer() {
                           ) : (
                             "Not Available"
                           )}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Additional Documentation:</th>
+                        <td>
+                          <td>
+                            <td>
+                              <td>
+                                {selectedAppointment?.additionalDocs?.length > 0 ? (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: "20px",
+                                      marginTop: "12px",
+                                      justifyContent: "flex-start",
+                                    }}
+                                  >
+                                    {selectedAppointment.additionalDocs.map((doc, index) => (
+                                      <div
+                                        key={index}
+                                        style={{
+                                          width: "200px",
+                                          padding: "12px",
+                                          border: "1px solid #ccc",
+                                          borderRadius: "10px",
+                                          textAlign: "center",
+                                          backgroundColor: "#ffffff",
+                                          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+                                          transition: "transform 0.2s",
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.03)")}
+                                        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+                                      >
+                                        <img
+                                          src={doc.url}
+                                          alt={doc.name || `File ${index + 1}`}
+                                          onClick={() => openImageModal(doc.url)}
+                                          style={{
+                                            width: "100%",
+                                            height: "140px",
+                                            objectFit: "cover",
+                                            borderRadius: "6px",
+                                            cursor: "pointer",
+                                          }}
+                                        />
+                                        <p
+                                          style={{
+                                            fontSize: "14px",
+                                            marginTop: "10px",
+                                            fontWeight: "500",
+                                            color: "#333",
+                                            wordBreak: "break-word",
+                                          }}
+                                        >
+                                          {doc.name || `Document ${index + 1}`}
+                                        </p>
+                                        {doc.note && (
+                                          <p
+                                            style={{
+                                              fontSize: "12px",
+                                              color: "#777",
+                                              marginTop: "4px",
+                                              wordBreak: "break-word",
+                                            }}
+                                          >
+                                            {doc.note}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p style={{ marginTop: "10px", color: "#888" }}>No additional documents submitted.</p>
+                                )}
+
+                              </td>
+
+                            </td>
+
+                          </td>
                         </td>
                       </tr>
                     </tbody>
@@ -3450,7 +3664,6 @@ function ApptsLawyer() {
                     placeholder="Enter any relevant notes here..."
                     value={clientEligibility.notes}
                     onChange={handleChange}
-                    required
                   ></textarea>
                 </div>
                 <button disabled={isSubmitting}>
@@ -3541,6 +3754,66 @@ function ApptsLawyer() {
                   <br />
                   <div>
                     <b>
+                      <label>Do you have any additional document(s) to request before rescheduling another appointment? *</label>
+                    </b>
+                    <div>
+                      <label>
+                        <input
+                          type="radio"
+                          name="hasAdditionalDocs"
+                          value="yes"
+                          checked={clientEligibility.hasAdditionalDocs === "yes"}
+                          onChange={() =>
+                            setClientEligibility({
+                              ...clientEligibility,
+                              hasAdditionalDocs: "yes",
+                            })
+                          }
+                          required
+                        />{" "}
+                        Yes
+                      </label>
+                      <br />
+                      <label>
+                        <input
+                          type="radio"
+                          name="hasAdditionalDocs"
+                          value="no"
+                          checked={clientEligibility.hasAdditionalDocs === "no"}
+                          onChange={() =>
+                            setClientEligibility({
+                              ...clientEligibility,
+                              hasAdditionalDocs: "no",
+                              additionalDocNote: "",
+                            })
+                          }
+                          required
+                        />{" "}
+                        No
+                      </label>
+                    </div>
+                  </div>
+                  {clientEligibility.hasAdditionalDocs === "yes" && (
+                    <div>
+                      <br />
+                      <label>Please specify the requested document(s): *</label>
+                      <textarea
+                        rows="2"
+                        placeholder="Specify requested documents..."
+                        value={clientEligibility.additionalDocNote || ""}
+                        onChange={(e) =>
+                          setClientEligibility({
+                            ...clientEligibility,
+                            additionalDocNote: e.target.value,
+                          })
+                        }
+                        required
+                      ></textarea>
+                    </div>
+                  )}
+                  <br />
+                  <div>
+                    <b>
                       <label>Attach File (optional):</label>
                     </b>
                     <input
@@ -3553,7 +3826,7 @@ function ApptsLawyer() {
                   <br />
                   <div>
                     <b>
-                      <label>IBP Paralegal/Staff:</label>
+                      <label>IBP Paralegal/Staff (optional):</label>
                     </b>
                     <input
                       type="text"
@@ -3563,7 +3836,7 @@ function ApptsLawyer() {
                       onChange={handleChange}
                     />
                     <b>
-                      <label>Assisting Counsel:</label>
+                      <label>Assisting Counsel (optional):</label>
                     </b>
                     <input
                       type="text"
@@ -3604,31 +3877,6 @@ function ApptsLawyer() {
               </button>
             </div>
             <h2>Reschedule Appointment</h2>
-            {selectedAppointment?.rescheduleHistory && (
-              <div
-                style={{
-                  backgroundColor: "#e6f4ea", // soft green background
-                  padding: "12px 16px",
-                  borderRadius: "8px",
-                  border: "1px solid #c8e6c9",
-                  marginBottom: "16px",
-                  color: "#2e7d32", // dark green text
-                  fontSize: "16px",
-                  lineHeight: "1.5",
-                }}
-              >
-                <strong>
-                  {3 -
-                    selectedAppointment.rescheduleHistory.filter(
-                      (entry) => entry.rescheduledByUid === currentUser.uid
-                    ).length}
-                </strong>{" "}
-                reschedule(s) left &nbsp;
-                <span style={{ color: "#1b5e20", fontWeight: "500" }}>
-                  (Maximum of 3 allowed)
-                </span>
-              </div>
-            )}
             <table className="table table-striped table-bordered">
               <tbody>
                 <tr>

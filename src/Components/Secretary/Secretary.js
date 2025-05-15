@@ -7,6 +7,7 @@ import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
 import zxcvbn from "zxcvbn"; // For password strength detection
 import { sendEmailVerification } from "firebase/auth";
+import { getDocs, where, QuerySnapshot } from "firebase/firestore";
 
 import {
   getUsers,
@@ -36,7 +37,7 @@ import {
   orderBy,
   limit,
 } from "../../Config/Firebase";
-import { addDoc, getDocs, setDoc, onSnapshot, arrayUnion, arrayRemove } from "firebase/firestore";
+import { addDoc, setDoc, onSnapshot, arrayUnion, arrayRemove } from "firebase/firestore";
 import {
   getAuth,
   signOut,
@@ -176,6 +177,31 @@ function Secretary() {
         member_type: "secretary",
         associate: userData?.uid,
         created_time: new Date(),
+      });
+      // Notify all admins about the new secretary
+      const adminsSnapshot = await getDocs(
+        query(collection(fs, "users"), where("member_type", "==", "admin"))
+      );
+
+      const notification = {
+        type: "new_secretary_added",
+        action: "secretary_signup",
+        message: `${newUser.display_name} ${newUser.last_name} was added as a secretary.`,
+        timestamp: new Date(),
+        seen: false,
+        senderId: auth.currentUser.uid,
+        relatedUserId: uid,
+      };
+
+      // Notify all admins
+      adminsSnapshot.forEach(async (adminDoc) => {
+        await addDoc(collection(fs, "users", adminDoc.id, "notifications"), notification);
+      });
+
+      // ✅ Also notify the current lawyer
+      await addDoc(collection(fs, "users", auth.currentUser.uid, "notifications"), {
+        ...notification,
+        message: `You have successfully added ${newUser.display_name} ${newUser.last_name} as a secretary.`,
       });
 
       // Optional: Notify admin to wait for verification

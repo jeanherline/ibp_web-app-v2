@@ -216,7 +216,7 @@ function WalkInForm() {
             dob: user.dob ? formatDob(user.dob) : "",
             streetAddress: user.address || "",
             city: user.city || "",
-            phone: user.phone || "09",
+            phone: user.phone?.replace(/^0/, "+63") || "+63",
             gender: user.gender || "",
             spouse: user.spouse || "",
             spouseOccupation: user.spouseOccupation || "",
@@ -330,7 +330,7 @@ function WalkInForm() {
             dob: formatDob(user.dob),
             streetAddress: user.address || "",
             city: user.city || "",
-            phone: user.phone || "09",
+            phone: user.phone || "+63",
             gender: user.gender || "",
             spouse: user.spouse || "",
             spouseOccupation: user.spouseOccupation || "",
@@ -430,8 +430,26 @@ function WalkInForm() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setUserData({ ...userData, [name]: value });
+
+    if (name === "phone") {
+      let formatted = value;
+
+      // If input starts with 09, convert to +63
+      if (/^09/.test(value)) {
+        formatted = value.replace(/^0/, "+63");
+      }
+
+      // If manually typing +63, ensure it’s only at the start
+      if (!formatted.startsWith("+63")) {
+        formatted = "+63" + formatted.replace(/^\+?63?/, "");
+      }
+
+      setUserData({ ...userData, phone: formatted });
+    } else {
+      setUserData({ ...userData, [name]: value });
+    }
   };
+
 
   const openImageModal = (url) => {
     setCurrentImageUrl(url);
@@ -619,7 +637,10 @@ function WalkInForm() {
           middle_name: userData.middle_name,
           last_name: userData.last_name,
           dob: userData.dob,
-          phone: userData.phone,
+          phone: userData.phone.startsWith("09")
+            ? userData.phone.replace(/^0/, "+63")
+            : userData.phone,
+
           gender: userData.gender,
           spouse: userData.spouse,
           spouseOccupation: userData.spouseOccupation,
@@ -932,7 +953,7 @@ function WalkInForm() {
                   id="phone"
                   name="phone"
                   value={userData.phone}
-                  placeholder="Contact Number"
+                  placeholder="+63xxxxxxxxxx"
                   onChange={handleChange}
                   required
                   disabled={isFromAppointment || credentialsOmitted}

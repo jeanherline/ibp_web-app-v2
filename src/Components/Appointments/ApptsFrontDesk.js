@@ -697,7 +697,11 @@ function ApptsFrontDesk() {
         "clientEligibility.denialReason": clientEligibility.denialReason,
         "clientEligibility.notes": clientEligibility.notes?.trim()
           ? clientEligibility.notes
-          : "All Documents Verified.",
+          : clientEligibility.eligibility === "no"
+            ? "Ineligible"
+            : clientEligibility.eligibility === "yes"
+              ? "All Documents Verified."
+              : "No further reason provided.",
         "appointmentDetails.assignedLawyer": clientEligibility.assistingCounsel,
         "updatedTime": Timestamp.fromDate(new Date()),
       };
@@ -1766,7 +1770,7 @@ function ApptsFrontDesk() {
                         </td>
                       </tr>
                       <tr>
-                        <th>New Appointment Request File:</th>
+                        <th>Recent Reschedule Request File:</th>
                         <td>
                           {selectedAppointment.uploadedImages?.newRequestUrl ? (
                             <a
@@ -1784,7 +1788,7 @@ function ApptsFrontDesk() {
                                   selectedAppointment.uploadedImages
                                     ?.newRequestUrl
                                 }
-                                alt="New Appointment Request File"
+                                alt="Recent Reschedule Request File"
                                 className="img-thumbnail"
                                 style={{ width: "100px", cursor: "pointer" }}
                               />

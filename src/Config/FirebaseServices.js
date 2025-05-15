@@ -111,6 +111,7 @@ const getAppointments = async (
         appointmentStatus: data.appointmentDetails?.appointmentStatus,
         controlNumber: data.appointmentDetails?.controlNumber,
         appointmentDate: data.appointmentDetails?.appointmentDate,
+        additionalDocs: data.additionalDocs || [],
       };
 
       appointmentsData.push(combined);
@@ -602,6 +603,7 @@ const getLawyerAppointments = (
             paoImageUrlDateUploaded:
               userData.uploadedImages?.paoImageUrlDateUploaded || null,
             ...data.uploadedImages,
+            additionalDocs: data.additionalDocs || [],
             display_name: userData.display_name || "",
             middle_name: userData.middle_name || "",
             last_name: userData.last_name || "",
@@ -621,6 +623,7 @@ const getLawyerAppointments = (
             childrenNamesAges: userData.childrenNamesAges || "",
             reviewerDetails: data.reviewerDetails || null,
             proceedingNotes: data.proceedingNotes || null,
+            proceedingNotesHistory: data.proceedingNotesHistory || [],
             clientEligibility: data.clientEligibility || null,
             rescheduleHistory: data.rescheduleHistory || [],
             createdDate: data.createdDate || null,
