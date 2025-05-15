@@ -1023,6 +1023,7 @@ function Users() {
           <option value="Guiguinto">Guiguinto</option>
           <option value="Hagonoy">Hagonoy</option>
           <option value="Marilao">Marilao</option>
+<option value="Malolos">Malolos</option>
           <option value="Norzagaray">Norzagaray</option>
           <option value="Obando">Obando</option>
           <option value="Pandi">Pandi</option>
@@ -1560,6 +1561,7 @@ function Users() {
                     <option value="Guiguinto">Guiguinto</option>
                     <option value="Hagonoy">Hagonoy</option>
                     <option value="Marilao">Marilao</option>
+<option value="Malolos">Malolos</option>
                     <option value="Norzagaray">Norzagaray</option>
                     <option value="Obando">Obando</option>
                     <option value="Pandi">Pandi</option>

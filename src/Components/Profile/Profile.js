@@ -120,12 +120,12 @@ function Profile() {
       const timestamp = `${now.getFullYear()}-${(now.getMonth() + 1)
         .toString()
         .padStart(2, "0")}-${now.getDate().toString().padStart(2, "0")}_${now
-        .getHours()
-        .toString()
-        .padStart(2, "0")}-${now.getMinutes().toString().padStart(2, "0")}-${now
-        .getSeconds()
-        .toString()
-        .padStart(2, "0")}`;
+          .getHours()
+          .toString()
+          .padStart(2, "0")}-${now.getMinutes().toString().padStart(2, "0")}-${now
+            .getSeconds()
+            .toString()
+            .padStart(2, "0")}`;
 
       const imageUrl = await uploadImage(
         profileImage,
@@ -300,6 +300,7 @@ function Profile() {
                   <option value="Guiguinto">Guiguinto</option>
                   <option value="Hagonoy">Hagonoy</option>
                   <option value="Marilao">Marilao</option>
+                  <option value="Malolos">Malolos</option>
                   <option value="Norzagaray">Norzagaray</option>
                   <option value="Obando">Obando</option>
                   <option value="Pandi">Pandi</option>

@@ -15,15 +15,18 @@ import { format } from "date-fns";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, fs, signOut } from "../../Config/Firebase";
+import { sendEmailVerification } from "firebase/auth";
 import {
   collection,
   addDoc,
   doc,
   setDoc,
   getDocs,
+  getDoc,
   query,
   where,
-} from "firebase/firestore"; // Import Firestore functions // Import Firestore functions // Add getDocs, query, and where
+} from "firebase/firestore";
+// Import Firestore functions // Import Firestore functions // Add getDocs, query, and where
 import { useNavigate } from "react-router-dom";
 const storage = getStorage();
 
@@ -88,7 +91,6 @@ const initialUserData = {
   employerName: "",
   employerAddress: "",
   monthlyIncome: "",
-  existingEmail: "",
   generatedEmail: "",
   generatedPassword: "",
   selectedAssistanceType: "",
@@ -140,6 +142,10 @@ function WalkInForm() {
   const [docValidityMessage, setDocValidityMessage] = useState(null);
   const expiredDocs = [];
   const validDocs = [];
+  const [updateBarangay, setUpdateBarangay] = useState(false);
+  const [updateDSWD, setUpdateDSWD] = useState(false);
+  const [updatePAO, setUpdatePAO] = useState(false);
+  const [customEmploymentType, setCustomEmploymentType] = useState("");
 
   const hasExpiredDocuments = () => {
     return Object.values(documentDates || {}).some((dateStr) => {
@@ -180,11 +186,9 @@ function WalkInForm() {
       });
 
       setDocumentDates({
-        certificateBarangay:
-          user.uploadedImages.barangayImageUrlDateUploaded || null,
-        certificateDSWD: user.uploadedImages.dswdImageUrlDateUploaded || null,
-        disqualificationLetterPAO:
-          user.uploadedImages.paoImageUrlDateUploaded || null,
+        certificateBarangay: user.uploadedImages?.barangayImageUrlDateUploaded || null,
+        certificateDSWD: user.uploadedImages?.dswdImageUrlDateUploaded || null,
+        disqualificationLetterPAO: user.uploadedImages?.paoImageUrlDateUploaded || null,
       });
     }
   };
@@ -393,14 +397,17 @@ function WalkInForm() {
               .join("<br/>");
 
             setDocValidityMessage(`
-              <p>Cannot proceed. The following documents are invalid:</p>
-              ${expiredFormatted}
-              ${validDocs.length > 0
-                ? `<br/><br/><p>Valid Documents:</p><strong>${validFormatted}</strong>`
-                : ""
-              }
-              <br/><br/>Kindly inform the client that valid documents must be uploaded in order to proceed.
-            `);
+  <p><strong>Some documents are expired or missing.</strong></p>
+  <p>Please review the affected documents below. You will be able to update them in Step 4.</p>
+  <br/>
+  <strong>Expired or Missing:</strong><br/>
+  ${expiredDocs.map((doc) => `✗ ${doc}`).join("<br/>")}
+  <br/><br/>
+  ${validDocs.length > 0
+                ? `<strong>Still Valid:</strong><br/>${validDocs.join("<br/>")}`
+                : ""}
+`);
+
             return; // stop form display
           } else {
             setDocValidityMessage(null); // no expired docs
@@ -439,17 +446,17 @@ function WalkInForm() {
         formatted = value.replace(/^0/, "+63");
       }
 
-      // If manually typing +63, ensure it’s only at the start
+      // If user types +63 incorrectly
       if (!formatted.startsWith("+63")) {
         formatted = "+63" + formatted.replace(/^\+?63?/, "");
       }
 
       setUserData({ ...userData, phone: formatted });
     } else {
+      // ✅ Update all other fields
       setUserData({ ...userData, [name]: value });
     }
   };
-
 
   const openImageModal = (url) => {
     setCurrentImageUrl(url);
@@ -550,10 +557,11 @@ function WalkInForm() {
     return uploaded;
   };
 
+  const isFirebaseStorageUrl = (url) => typeof url === "string" && url.startsWith("https://firebasestorage");
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Validation of required
       if (
         !userData.display_name ||
         !userData.last_name ||
@@ -569,7 +577,6 @@ function WalkInForm() {
       const now = new Date();
       const datetime = format(now, "yyyyMMdd_HHmmss");
 
-      // Utility for uploading documents
       const uploadDocument = async (file, path) => {
         if (file) {
           const storageRef = ref(storage, path);
@@ -579,10 +586,12 @@ function WalkInForm() {
         return null;
       };
 
+      const isFirebaseStorageUrl = (url) =>
+        typeof url === "string" && url.startsWith("https://");
+
       const controlNumber = generateControlNumber();
       setControlNumber(controlNumber);
 
-      // Generate control number QR code URL
       const controlNumberQrCodeUrl = await generateQrCodeImageUrl(
         controlNumber,
         "appt_qr_codes",
@@ -591,32 +600,27 @@ function WalkInForm() {
       setAppointmentQrCodeUrl(controlNumberQrCodeUrl);
 
       let userQrCodeUrl = null;
-      let firebaseUid = uid; // Retrieve UID if available from search term
+      let firebaseUid = uid;
 
+      const fullName = `${userData.display_name} ${userData.middle_name ? userData.middle_name + " " : ""
+        }${userData.last_name}`;
+
+      // ✅ Create new user if no UID
       if (!firebaseUid) {
-        // Use provided email if available, otherwise generate one
-        const email = userData.generatedEmail
-          ? userData.generatedEmail
-          : `${userData.display_name[0].toLowerCase()}${userData.middle_name ? userData.middle_name[0].toLowerCase() : ""
-          }${userData.last_name
-            .replace(/\s+/g, "")
-            .toLowerCase()}${userData.dob.replace(/-/g, "")}${EMAIL_DOMAIN}`;
-        const password = `${userData.last_name.replace(
-          /\s+/g,
-          ""
-        )}!${userData.dob.replace(/-/g, "")}`;
+        const email = userData.generatedEmail;
+        const password =
+          userData.generatedPassword ||
+          `${userData.last_name.replace(/\s+/g, "")}!${userData.dob.replace(/-/g, "")}`;
+
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        firebaseUid = userCredential.user.uid;
 
         setGeneratedEmail(email);
         setGeneratedPassword(password);
 
-        // Create user and retrieve Firebase UID
-        const tempAuth = getAuth();
-        const userCredential = await createUserWithEmailAndPassword(
-          tempAuth,
-          email,
-          password
-        );
-        firebaseUid = userCredential.user.uid; // Firebase-generated UID
+        if (userCredential.user && !userCredential.user.emailVerified) {
+          await sendEmailVerification(userCredential.user);
+        }
 
         userQrCodeUrl = await generateQrCodeImageUrl(
           firebaseUid,
@@ -624,13 +628,6 @@ function WalkInForm() {
           firebaseUid
         );
         setUserQrCodeUrl(userQrCodeUrl);
-
-        // Populate user data to save in Firestore
-        // Upload scanned documents first
-        setIsUploadingDocs(true);
-        const uploadedDocs = await uploadAllDocuments(scannedDocuments, fullName, controlNumber, firebaseUid);
-        setIsUploadingDocs(false);
-
 
         const userDataToSave = {
           display_name: userData.display_name,
@@ -640,63 +637,91 @@ function WalkInForm() {
           phone: userData.phone.startsWith("09")
             ? userData.phone.replace(/^0/, "+63")
             : userData.phone,
-
           gender: userData.gender,
           spouse: userData.spouse,
           spouseOccupation: userData.spouseOccupation,
           email: email,
           city: userData.city,
           member_type: "client",
-          user_status: "active",
+          user_status: "inactive",
           created_time: now,
           userQrCode: userQrCodeUrl,
-          occupation: userData.occupation,
-          employmentType: userData.employmentType,
+          occupation: userData.employment,
+          employmentType:
+            userData.employmentType === "Iba pa (Others)"
+              ? customEmploymentType
+              : userData.employmentType,
           employerName: userData.employerName,
           employerAddress: userData.employerAddress,
           monthlyIncome: userData.monthlyIncome,
-          uploadedImages: {
-            barangayImageUrl: uploadedDocs.certificateBarangay,
-            barangayImageUrlDateUploaded: now,
-            dswdImageUrl: uploadedDocs.certificateDSWD,
-            dswdImageUrlDateUploaded: now,
-            paoImageUrl: uploadedDocs.disqualificationLetterPAO,
-            paoImageUrlDateUploaded: now,
-          }
         };
 
         await setDoc(doc(fs, "users", firebaseUid), userDataToSave);
       }
 
-      const fullName = `${userData.display_name} ${userData.middle_name ? userData.middle_name + " " : ""
-        }${userData.last_name}`;
+      // ✅ Document upload logic
+      let uploadedBarangayUrl = null;
+      let uploadedDswdUrl = null;
+      let uploadedPaoUrl = null;
 
-      // Upload documents if available
-      const barangayImageUrl = scannedDocuments.certificateBarangay?.startsWith(
-        "data:"
-      )
-        ? await uploadDocument(
+      if (scannedDocuments.certificateBarangay?.startsWith("data:")) {
+        uploadedBarangayUrl = await uploadDocument(
           dataURItoBlob(scannedDocuments.certificateBarangay),
-          `konsulta_user_uploads/${firebaseUid}/${controlNumber}/${fullName}_${controlNumber}_barangayCertificateOfIndigency`
-        )
-        : scannedDocuments.certificateBarangay || null;
+          `konsulta_user_uploads/${firebaseUid}/${fullName}_${controlNumber}_barangayCertificateOfIndigency`
+        );
+      } else if (isFirebaseStorageUrl(scannedDocuments.certificateBarangay)) {
+        uploadedBarangayUrl = scannedDocuments.certificateBarangay;
+      }
 
-      const dswdImageUrl = scannedDocuments.certificateDSWD?.startsWith("data:")
-        ? await uploadDocument(
+      if (scannedDocuments.certificateDSWD?.startsWith("data:")) {
+        uploadedDswdUrl = await uploadDocument(
           dataURItoBlob(scannedDocuments.certificateDSWD),
-          `konsulta_user_uploads/${firebaseUid}/${controlNumber}/${fullName}_${controlNumber}_dswdCertificateOfIndigency`
-        )
-        : scannedDocuments.certificateDSWD || null;
+          `konsulta_user_uploads/${firebaseUid}/${fullName}_${controlNumber}_dswdCertificateOfIndigency`
+        );
+      } else if (isFirebaseStorageUrl(scannedDocuments.certificateDSWD)) {
+        uploadedDswdUrl = scannedDocuments.certificateDSWD;
+      }
 
-      const paoImageUrl =
-        scannedDocuments.disqualificationLetterPAO?.startsWith("data:")
-          ? await uploadDocument(
-            dataURItoBlob(scannedDocuments.disqualificationLetterPAO),
-            `konsulta_user_uploads/${firebaseUid}/${controlNumber}/${fullName}_${controlNumber}_paoDisqualificationLetter`
-          )
-          : scannedDocuments.disqualificationLetterPAO || null;
+      if (scannedDocuments.disqualificationLetterPAO?.startsWith("data:")) {
+        uploadedPaoUrl = await uploadDocument(
+          dataURItoBlob(scannedDocuments.disqualificationLetterPAO),
+          `konsulta_user_uploads/${firebaseUid}/${fullName}_${controlNumber}_paoDisqualificationLetter`
+        );
+      } else if (isFirebaseStorageUrl(scannedDocuments.disqualificationLetterPAO)) {
+        uploadedPaoUrl = scannedDocuments.disqualificationLetterPAO;
+      }
 
-      // Save appointment data in Firestore
+      const uploadedImagesToSave = {};
+
+      if (uploadedBarangayUrl && isFirebaseStorageUrl(uploadedBarangayUrl)) {
+        uploadedImagesToSave.barangayImageUrl = uploadedBarangayUrl;
+        uploadedImagesToSave.barangayImageUrlDateUploaded = now;
+      }
+      if (uploadedDswdUrl && isFirebaseStorageUrl(uploadedDswdUrl)) {
+        uploadedImagesToSave.dswdImageUrl = uploadedDswdUrl;
+        uploadedImagesToSave.dswdImageUrlDateUploaded = now;
+      }
+      if (uploadedPaoUrl && isFirebaseStorageUrl(uploadedPaoUrl)) {
+        uploadedImagesToSave.paoImageUrl = uploadedPaoUrl;
+        uploadedImagesToSave.paoImageUrlDateUploaded = now;
+      }
+
+      if (Object.keys(uploadedImagesToSave).length > 0) {
+        await setDoc(
+          doc(fs, "users", firebaseUid),
+          { uploadedImages: uploadedImagesToSave },
+          { merge: true }
+        );
+      }
+
+      // ✅ Update UI state
+      setDocumentDates({
+        certificateBarangay: uploadedBarangayUrl ? now : documentDates.certificateBarangay,
+        certificateDSWD: uploadedDswdUrl ? now : documentDates.certificateDSWD,
+        disqualificationLetterPAO: uploadedPaoUrl ? now : documentDates.disqualificationLetterPAO,
+      });
+
+      // ✅ Save appointment
       const appointmentData = {
         createdDate: now,
         uid: firebaseUid,
@@ -714,7 +739,6 @@ function WalkInForm() {
             userData.selectedAssistanceType === "Other"
               ? customAssistanceType
               : userData.selectedAssistanceType,
-
         },
       };
 
@@ -737,11 +761,12 @@ function WalkInForm() {
     }
   };
 
+
   useEffect(() => {
     if (!userData.phone) {
       setUserData((prevData) => ({
         ...prevData,
-        phone: "09",
+        phone: "+63",
       }));
     }
   }, []);
@@ -809,7 +834,28 @@ function WalkInForm() {
 
   const prevStep = () => setStep((prevStep) => prevStep - 1);
 
+  const getDocStatus = (dateObj) => {
+    if (!dateObj) return { status: "N/A", color: "#888" };
+    const date = typeof dateObj?.toDate === "function" ? dateObj.toDate() : new Date(dateObj);
+    const months = (new Date() - date) / (1000 * 60 * 60 * 24 * 30);
+    return months > 6
+      ? { status: "Expired", color: "red" }
+      : { status: "Valid", color: "green" };
+  };
+
+  const formatDate = (dateObj) => {
+    if (!dateObj) return "No Upload";
+    const date = typeof dateObj?.toDate === "function" ? dateObj.toDate() : new Date(dateObj);
+    if (isNaN(date.getTime())) return "Invalid Date";
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
   const renderStep = () => {
+
     switch (step) {
       case 1:
         return (
@@ -949,17 +995,16 @@ function WalkInForm() {
                   <span style={{ color: "red", marginLeft: "5px" }}>*</span>
                 </label>
                 <input
-                  type="text"
+                  type="tel"
                   id="phone"
                   name="phone"
                   value={userData.phone}
-                  placeholder="+63xxxxxxxxxx"
+                  placeholder="+639XXXXXXXXX"
                   onChange={handleChange}
                   required
                   disabled={isFromAppointment || credentialsOmitted}
                 />
               </div>
-
               <div className="form-group">
                 <label htmlFor="gender">
                   Kasarian <span className="subtitle">(Gender)</span>
@@ -1081,6 +1126,19 @@ function WalkInForm() {
                   <option value="Iba pa (Others)">Iba pa (Others)</option>
                 </select>
               </div>
+              {userData.employmentType === "Iba pa (Others)" && (
+                <div className="form-group mt-2">
+                  <label htmlFor="customEmploymentType">Iba pang detalye ng trabaho:</label>
+                  <input
+                    type="text"
+                    id="customEmploymentType"
+                    name="customEmploymentType"
+                    value={customEmploymentType}
+                    onChange={(e) => setCustomEmploymentType(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
               <div className="form-group">
                 <label htmlFor="employerName">
                   Pangalan ng Employer{" "}
@@ -1248,179 +1306,176 @@ function WalkInForm() {
       case 4:
         return (
           <div className="credentials-section">
-            {!credentialsOmitted && (
+            {!uid && !userData.existingEmail && (
               <>
-                <h4>
-                  Kredensyal <span className="subtitle">(Credentials)</span>
-                </h4>
                 <div className="form-group">
-                  <label>
-                    Mayroon na bang Email?{" "}
-                    <span className="subtitle">
-                      (Already Have an Existing Email?)
-                    </span>
+                  <label htmlFor="generatedEmail">
+                    Magbigay ng Email <span className="subtitle">(Provide Email)</span>
+                    <span style={{ color: "red", marginLeft: "5px" }}>*</span>
                   </label>
-                  <div className="form-group-inline radio-group">
-                    <input
-                      type="radio"
-                      id="emailYes"
-                      name="existingEmail"
-                      value="yes"
-                      onChange={handleChange}
-                    />
-                    <label htmlFor="emailYes">
-                      Oo <span className="subtitle">(Yes)</span>
-                    </label>
-                    <input
-                      type="radio"
-                      id="emailNo"
-                      name="existingEmail"
-                      value="no"
-                      onChange={handleChange}
-                    />
-                    <label htmlFor="emailNo">
-                      Hindi <span className="subtitle">(No)</span>
-                    </label>
-                  </div>
-                  {userData.existingEmail === "yes" && (
-                    <>
-                      <br />
-                      <div className="form-group">
-                        <label htmlFor="generatedEmail">
-                          Magbigay ng Email{" "}
-                          <span className="subtitle">(Provide Email)</span>
-                          <span style={{ color: "red", marginLeft: "5px" }}>
-                            *
-                          </span>
-                        </label>
-                        <input
-                          type="email"
-                          id="generatedEmail"
-                          name="generatedEmail"
-                          placeholder="Email"
-                          onChange={handleChange}
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="generatedPassword">
-                          Generated Password
-                        </label>
-                        <input
-                          type="text"
-                          id="generatedPassword"
-                          name="generatedPassword"
-                          value={`${userData.last_name.replace(
-                            /\s+/g,
-                            ""
-                          )}!${userData.dob.replace(/-/g, "")}`}
-                          readOnly
-                        />
-                      </div>
-                    </>
-                  )}
-                  {userData.existingEmail === "no" && (
-                    <>
-                      <br />
-                      <div className="form-group">
-                        <label htmlFor="generatedEmail">Generated Email</label>
-                        <input
-                          type="text"
-                          id="generatedEmail"
-                          name="generatedEmail"
-                          value={`${userData.display_name[0].toLowerCase()}${userData.middle_name
-                            ? userData.middle_name[0].toLowerCase()
-                            : ""
-                            }${userData.last_name
-                              .replace(/\s+/g, "")
-                              .toLowerCase()}${userData.dob.replace(/-/g, "")}${EMAIL_DOMAIN}`}
-                          readOnly
-                        />
-                      </div>
+                  <input
+                    type="email"
+                    id="generatedEmail"
+                    name="generatedEmail"
+                    placeholder="Email"
+                    value={userData.generatedEmail}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
 
-                      <div className="form-group">
-                        <label htmlFor="generatedPassword">
-                          Generated Password
-                        </label>
-                        <input
-                          type="text"
-                          id="generatedPassword"
-                          name="generatedPassword"
-                          value={`${userData.last_name.replace(
-                            /\s+/g,
-                            ""
-                          )}!${userData.dob.replace(/-/g, "")}`}
-                          readOnly
-                        />
-                      </div>
-                    </>
-                  )}
-
+                <div className="form-group">
+                  <label htmlFor="generatedPassword">
+                    Password <span className="subtitle">(Create or Use Suggested)</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="generatedPassword"
+                    name="generatedPassword"
+                    placeholder="Enter or use suggested password"
+                    value={
+                      userData.generatedPassword ||
+                      `${userData.last_name.replace(/\s+/g, "")}!${userData.dob.replace(/-/g, "")}`
+                    }
+                    onChange={handleChange}
+                  />
                 </div>
               </>
             )}
+
             <h4>Document Requirements</h4>
-            {credentialsOmitted ? (
+            {false ? (
               <div className="document-preview">
-                {scannedDocuments.certificateBarangay && (
-                  <img
-                    src={scannedDocuments.certificateBarangay}
-                    alt="Barangay Certificate"
-                    onClick={() =>
-                      openImageModal(scannedDocuments.certificateBarangay)
-                    }
-                    className="document-thumbnail"
-                  />
-                )}
-                {scannedDocuments.certificateDSWD && (
-                  <img
-                    src={scannedDocuments.certificateDSWD}
-                    alt="DSWD Certificate"
-                    onClick={() =>
-                      openImageModal(scannedDocuments.certificateDSWD)
-                    }
-                    className="document-thumbnail"
-                  />
-                )}
-                {scannedDocuments.disqualificationLetterPAO && (
-                  <img
-                    src={scannedDocuments.disqualificationLetterPAO}
-                    alt="PAO Disqualification Letter"
-                    onClick={() =>
-                      openImageModal(scannedDocuments.disqualificationLetterPAO)
-                    }
-                    className="document-thumbnail"
-                  />
-                )}
+                {[
+                  { key: "certificateBarangay", label: "Barangay Certificate" },
+                  { key: "certificateDSWD", label: "DSWD Certificate" },
+                  { key: "disqualificationLetterPAO", label: "PAO Disqualification Letter" },
+                ].map(({ key, label }) => (
+                  <div key={key} style={{ marginBottom: "20px", textAlign: "center" }}>
+                    {scannedDocuments[key] ? (
+                      <>
+                        <img
+                          src={scannedDocuments[key]}
+                          alt={label}
+                          onClick={() => openImageModal(scannedDocuments[key])}
+                          className="document-thumbnail"
+                          style={{ cursor: "pointer", marginBottom: "8px" }}
+                        />
+                        {documentDates[key] && (
+                          <p style={{ fontSize: "13px", marginTop: "4px", color: "#555" }}>
+                            Uploaded on: <strong>{formatDate(documentDates[key])}</strong><br />
+                            Status:{" "}
+                            <strong style={{ color: getDocStatus(documentDates[key]).color }}>
+                              {getDocStatus(documentDates[key]).status}
+                            </strong>
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p style={{ fontStyle: "italic" }}>{label} not uploaded</p>
+                    )}
+                    <div style={{ marginTop: "8px" }}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setScannedDocuments((prev) => ({
+                                ...prev,
+                                [key]: reader.result,
+                              }));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        className="scan-button"
+                        onClick={() => handleDocumentScan(key)}
+                        style={{ marginTop: "5px", fontSize: "14px" }}
+                      >
+                        Re-upload or Recapture {label}
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <div className="form-group scan-buttons">
-                <button
-                  type="button"
-                  className="scan-button"
-                  onClick={() => handleDocumentScan("certificateBarangay")}
-                >
-                  Capture Certificate of Indigency from Barangay
-                  <span style={{ color: "red", marginLeft: "5px" }}>*</span>
-                </button>
-                <button
-                  type="button"
-                  className="scan-button"
-                  onClick={() => handleDocumentScan("certificateDSWD")}
-                >
-                  Capture Certificate of Indigency from DSWD
-                  <span style={{ color: "red", marginLeft: "5px" }}>*</span>
-                </button>
-                <button
-                  type="button"
-                  className="scan-button"
-                  onClick={() =>
-                    handleDocumentScan("disqualificationLetterPAO")
-                  }
-                >
-                  Capture Disqualification Letter from PAO
-                  <span style={{ color: "red", marginLeft: "5px" }}>*</span>
-                </button>
+              <div className="form-group document-upload-group">
+                {[
+                  {
+                    key: "certificateBarangay",
+                    label: "Certificate of Indigency from Barangay",
+                  },
+                  {
+                    key: "certificateDSWD",
+                    label: "Certificate of Indigency from DSWD",
+                  },
+                  {
+                    key: "disqualificationLetterPAO",
+                    label: "Disqualification Letter from PAO",
+                  },
+                ].map(({ key, label }) => (
+                  <div key={key} style={{ marginBottom: "20px" }}>
+                    <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>
+                      {label}
+                      <span style={{ color: "red", marginLeft: "5px" }}>*</span>
+                    </label>
+
+                    {/* Preview image */}
+                    {scannedDocuments[key] && (
+                      <img
+                        src={scannedDocuments[key]}
+                        alt={label}
+                        style={{
+                          width: "200px",
+                          height: "auto",
+                          borderRadius: "6px",
+                          border: "1px solid #ccc",
+                          marginBottom: "10px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => openImageModal(scannedDocuments[key])}
+                      />
+                    )}
+
+                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                      {/* Scan button */}
+                      <button
+                        type="button"
+                        className="scan-button"
+                        onClick={() => handleDocumentScan(key)}
+                      >
+                        Scan/Take Photo
+                      </button>
+
+                      {/* Upload button */}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setScannedDocuments((prev) => ({
+                                ...prev,
+                                [key]: reader.result,
+                              }));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1434,18 +1489,26 @@ function WalkInForm() {
 
   const handleModalClose = async () => {
     setIsSubmissionModalOpen(false);
-    setUserData(initialUserData); // Clear form state
-    setScannedDocuments(initialScannedDocuments); // Clear scanned documents
-    setControlNumber(""); // Clear control number
-    setGeneratedEmail(""); // Clear generated email
-    setGeneratedPassword(""); // Clear generated password
-    setAppointmentQrCodeUrl(""); // Clear appointment QR code URL
-    setUserQrCodeUrl(""); // Clear user QR code URL
-    setUid(""); // Clear UID
-    setSearchTerm(""); // Clear search term
+    setUserData(initialUserData);
+    setScannedDocuments(initialScannedDocuments);
+    setControlNumber("");
+    setGeneratedEmail("");
+    setGeneratedPassword("");
+    setAppointmentQrCodeUrl("");
+    setUserQrCodeUrl("");
+    setUid("");
+    setSearchTerm("");
 
-    await signOut(auth); // Sign out the user
-    navigate("/"); // Redirect to /login
+    // ✅ Only logout if user is newly created
+    if (!uid) {
+      await signOut(auth);
+      navigate("/"); // Go back to home or login
+    } else {
+      // ✅ Just reset the form and stay
+      setSnackbarMessage("Appointment recorded. You're still signed in.");
+      setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 3000);
+    }
   };
 
   return (
@@ -1504,7 +1567,7 @@ function WalkInForm() {
             <br />
           </>
         )}
-        {docValidityMessage ? (
+        {docValidityMessage && step === 1 ? (
           <div
             style={{
               backgroundColor: "#fff0f0",
@@ -1545,6 +1608,22 @@ function WalkInForm() {
                 fontFamily: "inherit",
               }}
             ></div>
+            <div style={{ marginTop: "20px", textAlign: "center" }}>
+              <button
+                type="button"
+                onClick={() => setDocValidityMessage(null)}
+                style={{
+                  backgroundColor: "#580049",
+                  color: "#fff",
+                  padding: "10px 20px",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Continue to Update Documents
+              </button>
+            </div>
           </div>
         ) : (
           <form ref={formRef} onSubmit={handleSubmitWithPrevent} className="walkin-form">
@@ -1583,7 +1662,17 @@ function WalkInForm() {
                     disabled={isSubmitting}
                     onClick={() => {
                       const latestReviewData = { ...userData };
+                      const now = new Date();
+
+                      // Check document presence and prepare dates
+                      const latestDocumentDates = {
+                        certificateBarangay: scannedDocuments.certificateBarangay ? now : null,
+                        certificateDSWD: scannedDocuments.certificateDSWD ? now : null,
+                        disqualificationLetterPAO: scannedDocuments.disqualificationLetterPAO ? now : null,
+                      };
+
                       setReviewData(latestReviewData);
+                      setDocumentDates(latestDocumentDates);
                       setShowReviewModal(true);
                     }}
                   >
@@ -1651,8 +1740,16 @@ function WalkInForm() {
             handleSubmit();
           }}
           userData={reviewData}
+          customEmploymentType={customEmploymentType}
+          customAssistanceType={customAssistanceType}
           scannedDocuments={scannedDocuments}
           documentDates={documentDates}
+          updateBarangay={updateBarangay}
+          setUpdateBarangay={setUpdateBarangay}
+          updateDSWD={updateDSWD}
+          setUpdateDSWD={setUpdateDSWD}
+          updatePAO={updatePAO}
+          setUpdatePAO={setUpdatePAO}
         />
       </div>
     </div>
@@ -1751,14 +1848,14 @@ const SubmissionModal = ({
               <strong>Email:</strong> {generatedEmail}
             </p>
           )}
-          <p>
-            <strong>Created Date:</strong> {new Date().toLocaleDateString()}
-          </p>
           {generatedPassword && (
             <p>
               <strong>Password:</strong> {generatedPassword}
             </p>
           )}
+          <p>
+            <strong>Created Date:</strong> {new Date().toLocaleDateString()}
+          </p>
         </div>
 
         <div
@@ -1785,7 +1882,23 @@ const SubmissionModal = ({
     </div>
   );
 };
-function ReviewModal({ onConfirm, onCancel, userData, documentDates, hasExpiredDocs, isUploadingDocs, isOpen }) {
+function ReviewModal({
+  onConfirm,
+  onCancel,
+  userData,
+  customEmploymentType,
+  customAssistanceType,
+  documentDates,
+  hasExpiredDocs,
+  isUploadingDocs,
+  isOpen,
+  updateBarangay,
+  setUpdateBarangay,
+  updateDSWD,
+  setUpdateDSWD,
+  updatePAO,
+  setUpdatePAO,
+}) {
   useEffect(() => {
     if (isOpen) {
       document.body.classList.add("modal-open");
@@ -1841,7 +1954,14 @@ function ReviewModal({ onConfirm, onCancel, userData, documentDates, hasExpiredD
           <div className="review-section">
             <h4>2. Employment Information</h4>
             <div className="review-row"><span className="review-label">Occupation:</span><span className="review-value">{userData.employment}</span></div>
-            <div className="review-row"><span className="review-label">Type of Employment:</span><span className="review-value">{userData.employmentType}</span></div>
+            <div className="review-row">
+              <span className="review-label">Type of Employment:</span>
+              <span className="review-value">
+                {userData.employmentType === "Iba pa (Others)"
+                  ? customEmploymentType
+                  : userData.employmentType}
+              </span>
+            </div>
             <div className="review-row"><span className="review-label">Employer:</span><span className="review-value">{userData.employerName}</span></div>
             <div className="review-row"><span className="review-label">Employer Address:</span><span className="review-value">{userData.employerAddress}</span></div>
             <div className="review-row"><span className="review-label">Monthly Income:</span><span className="review-value">{userData.monthlyIncome ? `₱${Number(userData.monthlyIncome).toLocaleString()}` : "N/A"}</span></div>
@@ -1850,7 +1970,14 @@ function ReviewModal({ onConfirm, onCancel, userData, documentDates, hasExpiredD
           {/* Section 3: Legal Assistance */}
           <div className="review-section">
             <h4>3. Legal Assistance Requested</h4>
-            <div className="review-row"><span className="review-label">Nature of Assistance:</span><span className="review-value">{userData.selectedAssistanceType}</span></div>
+            <div className="review-row">
+              <span className="review-label">Nature of Assistance:</span>
+              <span className="review-value">
+                {userData.selectedAssistanceType === "Other"
+                  ? customAssistanceType
+                  : userData.selectedAssistanceType}
+              </span>
+            </div>
             <div className="review-row"><span className="review-label">Problems:</span><span className="review-value">{userData.problems}</span></div>
             <div className="review-row"><span className="review-label">Reason:</span><span className="review-value">{userData.problemReason}</span></div>
             <div className="review-row"><span className="review-label">Desired Solutions:</span><span className="review-value">{userData.desiredSolutions}</span></div>
@@ -1871,6 +1998,47 @@ function ReviewModal({ onConfirm, onCancel, userData, documentDates, hasExpiredD
                   <span className="review-value">
                     {formatDate(documentDates?.[doc.key])}{" "}
                     <strong style={{ color: status.color }}>({status.status})</strong>
+
+                    {status.status === "Expired" && (
+                      <div style={{ marginTop: "8px" }}>
+                        <label>
+                          <input
+                            type="radio"
+                            name={`update_${doc.key}`}
+                            value="yes"
+                            checked={
+                              doc.key === "certificateBarangay" ? updateBarangay :
+                                doc.key === "certificateDSWD" ? updateDSWD :
+                                  doc.key === "disqualificationLetterPAO" ? updatePAO : false
+                            }
+                            onChange={() => {
+                              if (doc.key === "certificateBarangay") setUpdateBarangay(true);
+                              if (doc.key === "certificateDSWD") setUpdateDSWD(true);
+                              if (doc.key === "disqualificationLetterPAO") setUpdatePAO(true);
+                            }}
+                          />{" "}
+                          Update
+                        </label>
+                        <label style={{ marginLeft: "12px" }}>
+                          <input
+                            type="radio"
+                            name={`update_${doc.key}`}
+                            value="no"
+                            checked={
+                              doc.key === "certificateBarangay" ? !updateBarangay :
+                                doc.key === "certificateDSWD" ? !updateDSWD :
+                                  doc.key === "disqualificationLetterPAO" ? !updatePAO : true
+                            }
+                            onChange={() => {
+                              if (doc.key === "certificateBarangay") setUpdateBarangay(false);
+                              if (doc.key === "certificateDSWD") setUpdateDSWD(false);
+                              if (doc.key === "disqualificationLetterPAO") setUpdatePAO(false);
+                            }}
+                          />{" "}
+                          Skip
+                        </label>
+                      </div>
+                    )}
                   </span>
                 </div>
               );
